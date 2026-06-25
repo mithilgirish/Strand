@@ -1,0 +1,1 @@
+# STRAND Pydantic models package

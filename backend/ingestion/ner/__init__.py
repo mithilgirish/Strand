@@ -1,0 +1,1 @@
+# STRAND NER parameters package
