@@ -9,6 +9,10 @@
   AI-Powered Construction Intelligence Platform for Hyperscale Data Centre EPC Delivery
 </p>
 
+<p align="center">
+  <a href="https://www.figma.com/design/bRWTvsFv3QeDJi8yLTk0uA/Strand?node-id=0-1&t=8FUIFPH4moS5VU8m-1" target="_blank">Figma Design System & Mockups</a>
+</p>
+
 ---
 
 ## What is STRAND?

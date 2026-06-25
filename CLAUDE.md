@@ -4,6 +4,7 @@
 For all coding operations, architecture schemas, prompt layouts, and build milestones:
 1. **Architecture & Skeletons**: You MUST refer to [STRAND_AGENT.md](file:///home/mithil/hackathon/Strand/STRAND_AGENT.md) as the single source of truth for database schemas, Cypher queries, agent states, and configuration parameters.
 2. **Build Plan & Timeline**: You MUST follow [plan.md](file:///home/mithil/hackathon/Strand/plan.md) for weekly milestones, Definition of Done criteria, branch naming rules, and integration test scripts.
+3. **Figma UI/UX Mockups**: Refer to the [Figma Design](https://www.figma.com/design/bRWTvsFv3QeDJi8yLTk0uA/Strand?node-id=0-1&t=8FUIFPH4moS5VU8m-1) for spacing rules, component aesthetics, and layouts.
 
 ## Developer Memory Layer 
 1. **READ**: At the start of a session or when asked about project context/history, you MUST call `traz_recent` to retrieve the latest state.

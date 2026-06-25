@@ -1434,6 +1434,7 @@ python scripts/test_agents.py
 DELIVERABLES:
 [ ] Working Prototype URL (Railway)    → https://strand-app.up.railway.app
 [ ] GitHub Repository (public)         → https://github.com/TEAM/strand
+[ ] Figma Design System & Mockups      → https://www.figma.com/design/bRWTvsFv3QeDJi8yLTk0uA/Strand?node-id=0-1&t=8FUIFPH4moS5VU8m-1
 [ ] Architecture Diagram               → docs/architecture.png
 [ ] Presentation Deck (PDF)            → docs/STRAND_Deck.pdf
 [ ] Demo Video (YouTube unlisted)      → https://youtu.be/...
