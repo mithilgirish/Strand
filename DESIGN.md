@@ -1,166 +1,378 @@
 ---
-name: Refined Neo-Brutalist
+name: Industrial Glass Design System
+themes:
+  - light
+  - dark
+
+# ─────────────────────────────────────────────
+# FONTS
+# Primary  : Outfit       — UI chrome, headlines, labels, body
+# Mono     : JetBrains Mono — data values, serial numbers, code
+# Source   : Google Fonts (both)
+# ─────────────────────────────────────────────
+fonts:
+  primary: Outfit
+  mono: JetBrains Mono
+
+# ─────────────────────────────────────────────
+# COLOR TOKENS  (light / dark)
+# ─────────────────────────────────────────────
 colors:
-  surface: '#f9f9f9'
-  surface-dim: '#dadada'
-  surface-bright: '#f9f9f9'
-  surface-container-lowest: '#ffffff'
-  surface-container-low: '#f3f3f3'
-  surface-container: '#eeeeee'
-  surface-container-high: '#e8e8e8'
-  surface-container-highest: '#e2e2e2'
-  on-surface: '#1b1b1b'
-  on-surface-variant: '#414755'
-  inverse-surface: '#303030'
-  inverse-on-surface: '#f1f1f1'
-  outline: '#717786'
-  outline-variant: '#c1c6d7'
-  surface-tint: '#005bc1'
-  primary: '#0058bc'
-  on-primary: '#ffffff'
-  primary-container: '#0070eb'
-  on-primary-container: '#fefcff'
-  inverse-primary: '#adc6ff'
-  secondary: '#ba0034'
-  on-secondary: '#ffffff'
-  secondary-container: '#e51245'
-  on-secondary-container: '#fffbff'
-  tertiary: '#006b27'
-  on-tertiary: '#ffffff'
-  tertiary-container: '#008733'
-  on-tertiary-container: '#f7fff2'
-  error: '#ba1a1a'
-  on-error: '#ffffff'
-  error-container: '#ffdad6'
-  on-error-container: '#93000a'
-  primary-fixed: '#d8e2ff'
-  primary-fixed-dim: '#adc6ff'
-  on-primary-fixed: '#001a41'
-  on-primary-fixed-variant: '#004493'
-  secondary-fixed: '#ffdada'
-  secondary-fixed-dim: '#ffb3b5'
-  on-secondary-fixed: '#40000c'
-  on-secondary-fixed-variant: '#920027'
-  tertiary-fixed: '#72fe88'
-  tertiary-fixed-dim: '#53e16f'
-  on-tertiary-fixed: '#002107'
-  on-tertiary-fixed-variant: '#00531c'
-  background: '#f9f9f9'
-  on-background: '#1b1b1b'
-  surface-variant: '#e2e2e2'
+  light:
+    background:                '#f7f9fb'
+    on-background:             '#191c1e'
+    surface:                   '#f7f9fb'
+    surface-dim:               '#d8dadc'
+    surface-bright:            '#ffffff'
+    surface-container-lowest:  '#ffffff'
+    surface-container-low:     '#f2f4f6'
+    surface-container:         '#eceef0'
+    surface-container-high:    '#e6e8ea'
+    surface-container-highest: '#e0e3e5'
+    on-surface:                '#191c1e'
+    on-surface-variant:        '#45464d'
+    inverse-surface:           '#2d3133'
+    inverse-on-surface:        '#eff1f3'
+    outline:                   '#76777d'
+    outline-variant:           '#c6c6cd'
+    surface-tint:              '#565e74'
+    # Primary — deep slate; authority + contrast on light canvas
+    primary:                   '#0f172a'
+    on-primary:                '#ffffff'
+    primary-container:         '#131b2e'
+    on-primary-container:      '#7c839b'
+    inverse-primary:           '#bec6e0'
+    # Secondary — forest emerald; "Pass", ready, active states
+    secondary:                 '#006c49'
+    on-secondary:              '#ffffff'
+    secondary-container:       '#6cf8bb'
+    on-secondary-container:    '#00714d'
+    # Tertiary — crimson; "Fail", danger, stop controls
+    tertiary:                  '#c0000c'
+    on-tertiary:               '#ffffff'
+    tertiary-container:        '#ffdad7'
+    on-tertiary-container:     '#ef4444'
+    error:                     '#ba1a1a'
+    on-error:                  '#ffffff'
+    error-container:           '#ffdad6'
+    on-error-container:        '#93000a'
+    surface-variant:           '#e0e3e5'
+
+  dark:
+    background:                '#0b1326'
+    on-background:             '#dae2fd'
+    surface:                   '#0b1326'
+    surface-dim:               '#0b1326'
+    surface-bright:            '#31394d'
+    surface-container-lowest:  '#060e20'
+    surface-container-low:     '#131b2e'
+    surface-container:         '#171f33'
+    surface-container-high:    '#222a3d'
+    surface-container-highest: '#2d3449'
+    on-surface:                '#dae2fd'
+    on-surface-variant:        '#b9cacb'
+    inverse-surface:           '#dae2fd'
+    inverse-on-surface:        '#283044'
+    outline:                   '#849495'
+    outline-variant:           '#3a494b'
+    surface-tint:              '#00dbe7'
+    # Primary — cyan; interactive, active, data, "backlit" glass
+    primary:                   '#00dbe7'
+    on-primary:                '#00363a'
+    primary-container:         '#00f2ff'
+    on-primary-container:      '#006a71'
+    inverse-primary:           '#00696f'
+    # Secondary — emerald; "Pass", system-ready, safe parameters
+    secondary:                 '#4edea3'
+    on-secondary:              '#003824'
+    secondary-container:       '#00a572'
+    on-secondary-container:    '#00311f'
+    # Tertiary — muted crimson; "Fail", critical alert, stop
+    tertiary:                  '#ffb3ad'
+    on-tertiary:               '#68000a'
+    tertiary-container:        '#ffd0cc'
+    on-tertiary-container:     '#bb1c25'
+    error:                     '#ffb4ab'
+    on-error:                  '#690005'
+    error-container:           '#93000a'
+    on-error-container:        '#ffdad6'
+    surface-variant:           '#2d3449'
+
+# ─────────────────────────────────────────────
+# TYPOGRAPHY SCALE  (theme-independent)
+# ─────────────────────────────────────────────
 typography:
-  display:
-    fontFamily: Outfit
-    fontSize: 64px
-    fontWeight: '800'
-    lineHeight: '1.1'
+  display-lg:
+    fontFamily:    Outfit
+    fontSize:      48px
+    fontWeight:    '700'
+    lineHeight:    '1.1'
     letterSpacing: -0.02em
   headline-lg:
-    fontFamily: Outfit
-    fontSize: 40px
-    fontWeight: '700'
-    lineHeight: '1.2'
+    fontFamily:    Outfit
+    fontSize:      32px
+    fontWeight:    '600'
+    lineHeight:    '1.2'
     letterSpacing: -0.01em
   headline-lg-mobile:
-    fontFamily: Outfit
-    fontSize: 32px
-    fontWeight: '700'
-    lineHeight: '1.2'
+    fontFamily:    Outfit
+    fontSize:      24px
+    fontWeight:    '600'
+    lineHeight:    '1.2'
   headline-md:
-    fontFamily: Outfit
-    fontSize: 24px
-    fontWeight: '700'
-    lineHeight: '1.3'
+    fontFamily:    Outfit
+    fontSize:      24px
+    fontWeight:    '500'
+    lineHeight:    '1.3'
   body-lg:
-    fontFamily: Inter
-    fontSize: 18px
-    fontWeight: '500'
-    lineHeight: '1.6'
+    fontFamily:    Outfit
+    fontSize:      18px
+    fontWeight:    '400'
+    lineHeight:    '1.6'
   body-md:
-    fontFamily: Inter
-    fontSize: 16px
-    fontWeight: '400'
-    lineHeight: '1.6'
-  label-bold:
-    fontFamily: Inter
-    fontSize: 14px
-    fontWeight: '700'
-    lineHeight: '1.2'
-    letterSpacing: 0.05em
-  label-md:
-    fontFamily: Inter
-    fontSize: 14px
-    fontWeight: '600'
-    lineHeight: '1.2'
+    fontFamily:    Outfit
+    fontSize:      16px
+    fontWeight:    '400'
+    lineHeight:    '1.5'
+  label-caps:
+    fontFamily:    Outfit
+    fontSize:      12px
+    fontWeight:    '700'
+    lineHeight:    '1'
+    letterSpacing: 0.08em
+    textTransform: uppercase
+  mono-data:
+    fontFamily:    JetBrains Mono
+    fontSize:      14px
+    fontWeight:    '500'
+    lineHeight:    '1.5'
+    letterSpacing: 0.02em
+
+# ─────────────────────────────────────────────
+# SHAPE / RADIUS
+# ─────────────────────────────────────────────
 rounded:
-  sm: 0.125rem
-  DEFAULT: 0.25rem
-  md: 0.375rem
-  lg: 0.5rem
-  xl: 0.75rem
-  full: 9999px
+  none:    0
+  sm:      0.125rem    # inputs, small controls
+  DEFAULT: 0.25rem     # standard elements
+  md:      0.375rem    # buttons
+  lg:      0.5rem      # cards, glass panels
+  xl:      0.75rem     # large containers
+  full:    9999px      # pills, status indicators
+
+# ─────────────────────────────────────────────
+# SPACING  (4 px baseline unit)
+# ─────────────────────────────────────────────
 spacing:
-  unit: 4px
-  xs: 8px
-  sm: 16px
-  md: 24px
-  lg: 40px
-  xl: 64px
-  gutter: 24px
-  margin: 32px
+  unit:          4px
+  gutter:        24px
+  margin-mobile: 16px
+  margin-desktop: 40px
+  container-max: 1440px
+
+# ─────────────────────────────────────────────
+# GLASS CONSTANTS  (reference values for both themes)
+# ─────────────────────────────────────────────
+glass:
+  light:
+    blur:       blur(24px)
+    fill:       'rgba(255, 255, 255, 0.60)'
+    border-top: '1px solid rgba(255, 255, 255, 0.90)'
+    border-bot: '1px solid rgba(15,  23,  42,  0.08)'
+    shadow:     '0 4px 24px rgba(15, 23, 42, 0.04), 0 1px 4px rgba(15, 23, 42, 0.06)'
+  dark:
+    blur:       blur(12px)
+    fill:       'rgba(255, 255, 255, 0.05)'
+    border-top: '1px solid rgba(255, 255, 255, 0.30)'
+    border-bot: '1px solid rgba(0,   0,   0,   0.40)'
+    shadow:     '0 4px 20px rgba(0, 0, 0, 0.50)'
 ---
 
 ## Brand & Style
-This design system merges the raw, unapologetic honesty of Neo-Brutalism with the surgical precision of high-end consumer technology interfaces. The brand personality is bold, structural, and intellectual. It prioritizes clarity over decoration, using stark contrast and heavy strokes to define a rigid hierarchy.
 
-The visual style is characterized by "floating paper" surfaces, aggressive weight contrasts, and a complete absence of gradients or traditional "soft" shadows. It evokes a sense of confidence and utility, designed for power users who appreciate both avant-garde aesthetics and functional rigor.
+This design system serves precision-critical professional environments — industrial QA dashboards, control consoles, site-intelligence platforms — where clarity, speed of reading, and aesthetic authority are non-negotiable.
+
+The personality is **clinical confidence**: capable, calibrated, and unfussy. The interface should feel like a high-grade instrument panel that happens to live on a screen.
+
+The visual language is **Glassmorphic Tactile Minimalism** — frosted layers over structural surfaces, subtle skeuomorphic depth, and a strict geometric grid. In light mode this reads as an airy clean-room terminal; in dark mode it reads as a heavy, illuminated control console. Both modes share the same component architecture; only the depth treatment and color intent differ.
+
+---
+
+## Font Choice: Outfit + JetBrains Mono
+
+**Outfit** is the primary font across all UI roles in both themes. Its geometric construction — near-circular bowls, consistent stem weights, optical precision — directly mirrors the "milled from a single block" aesthetic of the design system. The uppercase variant with tracked spacing reads exactly like engraved industrial placards. Outfit also offers a clean numerical form, critical for dashboards where figures must be immediately readable at a glance. Both source design systems converged on Outfit independently, confirming it as the correct choice for this context.
+
+**JetBrains Mono** handles all data-class content: sensor readings, serial numbers, timestamps, threshold values, and any machine-generated output. Its monospaced grid keeps columnar data perfectly aligned, its zero-slash disambiguates `0` from `O` in IDs, and its ligature set adds subtle sophistication to operator tokens (`>=`, `!=`, `→`). Together these two fonts cover every role the system requires without redundancy.
+
+No third font is needed. Resist the temptation to introduce a serif display face — it undermines the industrial register.
+
+---
 
 ## Colors
-The palette is built on a foundation of absolute extremes: `#FFFFFF` and `#000000`. This high-contrast base ensures maximum legibility and structural definition. 
 
-Accents are derived from vibrant, high-saturation spectrums. They are used exclusively as solid fills for interactive elements, status indicators, or category markers.
-- **Primary (Vibrant Blue):** Used for primary actions and focused states.
-- **Secondary (San Francisco Pink):** Used for highlights and expressive callouts.
-- **Tertiary (Neon Green):** Used for success states and growth metrics.
-- **Surface:** All containers use a pure white background to maintain the "paper" aesthetic against the stark black borders.
+The palette operates on a shared semantic vocabulary across both themes. **Primary** anchors authority and interactive action. **Secondary (emerald)** is the universal signal for "Pass / Ready / Active." **Tertiary (crimson)** is "Fail / Danger / Stop" — always. These semantic roles must never be inverted.
+
+### Light Theme
+
+The base canvas is clinical off-white (`#F7F9FB`), not pure white — pure white is too harsh under glass layers. Primary is deep slate (`#0F172A`) which provides industrial contrast. Glass overlays use 60% white fill with 24px blur, keeping the surface airy. Shadows are highly diffused with very low opacity (`rgba(15, 23, 42, 0.04)`) to avoid a "dirty" appearance.
+
+### Dark Theme
+
+The foundation is a deep charcoal-navy (`#0B1326`), evoking a physical console in a low-light environment. Primary shifts to cyan (`#00DBE7`) to represent digital connectivity and active data flow. Glass layers use 5% white fill with 12px blur — less blur than light mode because the dark canvas itself provides depth. Neon glow effects amplify the "backlit" LED quality of interactive elements.
+
+### Status Semantics (both themes)
+
+| State      | Light                     | Dark                      |
+|------------|---------------------------|---------------------------|
+| Pass / OK  | `secondary` `#006C49`     | `secondary` `#4EDEA3`     |
+| Fail / Alert | `tertiary` `#C0000C`    | `tertiary` `#FFB3AD`      |
+| Active / Data | `primary` `#0F172A`   | `primary` `#00DBE7`       |
+| Neutral    | `outline` `#76777D`       | `outline` `#849495`       |
+
+---
 
 ## Typography
-The typographic system relies on aggressive weight differentiation. **Outfit** is utilized for headings to provide a geometric, modern tech feel, while **Inter** handles body copy and UI labels with systematic precision.
 
-Headlines should be set with tight letter-spacing and heavy weights (700+) to compete with the thick borders of the UI. Body text remains neutral to ensure readability within dense layouts. Use uppercase labels for utility text to reinforce the architectural feel of the design.
+Outfit runs across all levels. Headlines use tighter tracking and heavier weights to anchor the light-toned pages and give "structural weight" in dark mode. Labels and data identifiers should always be set in `label-caps` style — uppercase with `0.08em` letter-spacing — to mimic industrial placard engraving.
+
+`mono-data` (JetBrains Mono 14px/500) is the exclusive style for any value that comes from a sensor, system, or API. Never mix Outfit and JetBrains Mono in the same line unless they occupy visibly distinct label/value roles.
+
+For mobile, scale `display-lg` and `headline-lg` down by ~25% using the `headline-lg-mobile` token rather than letting them wrap.
+
+---
 
 ## Layout & Spacing
-The layout follows a rigid 12-column grid system for desktop and a 4-column grid for mobile. All dimensions and spacing increments are strictly derived from a 4px baseline grid.
 
-Generous internal padding is a hallmark of this system, preventing the heavy 3px borders from feeling cramped. Content blocks should be separated by large vertical gutters to allow the "floating paper" elements room to breathe. Components should snap to the grid, maintaining a boxy, structural alignment across all breakpoints.
+A strict **4px baseline unit** governs all spacing. No arbitrary margins or padding.
+
+| Breakpoint | Columns | Gutters | Outer Margin |
+|------------|---------|---------|--------------|
+| Desktop    | 12      | 24px    | 40px         |
+| Tablet     | 8       | 16px    | 24px         |
+| Mobile     | 4       | 16px    | 16px         |
+
+Content is organized into **Modules**, not a continuous scroll. A Module mimics a physical hardware rack unit: a bounded container with 24px internal padding, its own glass surface, and a defined header area. This containment strategy reinforces the "control panel" mental model and allows the glass depth effects room to breathe.
+
+On mobile, Modules stack vertically. Reduce backdrop-blur values by 50% on mobile to maintain rendering performance while preserving the aesthetic intent.
+
+---
 
 ## Elevation & Depth
-Depth is communicated through "Hard Shadows"—solid black offsets with zero blur. This creates a tactile, physical stacking effect reminiscent of layered cardstock.
 
-- **Level 0 (Floor):** Pure white or light gray background.
-- **Level 1 (Default Card):** 3px black border, 4px x 4px solid black shadow.
-- **Level 2 (Hover/Active):** 3px black border, 8px x 8px solid black shadow. The element appears to lift further off the page.
-- **Level 3 (Pressed):** 3px black border, 0px shadow (the element flattens against the surface).
+Both themes share the same elevation stack, but the implementation inverts.
 
-There are no blurs, no transparencies, and no gradients. Every layer is opaque and clearly defined by its stroke.
+### Light Theme — Depth through light
+
+| Level | Description | Implementation |
+|-------|-------------|---------------|
+| 0 — Floor | Base canvas | `background: #F7F9FB` |
+| 1 — Surface | Raised neutral panels | `surface-container` + shadow `0 4px 24px rgba(15,23,42,0.04)` |
+| 2 — Glass | Frosted overlay containers | `rgba(255,255,255,0.60)` + `backdrop-filter: blur(24px)` |
+| 3 — Interactive | Buttons, active chips | Milled edge + elevated shadow |
+
+**The Milled Edge** (light mode signature): every card and button carries a `1px` top-aligned white inner highlight and a `1px rgba(15,23,42,0.08)` bottom border. This creates the impression the component was machined from a single block of material and light is catching the upper bevel.
+
+### Dark Theme — Depth through glow
+
+| Level | Description | Implementation |
+|-------|-------------|---------------|
+| 0 — Floor | Dark console base | `background: #0B1326` (subtle brushed-metal texture optional) |
+| 1 — Panel | Raised module surface | `surface-container-low` + `0 4px 20px rgba(0,0,0,0.50)` + 1px `rgba(255,255,255,0.20)` border |
+| 2 — Glass | Frosted glass container | `rgba(255,255,255,0.05)` + `backdrop-filter: blur(12px)` |
+| 3 — Interactive | Active / hover elements | Cyan or secondary glow + specular border pair |
+
+**Specular Highlight** (dark mode signature): every glass container has `1px solid rgba(255,255,255,0.30)` on the top and left edges, and `1px solid rgba(0,0,0,0.40)` on the bottom and right edges, simulating physical light striking a beveled surface.
+
+---
 
 ## Shapes
-While the system is rooted in Brutalism, it adopts an "Apple-inspired" refinement by avoiding jaggedness. Elements use a consistent `0.25rem` (4px) corner radius. This slight softening prevents the UI from feeling hostile while maintaining the overall rectangular, structural theme. 
 
-Large containers and cards should use `rounded-lg` (8px) to emphasize their scale, while buttons and inputs remain at the base `soft` (4px) setting.
+Shape language is disciplined and "engineered." The base radius (`0.25rem`) avoids the playfulness of fully rounded corners while escaping the harshness of 90° angles — it mimics the chamfered edge of precision-machined aluminum.
+
+| Element type | Radius token | Value |
+|-------------|-------------|-------|
+| Inputs, small controls | `rounded-sm` | 2px |
+| Standard buttons, chips | `rounded-md` | 6px |
+| Cards, glass panels | `rounded-lg` | 8px |
+| Status pips, full pills | `rounded-full` | 9999px |
+| **Critical override** — Error alerts, Stop buttons | `rounded-none` | **0px** — sharp corners communicate urgency |
+
+---
 
 ## Components
+
 ### Buttons
-Primary buttons are solid fills of Primary Blue or Neutral Black with white text. They must feature a 3px black border and the signature 4px hard shadow. On hover, the shadow increases to 8px; on click, the shadow disappears and the button "sinks."
+
+**Light — Primary:** Solid `primary` fill (`#0F172A`), white text, milled edge (1px white inner highlight top). Hover lifts shadow. Active removes the highlight and applies a subtle inset shadow.
+
+**Light — Secondary/Ghost:** Frosted glass fill, `outline` border at 1px, `on-surface` text. Hover increases glass opacity slightly.
+
+**Dark — Primary:** Linear gradient from a lighter cyan tint down to the base `primary` (`#00DBE7`). 1px `rgba(255,255,255,0.30)` top highlight. Active state: remove highlight, apply `inset 0 4px 4px rgba(0,0,0,0.40)` inner shadow, add cyan outer glow `0 0 12px rgba(0,219,231,0.40)`.
+
+**Dark — Secondary/Ghost:** Glass fill, specular border pair, `on-surface` text.
+
+**Shared rule:** A button's label always uses `label-caps` typography and sentence-case copy ("Run analysis", not "RUN ANALYSIS"). The label states the exact outcome, not a system operation.
+
+### Cards / Glass Modules
+
+Both themes: `rounded-lg` radius, 24px internal padding, defined header row with `label-caps` module title.
+
+**Light:** `rgba(255,255,255,0.60)` fill, `blur(24px)`, milled edge pair, diffused drop shadow. Data points within the card are separated by 1px `outline-variant` dividers.
+
+**Dark:** `rgba(255,255,255,0.05)` fill, `blur(12px)`, specular border pair, `0 4px 20px rgba(0,0,0,0.50)` outer shadow. Data separators are "etched" — a 1px dark line with a 1px lighter shadow beneath it to simulate an engraved groove.
 
 ### Input Fields
-Inputs use a white background, 3px black border, and 16px internal padding. Labels are placed above the field in `label-bold` style. The focus state replaces the 3px black border with a 3px Primary Blue border.
 
-### Cards
-Cards are the primary container. They always feature a 3px black stroke and a hard shadow. Header sections within cards are separated by a 3px horizontal stroke.
+**Light:** Background `surface-container-low`, subtle inset shadow `inset 0 2px 4px rgba(15,23,42,0.06)` creates a "hollowed-out" effect. Border `outline-variant`. Focus: border shifts to `primary`.
 
-### Chips & Tags
-Chips are rectangular with the base 4px border-radius. They use high-saturation fills (Pink or Green) with black text for maximum "pop" against the white background.
+**Dark:** Background `#05080F` (deeper than floor), inset shadow `inset 0 2px 6px rgba(0,0,0,0.60)`. Text and caret render in `primary` cyan for a screen-glow effect. Focus ring: 1px cyan border + faint `0 0 8px rgba(0,219,231,0.25)` glow.
 
-### Checkboxes & Radios
-These are oversized and strictly geometric. Checkboxes are squares; Radio buttons are circles. Both use 3px strokes and solid black fills when selected.
+### Status Indicators / Chips
+
+Small circular "LED pip" (8–10px) using a radial gradient from the center color outward to a transparent edge, simulating a physical indicator bulb.
+
+**Pass / OK:** Secondary emerald with outer glow `0 0 6px rgba(78,222,163,0.50)` in dark, solid `#006C49` in light.
+
+**Fail / Alert:** Tertiary crimson with outer glow `0 0 6px rgba(255,179,173,0.50)` in dark, solid `#C0000C` in light.
+
+**Label chips** (text-based): `label-caps` text, 1.5px border, `rounded-full`, no fill — they read as technical classification tags.
+
+### Gauges & Progress
+
+Background track: recessed in both themes (inset shadow). Track color: `surface-container-highest` (light) / `surface-container-low` (dark).
+
+Active bar: thick stroke (6–8px) in `secondary` (pass range) or `tertiary` (danger range). In dark mode the active bar carries a "neon tube" glow: `0 0 8px` in the bar's color at 60% opacity.
+
+Threshold markers: fine 1px vertical tick marks using `mono-data` labels below.
+
+### Lists & Tables
+
+Rows separated by 1px `outline-variant` lines at 40% opacity — present as visual rhythm, not as heavy dividers. Alternate row tinting is discouraged; it competes with the glass layer. Use hover highlight (`surface-container-high` in light, `surface-container` in dark) to indicate interactivity instead.
+
+Column headers: always `label-caps`. Data cells: `mono-data` for numeric values, `body-md` for descriptive content.
+
+---
+
+## Theme Switching
+
+Implement via a CSS `data-theme` attribute on `<html>` or `<body>`. All color tokens are CSS custom properties. The glass constants, shadows, and glow values should also be custom properties so they flip with the theme. Typography, spacing, and radius tokens are theme-independent and declared once.
+
+```css
+:root[data-theme="light"] {
+  --color-background:    #f7f9fb;
+  --color-primary:       #0f172a;
+  --glass-fill:          rgba(255, 255, 255, 0.60);
+  --glass-blur:          blur(24px);
+  /* ... */
+}
+
+:root[data-theme="dark"] {
+  --color-background:    #0b1326;
+  --color-primary:       #00dbe7;
+  --glass-fill:          rgba(255, 255, 255, 0.05);
+  --glass-blur:          blur(12px);
+  /* ... */
+}
+```
+
+Respect `prefers-color-scheme` as the default before any user override. Avoid animating theme switches on low-motion settings.
