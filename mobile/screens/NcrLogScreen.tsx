@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config';
 
 export default function NcrLogScreen({ route, navigation }: any) {
   const { equipmentTag, stepId } = route.params;
@@ -100,37 +102,65 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      // We will perform a POST request to the backend API if online.
-      // If offline, it saves to AsyncStorage queue (handled in SyncStatusScreen).
-      // For the demo/hackathon, we'll mock the success response from the Inspector Agent.
+      // Attempt connection to the backend server with a 3s timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      setTimeout(async () => {
-        const mockResponse = {
-          ncr_id: `NCR-${Math.floor(1000 + Math.random() * 9000)}`,
+      const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transcript: transcript,
           equipment_tag: equipmentTag,
           step_id: stepId,
-          transcript: transcript,
-          r0_score: stepId === 'IST-002' ? 4.2 : 3.1,
-          severity: stepId === 'IST-002' ? 'Critical' : 'Major',
-          mitigation: stepId === 'IST-002' 
-            ? 'Verify governor settings or replace fuel injector unit.' 
-            : 'Escalate to engineering lead for temperature tolerance override.'
-        };
+          raised_by: 'field_engineer',
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-        setResultNcr(mockResponse);
+      if (response.ok) {
+        const data = await response.json();
+        setResultNcr(data);
         setLoading(false);
 
         // Add to local logs for syncing/audit
         const localLogsRaw = await AsyncStorage.getItem('local_ncrs');
         const logs = localLogsRaw ? JSON.parse(localLogsRaw) : [];
-        logs.push(mockResponse);
+        logs.push(data);
         await AsyncStorage.setItem('local_ncrs', JSON.stringify(logs));
-        
-      }, 1500);
-    } catch (err) {
-      setLoading(false);
-      Alert.alert('Error', 'Failed to submit NCR.');
+        return;
+      }
+    } catch (apiErr) {
+      console.log("Backend offline, submitting via mock simulation.");
     }
+
+    // Local simulation fallback
+    setTimeout(async () => {
+      const mockResponse = {
+        ncr_id: `NCR-${Math.floor(1000 + Math.random() * 9000)}`,
+        equipment_tag: equipmentTag,
+        step_id: stepId,
+        transcript: transcript,
+        r0_score: stepId === 'IST-002' ? 4.2 : 3.1,
+        severity: stepId === 'IST-002' ? 'Critical' : 'Major',
+        mitigation: stepId === 'IST-002' 
+          ? 'Verify governor settings or replace fuel injector unit.' 
+          : 'Escalate to engineering lead for temperature tolerance override.'
+      };
+
+      setResultNcr(mockResponse);
+      setLoading(false);
+
+      // Add to local logs for syncing/audit
+      const localLogsRaw = await AsyncStorage.getItem('local_ncrs');
+      const logs = localLogsRaw ? JSON.parse(localLogsRaw) : [];
+      logs.push(mockResponse);
+      await AsyncStorage.setItem('local_ncrs', JSON.stringify(logs));
+      
+    }, 1200);
   };
 
   return (
@@ -257,7 +287,7 @@ export default function NcrLogScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#10101E',
+    backgroundColor: '#111111',
   },
   header: {
     flexDirection: 'row',
@@ -266,48 +296,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#262626',
   },
   backButton: {
     padding: 8,
   },
   backText: {
-    color: '#06B6D4',
+    color: '#E5E5E5',
     fontSize: 15,
     fontWeight: 'bold',
   },
   title: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#F8FAFC',
+    color: '#F5F5F5',
   },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
   },
   metaCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderRadius: 16,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#262626',
   },
   metaLabel: {
-    color: '#64748B',
+    color: '#A3A3A3',
     fontSize: 11,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   metaValue: {
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 12,
   },
   sectionLabel: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
@@ -315,37 +345,37 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   voiceSection: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0A0A0A',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#262626',
   },
   recordButton: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#ffb3ad',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: '#EF4444',
+    shadowColor: '#ffb3ad',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   recordButtonActive: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderWidth: 3,
-    borderColor: '#EF4444',
+    borderColor: '#ffb3ad',
   },
   recordIcon: {
     fontSize: 32,
   },
   recordStatusText: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -358,7 +388,7 @@ const styles = StyleSheet.create({
   },
   waveBar: {
     width: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#ffb3ad',
     borderRadius: 3,
   },
   transcriptSection: {
@@ -371,33 +401,33 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   simulateText: {
-    color: '#06B6D4',
+    color: '#E5E5E5',
     fontSize: 12,
     fontWeight: 'bold',
   },
   transcriptInput: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#262626',
     borderRadius: 16,
     padding: 16,
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontSize: 15,
     lineHeight: 22,
     textAlignVertical: 'top',
   },
   submitButton: {
-    backgroundColor: '#06B6D4',
+    backgroundColor: '#E5E5E5',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#06B6D4',
+    shadowColor: '#E5E5E5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
   },
   submitButtonText: {
-    color: '#10101E',
+    color: '#171717',
     fontWeight: '900',
     fontSize: 16,
   },
@@ -405,9 +435,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   successBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(78, 222, 163, 0.1)',
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#4edea3',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -416,22 +446,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   successBadgeText: {
-    color: '#10B981',
+    color: '#4edea3',
     fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
   ncrDetailsCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderRadius: 20,
     padding: 20,
     width: '100%',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#262626',
     marginBottom: 24,
   },
   detailsTitle: {
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontSize: 18,
     fontWeight: '900',
     marginBottom: 16,
@@ -443,27 +473,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderColor: '#2D3748',
+    borderColor: '#262626',
   },
   detailLabel: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 13,
     fontWeight: '600',
   },
   detailLabelMargin: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 13,
     fontWeight: '600',
     marginTop: 12,
     marginBottom: 6,
   },
   detailValueId: {
-    color: '#06B6D4',
+    color: '#E5E5E5',
     fontSize: 16,
     fontWeight: '900',
   },
   detailValueR0: {
-    color: '#EF4444',
+    color: '#ffb3ad',
     fontSize: 16,
     fontWeight: '900',
   },
@@ -473,9 +503,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   severityCritical: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(255, 179, 173, 0.15)',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#ffb3ad',
   },
   severityMajor: {
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
@@ -483,7 +513,7 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
   },
   severityBadgeText: {
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -492,32 +522,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     lineHeight: 20,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0A0A0A',
     padding: 12,
     borderRadius: 8,
   },
   detailMitigation: {
-    color: '#10B981',
+    color: '#4edea3',
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: 'rgba(78, 222, 163, 0.05)',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(78, 222, 163, 0.2)',
   },
   doneButton: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#262626',
     borderRadius: 16,
     paddingVertical: 16,
     width: '100%',
     alignItems: 'center',
   },
   doneButtonText: {
-    color: '#F8FAFC',
+    color: '#E5E5E5',
     fontWeight: '700',
     fontSize: 16,
   },

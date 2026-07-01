@@ -59,29 +59,29 @@ colors:
     surface-variant:           '#e0e3e5'
 
   dark:
-    background:                '#0b1326'
-    on-background:             '#dae2fd'
-    surface:                   '#0b1326'
-    surface-dim:               '#0b1326'
-    surface-bright:            '#31394d'
-    surface-container-lowest:  '#060e20'
-    surface-container-low:     '#131b2e'
-    surface-container:         '#171f33'
-    surface-container-high:    '#222a3d'
-    surface-container-highest: '#2d3449'
-    on-surface:                '#dae2fd'
-    on-surface-variant:        '#b9cacb'
-    inverse-surface:           '#dae2fd'
+    background:                '#111111'
+    on-background:             '#f5f5f5'
+    surface:                   '#111111'
+    surface-dim:               '#111111'
+    surface-bright:            '#262626'
+    surface-container-lowest:  '#0a0a0a'
+    surface-container-low:     '#171717'
+    surface-container:         '#1c1c1c'
+    surface-container-high:    '#262626'
+    surface-container-highest: '#333333'
+    on-surface:                '#f5f5f5'
+    on-surface-variant:        '#a3a3a3'
+    inverse-surface:           '#f5f5f5'
     inverse-on-surface:        '#283044'
-    outline:                   '#849495'
-    outline-variant:           '#3a494b'
-    surface-tint:              '#00dbe7'
-    # Primary — cyan; interactive, active, data, "backlit" glass
-    primary:                   '#00dbe7'
-    on-primary:                '#00363a'
-    primary-container:         '#00f2ff'
-    on-primary-container:      '#006a71'
-    inverse-primary:           '#00696f'
+    outline:                   '#525252'
+    outline-variant:           '#404040'
+    surface-tint:              '#e5e5e5'
+    # Primary — light grey/white; interactive, active, data, "backlit" glass
+    primary:                   '#e5e5e5'
+    on-primary:                '#171717'
+    primary-container:         '#f5f5f5'
+    on-primary-container:      '#262626'
+    inverse-primary:           '#a3a3a3'
     # Secondary — emerald; "Pass", system-ready, safe parameters
     secondary:                 '#4edea3'
     on-secondary:              '#003824'
@@ -96,7 +96,7 @@ colors:
     on-error:                  '#690005'
     error-container:           '#93000a'
     on-error-container:        '#ffdad6'
-    surface-variant:           '#2d3449'
+    surface-variant:           '#333333'
 
 # ─────────────────────────────────────────────
 # TYPOGRAPHY SCALE  (theme-independent)
@@ -218,7 +218,7 @@ The base canvas is clinical off-white (`#F7F9FB`), not pure white — pure white
 
 ### Dark Theme
 
-The foundation is a deep charcoal-navy (`#0B1326`), evoking a physical console in a low-light environment. Primary shifts to cyan (`#00DBE7`) to represent digital connectivity and active data flow. Glass layers use 5% white fill with 12px blur — less blur than light mode because the dark canvas itself provides depth. Neon glow effects amplify the "backlit" LED quality of interactive elements.
+The foundation is a deep charcoal grey (`#111111`), evoking a physical console in a low-light environment. Primary shifts to light grey (`#E5E5E5`) to represent digital connectivity and active data flow. Glass layers use 5% white fill with 12px blur — less blur than light mode because the dark canvas itself provides depth. Neon glow effects amplify the "backlit" LED quality of interactive elements.
 
 ### Status Semantics (both themes)
 
@@ -226,8 +226,8 @@ The foundation is a deep charcoal-navy (`#0B1326`), evoking a physical console i
 |------------|---------------------------|---------------------------|
 | Pass / OK  | `secondary` `#006C49`     | `secondary` `#4EDEA3`     |
 | Fail / Alert | `tertiary` `#C0000C`    | `tertiary` `#FFB3AD`      |
-| Active / Data | `primary` `#0F172A`   | `primary` `#00DBE7`       |
-| Neutral    | `outline` `#76777D`       | `outline` `#849495`       |
+| Active / Data | `primary` `#0F172A`   | `primary` `#E5E5E5`       |
+| Neutral    | `outline` `#76777D`       | `outline` `#525252`       |
 
 ---
 
@@ -276,7 +276,7 @@ Both themes share the same elevation stack, but the implementation inverts.
 
 | Level | Description | Implementation |
 |-------|-------------|---------------|
-| 0 — Floor | Dark console base | `background: #0B1326` (subtle brushed-metal texture optional) |
+| 0 — Floor | Dark console base | `background: #111111` (subtle brushed-metal texture optional) |
 | 1 — Panel | Raised module surface | `surface-container-low` + `0 4px 20px rgba(0,0,0,0.50)` + 1px `rgba(255,255,255,0.20)` border |
 | 2 — Glass | Frosted glass container | `rgba(255,255,255,0.05)` + `backdrop-filter: blur(12px)` |
 | 3 — Interactive | Active / hover elements | Cyan or secondary glow + specular border pair |
@@ -307,7 +307,7 @@ Shape language is disciplined and "engineered." The base radius (`0.25rem`) avoi
 
 **Light — Secondary/Ghost:** Frosted glass fill, `outline` border at 1px, `on-surface` text. Hover increases glass opacity slightly.
 
-**Dark — Primary:** Linear gradient from a lighter cyan tint down to the base `primary` (`#00DBE7`). 1px `rgba(255,255,255,0.30)` top highlight. Active state: remove highlight, apply `inset 0 4px 4px rgba(0,0,0,0.40)` inner shadow, add cyan outer glow `0 0 12px rgba(0,219,231,0.40)`.
+**Dark — Primary:** Linear gradient from a lighter grey tint down to the base `primary` (`#E5E5E5`). 1px `rgba(255,255,255,0.30)` top highlight. Active state: remove highlight, apply `inset 0 4px 4px rgba(0,0,0,0.40)` inner shadow, add light grey outer glow `0 0 12px rgba(229,229,229,0.40)`.
 
 **Dark — Secondary/Ghost:** Glass fill, specular border pair, `on-surface` text.
 
@@ -325,7 +325,7 @@ Both themes: `rounded-lg` radius, 24px internal padding, defined header row with
 
 **Light:** Background `surface-container-low`, subtle inset shadow `inset 0 2px 4px rgba(15,23,42,0.06)` creates a "hollowed-out" effect. Border `outline-variant`. Focus: border shifts to `primary`.
 
-**Dark:** Background `#05080F` (deeper than floor), inset shadow `inset 0 2px 6px rgba(0,0,0,0.60)`. Text and caret render in `primary` cyan for a screen-glow effect. Focus ring: 1px cyan border + faint `0 0 8px rgba(0,219,231,0.25)` glow.
+**Dark:** Background `#0A0A0A` (deeper than floor), inset shadow `inset 0 2px 6px rgba(0,0,0,0.60)`. Text and caret render in `primary` light grey for a screen-glow effect. Focus ring: 1px light grey border + faint `0 0 8px rgba(229,229,229,0.25)` glow.
 
 ### Status Indicators / Chips
 
@@ -367,8 +367,8 @@ Implement via a CSS `data-theme` attribute on `<html>` or `<body>`. All color to
 }
 
 :root[data-theme="dark"] {
-  --color-background:    #0b1326;
-  --color-primary:       #00dbe7;
+  --color-background:    #111111;
+  --color-primary:       #e5e5e5;
   --glass-fill:          rgba(255, 255, 255, 0.05);
   --glass-blur:          blur(12px);
   /* ... */

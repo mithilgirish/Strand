@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config';
 
 export default function SyncStatusScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -33,22 +35,56 @@ export default function SyncStatusScreen({ navigation }: any) {
     }
 
     setLoading(true);
-    // Simulate syncing local observations with the Neo4j PKG via backend
-    setTimeout(async () => {
-      setLoading(false);
-      const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setSyncTime(currentTime);
-      await AsyncStorage.setItem('last_sync_time', currentTime);
-      
+    let successCount = 0;
+    try {
+      // Loop and sync each local NCR to the backend
+      for (const ncr of localNcrs) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            transcript: ncr.transcript,
+            equipment_tag: ncr.equipment_tag,
+            step_id: ncr.step_id,
+            raised_by: ncr.raised_by || 'field_engineer',
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          successCount++;
+        }
+      }
+
+      if (successCount === localNcrs.length) {
+        const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setSyncTime(currentTime);
+        await AsyncStorage.setItem('last_sync_time', currentTime);
+        
+        Alert.alert(
+          'Sync Successful',
+          `Successfully uploaded ${successCount} observations to STRAND PKG database.`
+        );
+        
+        setLocalNcrs([]);
+        await AsyncStorage.removeItem('local_ncrs');
+      } else {
+        Alert.alert('Sync Incomplete', `Uploaded ${successCount} of ${localNcrs.length} records. Try again.`);
+      }
+    } catch (err) {
       Alert.alert(
-        'Sync Successful',
-        `Successfully uploaded ${localNcrs.length} observations to STRAND PKG database.`
+        'Sync Failed',
+        'Backend server is unreachable. Please ensure the backend is running on your host machine at http://192.168.0.100:8000'
       );
-      
-      // Clear synced queue for demo
-      setLocalNcrs([]);
-      await AsyncStorage.removeItem('local_ncrs');
-    }, 2000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClearHistory = async () => {
@@ -60,13 +96,10 @@ export default function SyncStatusScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
         <Text style={styles.title}>Database Sync</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.subtitle}>Audit & Sync Logs</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -134,41 +167,46 @@ export default function SyncStatusScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#10101E',
+    backgroundColor: '#111111',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#262626',
+    alignItems: 'center',
+  },
+  subtitle: {
+    fontSize: 11,
+    color: '#A3A3A3',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginTop: 2,
   },
   backButton: {
     padding: 8,
   },
   backText: {
-    color: '#06B6D4',
+    color: '#E5E5E5',
     fontSize: 15,
     fontWeight: 'bold',
   },
   title: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#F8FAFC',
+    color: '#F5F5F5',
   },
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
   },
   statusCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1C',
     borderRadius: 16,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#262626',
   },
   statusRow: {
     flexDirection: 'row',
@@ -176,22 +214,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statusLabel: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 14,
     fontWeight: '600',
   },
   statusOnline: {
-    color: '#10B981',
+    color: '#4edea3',
     fontWeight: 'bold',
     fontSize: 14,
   },
   statusTime: {
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontWeight: 'bold',
     fontSize: 14,
   },
   statusQueue: {
-    color: '#64748B',
+    color: '#A3A3A3',
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -199,18 +237,18 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
   },
   syncButton: {
-    backgroundColor: '#06B6D4',
+    backgroundColor: '#E5E5E5',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 32,
-    shadowColor: '#06B6D4',
+    shadowColor: '#E5E5E5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
   },
   syncButtonText: {
-    color: '#10101E',
+    color: '#171717',
     fontWeight: '900',
     fontSize: 16,
   },
@@ -221,14 +259,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    color: '#94A3B8',
+    color: '#A3A3A3',
     fontSize: 14,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   clearText: {
-    color: '#EF4444',
+    color: '#ffb3ad',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -237,17 +275,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#64748B',
+    color: '#A3A3A3',
     fontSize: 14,
     fontStyle: 'italic',
   },
   ncrItem: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#262626',
   },
   ncrItemHeader: {
     flexDirection: 'row',
@@ -256,7 +294,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   ncrId: {
-    color: '#06B6D4',
+    color: '#E5E5E5',
     fontWeight: '900',
     fontSize: 15,
   },
@@ -266,9 +304,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   severityCritical: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(255, 179, 173, 0.15)',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#ffb3ad',
   },
   severityMajor: {
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
@@ -276,12 +314,12 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
   },
   severityText: {
-    color: '#F8FAFC',
+    color: '#F5F5F5',
     fontSize: 9,
     fontWeight: '900',
   },
   ncrMeta: {
-    color: '#64748B',
+    color: '#A3A3A3',
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 10,
@@ -294,7 +332,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ncrR0: {
-    color: '#EF4444',
+    color: '#ffb3ad',
     fontWeight: 'bold',
     fontSize: 12,
   },

@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 // Layout components
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
@@ -27,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#0E0E1F] text-slate-100 flex overflow-hidden`}>
+    <html lang="en" className="h-full antialiased dark" data-theme="dark">
+      <body className={`${outfit.variable} ${jetbrainsMono.variable} h-full bg-background text-on-background flex overflow-hidden font-sans`}>
         {/* Sidebar */}
         <Sidebar />
 
@@ -38,8 +38,10 @@ export default function RootLayout({
           <TopBar />
 
           {/* Main Page Area */}
-          <main className="flex-1 overflow-y-auto bg-[#0E0E1F]">
-            {children}
+          <main className="flex-1 overflow-y-auto bg-background p-10">
+            <div className="max-w-[1440px] mx-auto h-full">
+              {children}
+            </div>
           </main>
         </div>
       </body>

@@ -1,0 +1,276 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'brain';
+  text: string;
+  timestamp: string;
+}
+
+export default function ChatbotScreen({ navigation }: any) {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      sender: 'brain',
+      text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
+      timestamp: '02:30 AM'
+    }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardDidHideListener.remove();
+      keyboardDidShowListener.remove();
+    };
+  }, []);
+
+  const handleSendMessage = () => {
+    if (!inputText.trim()) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: inputText.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    setIsTyping(true);
+
+    // Simulate Brain response
+    setTimeout(() => {
+      setIsTyping(false);
+      let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
+      
+      const query = userMessage.text.toLowerCase();
+      if (query.includes('generator') || query.includes('gen-01')) {
+        responseText = "GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).";
+      } else if (query.includes('cooling') || query.includes('ct-01')) {
+        responseText = "Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.";
+      } else if (query.includes('r0') || query.includes('risk')) {
+        responseText = "Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).";
+      }
+
+      const brainMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'brain',
+        text: responseText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, brainMessage]);
+    }, 1500);
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Brain Agent</Text>
+        <Text style={styles.subtitle}>Causal Query Intelligence</Text>
+      </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView 
+          style={styles.chatArea}
+          contentContainerStyle={styles.chatContent}
+          ref={scrollViewRef}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.map((msg) => (
+            <View 
+              key={msg.id} 
+              style={[
+                styles.messageRow, 
+                msg.sender === 'user' ? styles.userRow : styles.brainRow
+              ]}
+            >
+              <View 
+                style={[
+                  styles.bubble, 
+                  msg.sender === 'user' ? styles.userBubble : styles.brainBubble
+                ]}
+              >
+                <Text style={[
+                  styles.messageText,
+                  msg.sender === 'user' ? styles.userText : styles.brainText
+                ]}>
+                  {msg.text}
+                </Text>
+                <Text style={styles.timestamp}>{msg.timestamp}</Text>
+              </View>
+            </View>
+          ))}
+
+          {isTyping && (
+            <View style={[styles.messageRow, styles.brainRow]}>
+              <View style={[styles.bubble, styles.brainBubble, styles.typingBubble]}>
+                <ActivityIndicator size="small" color="#E5E5E5" />
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Input Bar */}
+        <View style={styles.inputBar}>
+          <TextInput
+            style={styles.input}
+            placeholder="Query project specifications..."
+            placeholderTextColor="#64748B"
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={handleSendMessage}
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+            <Text style={styles.sendIcon}>➔</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#111111',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderColor: '#262626',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#F5F5F5',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  subtitle: {
+    fontSize: 11,
+    color: '#A3A3A3',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  chatArea: {
+    flex: 1,
+  },
+  chatContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    width: '100%',
+  },
+  userRow: {
+    justifyContent: 'flex-end',
+  },
+  brainRow: {
+    justifyContent: 'flex-start',
+  },
+  bubble: {
+    maxWidth: '85%',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  userBubble: {
+    backgroundColor: '#E5E5E5',
+    borderBottomRightRadius: 4,
+  },
+  brainBubble: {
+    backgroundColor: '#1C1C1C',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderBottomLeftRadius: 4,
+  },
+  typingBubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  userText: {
+    color: '#171717',
+  },
+  brainText: {
+    color: '#F5F5F5',
+  },
+  timestamp: {
+    fontSize: 9,
+    color: '#A3A3A3',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderColor: '#262626',
+    backgroundColor: '#171717',
+    alignItems: 'center',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#1C1C1C',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    color: '#F5F5F5',
+    fontSize: 14,
+  },
+  sendButton: {
+    backgroundColor: '#E5E5E5',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendIcon: {
+    color: '#171717',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});

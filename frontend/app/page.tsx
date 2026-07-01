@@ -1,174 +1,101 @@
-import { 
-  ShieldAlert, 
-  ClipboardAlert, 
-  Ship, 
-  Flame, 
-  TrendingUp, 
-  CheckCircle, 
-  ArrowRight
-} from "lucide-react";
-import Link from "next/link";
+"use client";
 
-export default function Home() {
-  const kpis = [
-    { title: "Violations Today", value: "2", subtitle: "1 Critical, 1 Minor", icon: ShieldAlert, color: "text-red-400 bg-red-500/10 border-red-500/20" },
-    { title: "Open NCRs", value: "5", subtitle: "2 in review, 3 active", icon: ClipboardAlert, color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
-    { title: "At-Risk Shipments", value: "3", subtitle: "Critical delays at port", icon: Ship, color: "text-orange-400 bg-orange-500/10 border-orange-500/20" },
-    { title: "Max R0 Score", value: "4.2", subtitle: "Moderate cascade risk", icon: Flame, color: "text-red-500 bg-red-600/10 border-red-600/20" },
-  ];
+import React from 'react';
+import { Shield, CalendarClock, LayoutDashboard } from 'lucide-react';
+import ImmunityScore from '@/components/shared/ImmunityScore';
+import StatCard from '@/components/shared/StatCard';
+import AgentStatusBadge from '@/components/shared/AgentStatusBadge';
+import ViolationCard from '@/components/guardian/ViolationCard';
 
-  const alerts = [
-    {
-      id: "alt-001",
-      agent: "Guardian",
-      type: "Violation",
-      title: "Cooling Tower Operating Temp Deviation",
-      desc: "SUB-CT-01 reads 45°C operating capacity, violating contract clause Section 6.7.1 (requires 50°C).",
-      time: "12 mins ago",
-      impact: "Critical (R0: 4.2)"
-    },
-    {
-      id: "alt-002",
-      agent: "Scheduler",
-      type: "Delay Risk",
-      title: "Task T047 Delayed Predecessors",
-      desc: "ATS delivery delay is propagating to Integrated System Testing (IST) scheduling.",
-      time: "1 hour ago",
-      impact: "Major (R0: 3.1)"
-    },
-    {
-      id: "alt-003",
-      agent: "Inspector",
-      type: "Field NCR",
-      title: "GEN-01 Fuel Consumption NCR-4091",
-      desc: "Inspector logged 285 l/hr fuel consumption under load, exceeding limit (260 l/hr limit).",
-      time: "3 hours ago",
-      impact: "Critical (R0: 4.2)"
-    }
+export default function RiskCockpit() {
+  const agents = [
+    { name: 'Guardian', status: 'active' as const },
+    { name: 'Scheduler', status: 'active' as const },
+    { name: 'Oracle', status: 'active' as const },
+    { name: 'Inspector', status: 'idle' as const },
+    { name: 'Brain', status: 'active' as const },
   ];
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Welcome Banner */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gradient-to-r from-slate-900 via-[#0F0F28] to-slate-900 border border-[#1E1E38] rounded-2xl p-6 gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            STRAND Construction Intelligence Cockpit
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Analyzing 15 spec requirements, 40 supply chains, and 100 schedule activities.
-          </p>
+    <div className="flex flex-col h-full pb-12">
+      {/* Page Title Header */}
+      <div className="mb-6 select-none">
+        <h2 className="text-3xl font-black text-on-surface flex items-center gap-3 font-sans tracking-wide">
+          <LayoutDashboard className="w-7 h-7 text-primary" />
+          RISK COCKPIT
+        </h2>
+        <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
+          Real-time causal project intelligence, compliance tracking, and contagion monitoring.
+        </p>
+      </div>
+
+      {/* Row 1: KPI Stats Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+        <div className="col-span-1">
+          <ImmunityScore score={67.5} />
         </div>
-        <div className="flex items-center gap-2 bg-[#0A0A16] px-4 py-2 border border-[#1E1E38] rounded-xl text-xs font-semibold text-slate-400">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          PKG Causal Graph Synced
+        <div className="col-span-1 lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard label="Violations Today" value={2} trend="up" color="tertiary" />
+          <StatCard label="Open NCRs" value={5} trend="up" color="warning" />
+          <StatCard label="At-Risk Shipments" value={3} trend="up" color="tertiary" />
         </div>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.title} className="bg-[#13132B]/60 border border-[#1E1E38] rounded-2xl p-6 flex flex-col justify-between hover:border-slate-800 transition-all duration-200">
-              <div className="flex justify-between items-start">
-                <span className="text-sm font-bold text-slate-400 tracking-wide">{kpi.title}</span>
-                <div className={`p-2.5 rounded-xl border ${kpi.color}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <span className="text-3xl font-extrabold text-slate-100 tracking-tight">{kpi.value}</span>
-                <p className="text-xs text-slate-500 font-semibold mt-1">{kpi.subtitle}</p>
-              </div>
-            </div>
-          );
-        })}
+      {/* Row 2: Agent Status Panel */}
+      <div className="bg-surface-container-low border-t border-l border-[rgba(255,255,255,0.15)] border-r border-b border-[rgba(0,0,0,0.40)] p-5 mb-6 flex flex-wrap items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.50)] rounded-lg">
+        <span className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans mr-2 select-none">
+          Active Agents Grid:
+        </span>
+        <div className="flex flex-wrap gap-4">
+          {agents.map((agent) => (
+            <AgentStatusBadge key={agent.name} name={agent.name} status={agent.status} />
+          ))}
+        </div>
       </div>
 
-      {/* Main Grid: Immunity Score and Real-time Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Col: Immunity Index */}
-        <div className="bg-[#13132B]/60 border border-[#1E1E38] rounded-2xl p-6 flex flex-col justify-between">
-          <div>
-            <h3 className="text-md font-bold text-slate-100 uppercase tracking-wider mb-4">Project Immunity Index</h3>
+      {/* Row 3: Feeds & Alert Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Violation Feed Module */}
+        <div className="bg-surface-container-low border-t border-l border-[rgba(255,255,255,0.15)] border-r border-b border-[rgba(0,0,0,0.40)] rounded-lg p-6 shadow-[0_4px_20px_rgba(0,0,0,0.50)]">
+          <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 mb-5 select-none border-b border-outline-variant pb-3">
+            <Shield className="w-4 h-4 text-primary" />
+            Recent Guardian Violations
+          </h3>
+          <div className="space-y-6">
+            <ViolationCard />
+          </div>
+        </div>
+
+        {/* Scheduler Alerts Module */}
+        <div className="bg-surface-container-low border-t border-l border-[rgba(255,255,255,0.15)] border-r border-b border-[rgba(0,0,0,0.40)] rounded-lg p-6 shadow-[0_4px_20px_rgba(0,0,0,0.50)]">
+          <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 mb-5 select-none border-b border-outline-variant pb-3">
+            <CalendarClock className="w-4 h-4 text-primary" />
+            Latest Scheduler Alerts
+          </h3>
+          
+          <div className="bg-[rgba(255,255,255,0.02)] p-5 rounded-md border border-[rgba(255,255,255,0.05)] relative overflow-hidden">
+            {/* Warning Alert bar uses rounded-none */}
+            <div className="absolute left-0 top-0 w-1.5 h-full bg-yellow-500 rounded-none"></div>
             
-            <div className="flex flex-col items-center py-6">
-              {/* Simulated Circular Gauge */}
-              <div className="relative w-44 h-44 rounded-full border-[10px] border-slate-900 border-t-[#06B6D4] border-r-[#10B981] flex items-center justify-center shadow-lg shadow-cyan-500/5">
-                <div className="text-center">
-                  <span className="text-4xl font-extrabold text-slate-100">78.5</span>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">HEALTH SCORE</p>
-                </div>
-              </div>
-              
-              <div className="mt-6 flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
-                <TrendingUp className="w-4 h-4" />
-                +2.4% vs last commissioning phase
-              </div>
+            <div className="flex justify-between items-center mb-3.5 pl-3">
+              <span className="px-2 py-0.5 rounded-none text-[10px] font-bold tracking-[0.08em] uppercase bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+                At Risk
+              </span>
+              <span className="text-[12px] font-medium tracking-[0.02em] text-on-surface-variant font-mono">R0: 2.8</span>
             </div>
-          </div>
-
-          <div className="border-t border-[#1E1E38] pt-4 mt-4 space-y-3">
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-slate-500">Spec Alignment Rate:</span>
-              <span className="text-slate-300">93.3% (14/15 verified)</span>
-            </div>
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-slate-500">Supply Chain Stability:</span>
-              <span className="text-slate-300">89.4% (3 delayed)</span>
-            </div>
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-slate-500">Commissioning Status:</span>
-              <span className="text-slate-300">91.3% (21/23 complete)</span>
+            
+            <h4 className="font-bold text-on-surface font-sans text-base pl-3">Generator Installation Delay</h4>
+            <p className="text-sm text-on-surface-variant font-sans mt-2 mb-5 pl-3 leading-relaxed">
+              Delay probability estimated at <span className="text-on-surface font-semibold font-mono">85%</span> due to predecessor cooling tower procurement hold. Downstream cascading risk detected.
+            </p>
+            
+            <div className="pl-3">
+              <button className="px-4 py-2 text-xs font-bold rounded-md bg-primary text-on-primary hover:bg-opacity-90 shadow-md border-t border-l border-[rgba(255,255,255,0.20)] border-r border-b border-[rgba(0,0,0,0.40)] transition-all font-sans">
+                View Critical Path
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Right Col: Live Causal Risk Stream */}
-        <div className="lg:col-span-2 bg-[#13132B]/60 border border-[#1E1E38] rounded-2xl p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-md font-bold text-slate-100 uppercase tracking-wider">Causal Violation Feed</h3>
-            <span className="text-xs text-cyan-400 font-bold cursor-pointer hover:underline flex items-center gap-1">
-              Filter Active Only <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-
-          <div className="space-y-4 flex-1">
-            {alerts.map((alert) => (
-              <div key={alert.id} className="p-4 rounded-xl bg-[#0F0F24]/60 border border-[#1E1E38] flex gap-4 hover:border-slate-800 transition-all">
-                <div className="flex flex-col items-center">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                    alert.agent === "Guardian" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                    alert.agent === "Scheduler" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
-                    "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                  }`}>
-                    {alert.agent.charAt(0)}
-                  </div>
-                  <span className="text-[9px] text-slate-500 font-bold mt-2 uppercase">{alert.agent}</span>
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h4 className="text-sm font-bold text-slate-200">{alert.title}</h4>
-                    <span className="text-xs text-red-400 font-extrabold uppercase px-2 py-0.5 rounded-md bg-red-500/5 border border-red-500/10">
-                      {alert.impact}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    {alert.desc}
-                  </p>
-                  <div className="flex justify-between items-center mt-3 text-[10px] text-slate-500 font-semibold">
-                    <span>ID: {alert.id.toUpperCase()}</span>
-                    <span>{alert.time}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
       </div>
     </div>
   );

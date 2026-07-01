@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -8,8 +9,7 @@ import {
   Calendar, 
   MapPin, 
   ClipboardCheck, 
-  MessageSquare,
-  Activity
+  MessageSquare
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -25,15 +25,15 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-[#0A0A16] border-r border-[#1E1E38] text-slate-300 flex flex-col justify-between h-screen sticky top-0">
+    <aside className="w-64 bg-surface-container-lowest border-r border-outline-variant text-on-surface flex flex-col justify-between h-screen sticky top-0">
       <div className="flex flex-col">
         {/* Brand Header */}
-        <div className="h-16 flex items-center px-6 border-b border-[#1E1E38] gap-3 bg-[#080812]">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Activity className="w-5 h-5 text-[#0A0A16] stroke-[2.5]" />
+        <div className="h-24 flex items-center px-6 border-b border-outline-variant gap-4 bg-surface-container-lowest">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
+            <Image src="/strand_logo.png" alt="STRAND Logo" width={56} height={56} className="object-cover rounded-2xl" />
           </div>
           <div>
-            <span className="font-black text-xl tracking-wider text-slate-100 bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+            <span className="font-black text-2xl tracking-wider text-on-surface label-caps">
               STRAND
             </span>
           </div>
@@ -49,16 +49,19 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 group relative ${
                   isActive
-                    ? "bg-gradient-to-r from-cyan-950/40 to-slate-900/40 border border-cyan-500/30 text-cyan-400 font-medium shadow-inner shadow-cyan-950/20"
-                    : "hover:bg-slate-900/30 hover:text-slate-100 border border-transparent text-slate-400"
+                    ? "bg-[rgba(255,255,255,0.05)] border-t border-t-[rgba(255,255,255,0.30)] border-b border-b-[rgba(0,0,0,0.40)] shadow-[0_4px_20px_rgba(0,0,0,0.50)] text-primary"
+                    : "hover:bg-surface-container hover:text-on-surface border border-transparent text-on-surface-variant"
                 }`}
               >
                 <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-105 ${
-                  isActive ? "text-cyan-400" : "text-slate-400 group-hover:text-slate-200"
+                  isActive ? "text-primary drop-shadow-[0_0_8px_rgba(229,229,229,0.40)]" : "text-on-surface-variant group-hover:text-on-surface"
                 }`} />
-                <span className="text-sm">{item.name}</span>
+                <span className="label-caps">{item.name}</span>
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-sm drop-shadow-[0_0_8px_rgba(229,229,229,0.60)]" />
+                )}
               </Link>
             );
           })}
@@ -66,9 +69,9 @@ export default function Sidebar() {
       </div>
 
       {/* Footer Info */}
-      <div className="p-6 border-t border-[#1E1E38] bg-[#080812] text-xs text-slate-500 text-center">
-        <p className="font-semibold text-slate-400">ET AI Hackathon 2026</p>
-        <p className="mt-1">Problem Statement 4</p>
+      <div className="p-6 border-t border-outline-variant bg-surface-container-lowest text-xs text-on-surface-variant text-center">
+        <p className="label-caps mb-1">ET AI Hackathon 2026</p>
+        <p className="mono-data text-xs">Problem Statement 4</p>
       </div>
     </aside>
   );
