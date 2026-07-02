@@ -5,11 +5,11 @@ pydantic-settings==2.3.0
 python-multipart==0.0.9
 
 # LangGraph / LangChain
-langgraph==0.2.0
-langchain==0.2.0
-langchain-anthropic==0.1.0
-langchain-groq==0.1.0
-langchain-community==0.2.0
+langgraph>=0.2.0
+langchain>=0.2.0
+langchain-anthropic>=0.1.15
+langchain-groq>=0.1.0
+langchain-community>=0.2.0
 
 # Vector DB
 chromadb==0.5.0

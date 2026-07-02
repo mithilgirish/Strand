@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.deps import limiter
-from backend.routers import health, documents, guardian, scheduler, oracle, inspector, brain, approvals, metrics, planner, judge
+from backend.routers import health, documents, guardian, scheduler, oracle, inspector, brain, approvals, metrics, planner, judge, project
 
 app = FastAPI(
     title="STRAND API",
@@ -38,7 +38,7 @@ app.include_router(approvals.router, prefix="/api/v1")
 app.include_router(metrics.router, prefix="/api/v1")
 app.include_router(planner.router, prefix="/api/v1")
 app.include_router(judge.router, prefix="/api/v1")
-
+app.include_router(project.router, prefix="/api/v1")
 @app.get("/")
 async def root():
     return {

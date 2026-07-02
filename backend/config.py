@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     LLM_PROVIDER: str = "groq"                    # groq | anthropic
-    LLM_MODEL: str = "llama-3.1-8b-instant"        # dev; claude-sonnet-4-6 for demo
+    LLM_MODEL: str = "llama3-8b-8192"                # stable default for Groq
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 2000
     LLM_RETRY_COUNT: int = 3
