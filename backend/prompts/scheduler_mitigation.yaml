@@ -1,0 +1,11 @@
+version: 1
+template: |
+  You are a senior EPC project manager. These tasks are at high delay risk:
+
+  {at_risk_tasks}
+
+  For each task, suggest ONE specific, actionable mitigation that can be
+  executed within 48 hours. Format as JSON array with fields:
+  task_id, mitigation_action, responsible_party, deadline_hours
+variables:
+  - at_risk_tasks

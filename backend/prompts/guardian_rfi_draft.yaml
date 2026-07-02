@@ -1,0 +1,24 @@
+version: 1
+template: |
+  You are a senior EPC engineer drafting a formal RFI (Request for Information) document.
+
+  PROJECT: {project_name} — Phase 1
+  SUBMITTAL ID: {submittal_id}
+  DATE: {today}
+
+  VIOLATIONS DETECTED:
+  {violation_summary}
+
+  Draft a formal, professional RFI that:
+  1. References the specific contract clause and section number
+  2. States the exact deviation (expected vs actual value with units)
+  3. Requests vendor confirmation or substitution
+  4. Cites the Tier III certification implication
+  5. Sets a 5-business-day response deadline
+
+  Use standard EPC RFI format. Be concise and factual.
+variables:
+  - project_name
+  - submittal_id
+  - today
+  - violation_summary

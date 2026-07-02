@@ -1,13 +1,7 @@
-# backend/deps.py
-
-class Neo4jClientStub:
-    def __init__(self):
-        pass
-
-class ChromaClientStub:
-    def __init__(self):
-        pass
-
-# Singletons for dependency injection/access
-neo4j_client = Neo4jClientStub()
-chroma_client = ChromaClientStub()
+# backend/deps.py — Shared dependency singletons
+"""
+Real clients replacing the stubs. All modules import from here.
+"""
+from backend.graph.client import neo4j_client, get_neo4j_session
+from backend.vector.store import chroma_store
+from backend.redis_client import redis_client

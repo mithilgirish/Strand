@@ -1,2 +1,4 @@
 .traz/
 .env
+.venv/
+backend/.venv/
