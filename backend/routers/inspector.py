@@ -3,7 +3,8 @@ import json
 import random
 from typing import Optional, List
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from backend.deps import limiter
 
 router = APIRouter()
 
@@ -109,7 +110,8 @@ async def get_checklist(tag: str):
     }
 
 @router.post("/inspector/ncr")
-async def log_ncr(ncr: NcrSubmission):
+@limiter.limit("30/minute")
+async def log_ncr(request: Request, ncr: NcrSubmission):
     db = load_db()
     
     # Calculate mock R0 contagion scores based on tag and step reference
