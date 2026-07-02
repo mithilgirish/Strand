@@ -132,6 +132,8 @@ def _ingest_pdf(
                 match = re.search(r"(?:vendor|supplier)[:\s]+(.+?)(?:\n|$)", page_data["text"], re.IGNORECASE)
                 if match:
                     vendor_name = match.group(1).strip()
+                else:
+                    logger.warning(f"Vendor name regex failed to match on page {page_data['page']}, falling back")
 
         # Create submittal node
         spec_dna = generate_spec_dna_id(filename, "submittal", equipment_tag, vendor_name)

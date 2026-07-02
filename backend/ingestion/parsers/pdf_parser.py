@@ -86,7 +86,7 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
                 if tab_finder and tab_finder.tables:
                     for table in tab_finder.tables:
                         tables.append(table.extract())
-            except Exception:
+            except BaseException:
                 pass  # Tables extraction is best-effort
 
             pages.append({

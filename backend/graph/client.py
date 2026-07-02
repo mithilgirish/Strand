@@ -79,7 +79,7 @@ class Neo4jClient:
         """Execute a Cypher query and return results as list of dicts."""
         if self._using_fallback:
             logger.debug(f"Fallback graph query (no-op): {query[:80]}...")
-            return []
+            raise StrandGraphUnavailableError(message="Graph operations are not supported in fallback mode")
 
         try:
             with self.get_session() as session:
@@ -94,7 +94,7 @@ class Neo4jClient:
         """Execute a write Cypher query (MERGE, CREATE, DELETE)."""
         if self._using_fallback:
             logger.debug(f"Fallback graph write (no-op): {query[:80]}...")
-            return []
+            raise StrandGraphUnavailableError(message="Graph operations are not supported in fallback mode")
 
         try:
             with self.get_session() as session:
@@ -130,7 +130,7 @@ class _NetworkXSession:
 
     def run(self, query: str, **kwargs) -> "_NetworkXResult":
         logger.debug(f"NetworkX fallback — query not executed: {query[:60]}...")
-        return _NetworkXResult([])
+        raise StrandGraphUnavailableError(message="Graph operations are not supported in fallback mode")
 
 
 class _NetworkXResult:

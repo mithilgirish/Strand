@@ -27,6 +27,7 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 def seed_all():
     """Seed the entire PKG from synthetic data."""
     logger.info("Starting PKG seed...")
+    random.seed(42)  # Make seed deterministic to prevent duplicate paths if rerun
 
     # 1. Initialize schema constraints
     init_schema(neo4j_client)

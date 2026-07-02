@@ -6,7 +6,7 @@ Never use f-strings with extracted/attacker-controlled text in Cypher.
 
 # ── Spec-DNA lineage chain ───────────────────────────────────────────
 GET_SPEC_DNA_CHAIN = """
-MATCH path = (c:ContractClause)<-[:DERIVES_FROM*]-(s:VendorSubmittal {submittal_id: $submittal_id})
+MATCH path = (c:ContractClause)<-[:DERIVES_FROM*1..5]-(s:VendorSubmittal {submittal_id: $submittal_id})
 RETURN [n IN nodes(path) | {
     id: coalesce(n.spec_dna_id, n.submittal_id, n.line_id, n.po_number, n.step_id),
     label: labels(n)[0],
@@ -59,7 +59,7 @@ RETURN s, v, c
 # ── Downstream impact for R0 ────────────────────────────────────────
 GET_DOWNSTREAM_DEPENDENCIES = """
 MATCH (start {spec_dna_id: $spec_dna_id})
-MATCH (downstream)-[:DERIVES_FROM*]->(start)
+MATCH (downstream)-[:DERIVES_FROM*1..5]->(start)
 RETURN DISTINCT downstream, labels(downstream)[0] as type,
        downstream.spec_dna_id as spec_dna_id
 """
@@ -83,7 +83,7 @@ RETURN c
 GET_AT_RISK_SHIPMENTS = """
 MATCH (sh:Shipment)-[:SUPPLIED_BY]->(sup:Supplier)
 WHERE sh.risk_flag = true OR sh.delay_days > 7
-OPTIONAL MATCH (sup)-[:TIER_OF*]->(parent:Supplier)
+OPTIONAL MATCH (sup)-[:TIER_OF*1..3]->(parent:Supplier)
 RETURN sh.shipment_id as shipment_id,
        sh.equipment_tag as equipment_tag,
        sh.delay_days as delay_days,
@@ -117,7 +117,7 @@ RETURN sh.shipment_id as shipment_id,
 
 GET_SUPPLY_CHAIN = """
 MATCH (sh:Shipment {shipment_id: $shipment_id})-[:SUPPLIED_BY]->(sup:Supplier)
-OPTIONAL MATCH (sup)-[:TIER_OF*]->(parent:Supplier)
+OPTIONAL MATCH (sup)-[:TIER_OF*1..3]->(parent:Supplier)
 RETURN sh, sup, collect(parent) as supply_chain_tiers
 """
 

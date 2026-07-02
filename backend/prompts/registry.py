@@ -38,12 +38,19 @@ def load_prompt(name: str, version: Optional[int] = None, **variables) -> str:
     prompt_data = _prompt_cache[cache_key]
 
     if version and prompt_data.get("version") != version:
-        logger.warning(
+        raise ValueError(
             f"Prompt '{name}' version mismatch: "
             f"requested {version}, got {prompt_data.get('version')}"
         )
 
     template = prompt_data.get("template", "")
+
+    # Sanitize injected text fields to prevent prompt injection
+    for key in ["context", "related_rfis"]:
+        if key in variables and isinstance(variables[key], str):
+            # Escape triple backticks to prevent breaking out of delimiters
+            safe_text = variables[key].replace("```", "'''")
+            variables[key] = f"```\n{safe_text}\n```"
 
     # Substitute variables
     try:

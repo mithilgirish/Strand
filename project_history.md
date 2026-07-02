@@ -17,7 +17,7 @@ This document tracks the history of the STRAND Backend & Agentic AI architecture
 - **Configuration & Error Handling (`backend/config.py`, `backend/errors.py`):** Configured application settings, rate limits, and standardized error envelopes.
 - **Database Clients (`backend/graph/client.py`, `backend/vector/store.py`, `backend/redis_client.py`):** Implemented Neo4j driver with NetworkX fallback, ChromaDB vector store, and Redis client with in-memory fallback.
 - **Graph Schema & Queries (`backend/graph/schema.py`, `backend/graph/queries.py`):** Defined constraint logic (`passes_constraint`) and all Cypher queries using idempotent `MERGE` statements.
-- **R0 Contagion Engine (`backend/r0/`):** Built the core physics engine that calculates cascading supply chain risk and maps it to severity levels.
+- **R0 Contagion Engine (`backend/r0/`):** Built the core physics engine that calculates cascading supply chain risk and maps it to severity levels. (Note: Resolved mathematical discrepancy by adding a critical-path weight multiplier `2 * critical_path_downstream` normalized to a 0-10 scale).
 - **Spec-DNA Ingestion (`backend/ingestion/`):** Created the deterministic SHA-256 fingerprinting system for document lineage. Built parsers for PDFs (PyMuPDF) and CSVs, along with NER parameter extractors.
 - **LLM Wrappers (`backend/llm/client.py`):** Established robust Pydantic structured output extraction using `langchain-groq`.
 - **Prompt Registry (`backend/prompts/`):** Externalized all LLM prompts into YAML files for easier editing and versioning.

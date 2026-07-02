@@ -53,7 +53,14 @@ def authorize_tool_call(tool_name: str, is_write: bool = False) -> bool:
     Raises:
         StrandPermissionError: If the role cannot use this tool
     """
+    from backend.config import settings
     allowed_tools = TOOL_POLICY.get(_current_role, [])
+
+    if is_write and not getattr(settings, "DEMO_MODE", False):
+        raise StrandPermissionError(
+            message=f"Write operations are disabled unless DEMO_MODE=True",
+            agent=_current_role,
+        )
 
     if "*" in allowed_tools:
         return True

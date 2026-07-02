@@ -19,23 +19,31 @@ class ChromaStore:
         self._connect()
 
     def _connect(self):
-        try:
-            import chromadb
-            self._client = chromadb.PersistentClient(
-                path=settings.CHROMA_PERSIST_DIR,
-            )
-            self._collection = self._client.get_or_create_collection(
-                name=settings.CHROMA_COLLECTION,
-                metadata={"hnsw:space": "cosine"},
-            )
-            logger.info(
-                f"Chroma connected: collection='{settings.CHROMA_COLLECTION}', "
-                f"count={self._collection.count()}"
-            )
-        except Exception as e:
-            logger.warning(f"Chroma initialization failed: {e}")
-            self._client = None
-            self._collection = None
+        import time
+        retries = 3
+        for attempt in range(retries):
+            try:
+                import chromadb
+                self._client = chromadb.PersistentClient(
+                    path=settings.CHROMA_PERSIST_DIR,
+                )
+                self._collection = self._client.get_or_create_collection(
+                    name=settings.CHROMA_COLLECTION,
+                    metadata={"hnsw:space": "cosine"},
+                )
+                logger.info(
+                    f"Chroma connected: collection='{settings.CHROMA_COLLECTION}', "
+                    f"count={self._collection.count()}"
+                )
+                return
+            except Exception as e:
+                if attempt < retries - 1:
+                    logger.warning(f"Chroma init failed, retrying in 2s (attempt {attempt + 1}): {e}")
+                    time.sleep(2)
+                else:
+                    logger.warning(f"Chroma initialization failed after {retries} attempts: {e}")
+                    self._client = None
+                    self._collection = None
 
     @property
     def is_available(self) -> bool:

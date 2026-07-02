@@ -1,7 +1,6 @@
 # backend/agents/planner.py — The Planner (Orchestration Layer) per PRD §7
 """
-Routes user requests to agents. Two paths:
-- Fast path: EVENT_ROUTING dict for structured events
+Routes user requests to agents.
 - LLM path: classify_intent → decompose → execute → judge → approve → synthesize
 
 Per v1.2 §14.4: Write operations go through HITL approval gate.
@@ -28,7 +27,7 @@ from backend.agents.judge import run_judge
 from backend.approvals.manager import approval_manager
 
 
-# ── Fast-path routing ────────────────────────────────────────────────
+# ── Fast-path routing (Not yet implemented) ────────────────────────
 EVENT_ROUTING = {
     "submittal_upload": "guardian",
     "schedule_update": "scheduler",
@@ -88,18 +87,26 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                 "result": result,
             })
 
-            # Cross-agent trigger: Guardian R0 > 5.0 → Scheduler re-check (§7)
             if agent_name == "guardian" and isinstance(result, dict):
                 r0_max = result.get("r0_max", 0)
                 if r0_max > 5.0 and "scheduler" not in intent.agents:
                     logger.info(f"Planner: R0={r0_max} > 5.0, triggering Scheduler re-check")
-                    sched_result = await run_scheduler()
-                    subtask_results.append({
-                        "agent": "scheduler",
-                        "status": "completed",
-                        "result": sched_result,
-                        "triggered_by": f"guardian_r0_{r0_max}",
-                    })
+                    try:
+                        sched_result = await run_scheduler()
+                        subtask_results.append({
+                            "agent": "scheduler",
+                            "status": "completed",
+                            "result": sched_result,
+                            "triggered_by": f"guardian_r0_{r0_max}",
+                        })
+                    except Exception as sched_e:
+                        logger.error(f"Planner: triggered scheduler re-check failed: {sched_e}")
+                        subtask_results.append({
+                            "agent": "scheduler",
+                            "status": "failed",
+                            "error": str(sched_e),
+                            "triggered_by": f"guardian_r0_{r0_max}",
+                        })
 
         except Exception as e:
             logger.error(f"Planner: {agent_name} execution failed: {e}")
@@ -114,10 +121,11 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
     if any(r.get("status") == "completed" for r in subtask_results):
         try:
             first_success = next(r for r in subtask_results if r.get("status") == "completed")
+            agent_source = first_success.get("agent", "unknown")
             judge_verdict = await run_judge(
                 content=first_success.get("result", {}),
-                content_type=_infer_content_type(intent.agents),
-                agent_source=first_success.get("agent", "unknown"),
+                content_type=_infer_content_type([agent_source]),
+                agent_source=agent_source,
             )
         except Exception as e:
             logger.warning(f"Planner: Judge failed: {e}")
@@ -129,6 +137,11 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
             # We determine action based on the agent involved, e.g. create_ncr or send_rfi
             action = "create_ncr" if "inspector" in intent.agents else "send_rfi"
             payload = {"query": query, "subtask_results": subtask_results}
+            if action == "create_ncr":
+                for r in subtask_results:
+                    if r.get("agent") == "inspector" and isinstance(r.get("result"), dict):
+                        payload["ncr_id"] = r["result"].get("ncr_id")
+                        break
             approval_id = approval_manager.create_approval(
                 action=action,
                 payload=payload,
@@ -137,6 +150,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
             logger.info(f"Planner: pending approval {approval_id} created for {action}")
         except Exception as e:
             logger.error(f"Planner: failed to create approval: {e}")
+            raise
 
     # Step 5: Build response
     response = _synthesize_response(query, intent, subtask_results, judge_verdict, approval_id)

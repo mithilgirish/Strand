@@ -61,6 +61,7 @@ class ApprovalManager:
             item.decided_at = datetime.utcnow().isoformat() + "Z"
             item.decision_reason = "Auto-approved (DEMO_MODE)"
             logger.info(f"HITL: auto-approved {approval_id} (DEMO_MODE)")
+            self._execute_approved_action(item)
 
         # Store in Redis or memory
         self._store_approval(item)
@@ -85,28 +86,37 @@ class ApprovalManager:
         Returns:
             Updated ApprovalItem
         """
-        item = self._get_approval(approval_id)
-        if not item:
-            from backend.errors import StrandNotFoundError
-            raise StrandNotFoundError(f"Approval {approval_id} not found")
-
-        if item.status != "pending":
+        # Concurrency guard
+        lock_key = f"lock:approval:{approval_id}"
+        if not redis_client.acquire_lock(lock_key):
             from backend.errors import StrandValidationError
-            raise StrandValidationError(f"Approval {approval_id} already resolved: {item.status}")
+            raise StrandValidationError(f"Approval {approval_id} is currently being resolved")
 
-        item.status = "approved" if decision.lower() == "approve" else "rejected"
-        item.decided_at = datetime.utcnow().isoformat() + "Z"
-        item.decision_reason = reason
+        try:
+            item = self._get_approval(approval_id)
+            if not item:
+                from backend.errors import StrandNotFoundError
+                raise StrandNotFoundError(f"Approval {approval_id} not found")
 
-        self._store_approval(item)
+            if item.status != "pending":
+                from backend.errors import StrandValidationError
+                raise StrandValidationError(f"Approval {approval_id} already resolved: {item.status}")
 
-        logger.info(f"HITL: {item.status} approval {approval_id}: {reason or 'no reason'}")
+            item.status = "approved" if decision.lower() == "approve" else "rejected"
+            item.decided_at = datetime.utcnow().isoformat() + "Z"
+            item.decision_reason = reason
 
-        # If approved, execute the action
-        if item.status == "approved":
-            self._execute_approved_action(item)
+            # If approved, execute the action (can throw, preventing storage)
+            if item.status == "approved":
+                self._execute_approved_action(item)
 
-        return item
+            self._store_approval(item)
+
+            logger.info(f"HITL: {item.status} approval {approval_id}: {reason or 'no reason'}")
+
+            return item
+        finally:
+            redis_client.release_lock(lock_key)
 
     def get_pending(self) -> list[ApprovalItem]:
         """Get all pending approvals."""
@@ -141,13 +151,17 @@ class ApprovalManager:
         items = list(self._memory_queue.values())
 
         # Also check Redis
-        keys = redis_client.keys("approval:APPR-*")
-        for key in keys:
-            data = redis_client.get_json(key)
-            if data:
-                item = ApprovalItem(**data)
-                if item.approval_id not in self._memory_queue:
-                    items.append(item)
+        cursor = 0
+        while True:
+            cursor, keys = redis_client.client.scan(cursor, match="approval:APPR-*", count=100)
+            for key in keys:
+                data = redis_client.get_json(key.decode('utf-8') if isinstance(key, bytes) else key)
+                if data:
+                    item = ApprovalItem(**data)
+                    if item.approval_id not in self._memory_queue:
+                        items.append(item)
+            if cursor == 0:
+                break
 
         return items
 
@@ -165,7 +179,7 @@ class ApprovalManager:
                 logger.info(f"HITL: NCR {ncr_id} status → 'open' after approval")
 
         elif item.action == "send_rfi":
-            logger.info(f"HITL: RFI approved for transmission (mock)")
+            logger.info("HITL: RFI approved for transmission (mock)")
 
         else:
             logger.info(f"HITL: approved action '{item.action}' — no auto-execution configured")

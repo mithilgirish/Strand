@@ -33,7 +33,7 @@ def link_entity_to_clause(parameter_name: str) -> Optional[dict]:
 
 
 def link_entities_to_clauses(
-    extracted_params: dict[str, dict],
+    extracted_params: Optional[dict[str, dict]],
 ) -> list[dict]:
     """
     Link a batch of extracted parameters to their governing ContractClause nodes.
@@ -45,6 +45,9 @@ def link_entities_to_clauses(
         List of matched pairs: {parameter, extracted, clause}
     """
     linked = []
+    if not extracted_params:
+        return linked
+        
     for param_name, param_data in extracted_params.items():
         clause = link_entity_to_clause(param_name)
         if clause:

@@ -75,14 +75,25 @@ class RedisClient:
     def _connect(self):
         try:
             import redis
-            self._client = redis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True,
-                socket_connect_timeout=5,
-            )
-            self._client.ping()
-            logger.info("Redis connected successfully", url=settings.REDIS_URL)
-            self._using_fallback = False
+            
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    self._client = redis.from_url(
+                        settings.REDIS_URL,
+                        decode_responses=True,
+                        socket_connect_timeout=5,
+                    )
+                    self._client.ping()
+                    logger.info("Redis connected successfully", url=settings.REDIS_URL)
+                    self._using_fallback = False
+                    return
+                except Exception as e:
+                    if attempt < retries - 1:
+                        logger.warning(f"Redis connection attempt {attempt + 1} failed, retrying in 2s: {e}")
+                        time.sleep(2)
+                    else:
+                        raise e
         except Exception as e:
             logger.warning(f"Redis unavailable, using in-process dict fallback: {e}")
             self._client = None

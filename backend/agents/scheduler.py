@@ -31,13 +31,15 @@ def build_task_graph(state: SchedulerState) -> SchedulerState:
     """Parse schedule data and build NetworkX directed graph (CPM)."""
     G = nx.DiGraph()
 
+    valid_task_ids = {t["task_id"] for t in state["schedule_data"]}
+
     for task in state["schedule_data"]:
         G.add_node(task["task_id"], **task)
         preds = task.get("predecessors", "")
         if preds:
             for pred in str(preds).split(";"):
                 pred = pred.strip()
-                if pred and pred in [t["task_id"] for t in state["schedule_data"]]:
+                if pred and pred in valid_task_ids:
                     G.add_edge(pred, task["task_id"])
 
     # Compute critical path

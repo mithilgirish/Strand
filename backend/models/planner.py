@@ -1,7 +1,7 @@
 # backend/models/planner.py — Planner, Judge, Approval models
 from __future__ import annotations
 from typing import Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class PlannerRequest(BaseModel):
@@ -23,6 +23,14 @@ class IntentClassification(BaseModel):
     subtasks: list[PlannerSubtask] = []
     requires_write: bool = False
     confidence: str = "Medium"
+
+    @model_validator(mode="after")
+    def validate_agents(self):
+        valid_agents = {"guardian", "scheduler", "oracle", "inspector", "brain", "judge"}
+        for agent in self.agents:
+            if agent not in valid_agents:
+                raise ValueError(f"Invalid agent specified: {agent}. Must be one of {valid_agents}")
+        return self
 
 
 class PlannerResponse(BaseModel):

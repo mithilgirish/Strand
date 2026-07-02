@@ -161,13 +161,15 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
     """
     # Idempotency check
     lock_key = f"guardian:{submittal_id}"
-    if not redis_client.acquire_lock(lock_key):
+    acquired = redis_client.acquire_lock(lock_key)
+    if not acquired:
         cached = redis_client.get_json(f"cache:guardian:{submittal_id}")
         if cached:
             logger.info(f"Guardian: returning cached result for {submittal_id}")
             return cached
-        # Lock held but no cache — release and re-run
-        redis_client.release_lock(lock_key)
+        # Another worker is analyzing but no cache yet — do not steal its lock.
+        logger.info(f"Guardian: analysis in progress for {submittal_id}")
+        raise RuntimeError("Guardian analysis already in progress")
 
     state: GuardianState = {
         "submittal_id": submittal_id,
@@ -205,4 +207,5 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
         logger.error(f"Guardian pipeline failed: {e}")
         raise
     finally:
-        redis_client.release_lock(lock_key)
+        if acquired:
+            redis_client.release_lock(lock_key)

@@ -1,6 +1,6 @@
 # backend/config.py — Expanded settings per PRD §5.1
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_validator
 
 
 class Settings(BaseSettings):
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     LLM_RETRY_COUNT: int = 3
 
     # ── Neo4j ───────────────────────────────────────────────────
-    NEO4J_URI: str = "neo4j+s://localhost"
+    NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = ""
     NEO4J_TIMEOUT: int = 30                        # seconds
@@ -47,6 +47,12 @@ class Settings(BaseSettings):
 
     # ── Frontend (passthrough) ──────────────────────────────────
     NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
+
+    @model_validator(mode="after")
+    def validate_api_key(self):
+        if not self.DEMO_MODE and self.API_KEY in ["strand-dev-key", "", None]:
+            raise ValueError("API_KEY must be configured securely in non-demo mode")
+        return self
 
 
 settings = Settings()

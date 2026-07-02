@@ -47,7 +47,7 @@ NODE_SCHEMAS: dict[str, dict[str, str]] = {
     },
     "VendorSubmittal": {
         "submittal_id": "str",
-        "spec_dna_id": "str",
+        "spec_dna_id": "str (SHA-256 fingerprint of target clause)",
         "vendor_name": "str",
         "equipment_tag": "str (e.g. 'CT-01')",
         "document_path": "str",
@@ -65,7 +65,7 @@ NODE_SCHEMAS: dict[str, dict[str, str]] = {
         "raised_by": "str",
         "raised_at": "datetime",
         "equipment_tag": "str",
-        "spec_dna_ref": "str (spec_dna_id of violated clause)",
+        "spec_dna_ref": "str (SHA-256 fingerprint of violated clause)",
         "status": "str (pending_approval|open|under_review|closed|rejected)",
         "voice_transcript": "str (optional)",
         "r0_score": "float",

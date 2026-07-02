@@ -131,7 +131,7 @@ def _heuristic_ncr(transcript: str, equipment_tag: str, step_id: str) -> NcrData
 
 
 def generate_checklist(tag: str) -> list[dict]:
-    """Generate a TIA-942 IST 23-step commissioning checklist."""
+    """Generate a TIA-942 IST 10-step commissioning checklist."""
     is_gen = tag.upper().startswith("GEN")
 
     steps = [

@@ -1,7 +1,7 @@
 # backend/models/shipments.py — Oracle models
 from __future__ import annotations
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Shipment(BaseModel):
@@ -16,8 +16,8 @@ class Shipment(BaseModel):
     current_status: str = ""
     delay_days: int = 0
     risk_flag: bool = False
-    lat: float = 0.0
-    lng: float = 0.0
+    lat: float = Field(default=0.0, ge=-90.0, le=90.0)
+    lng: float = Field(default=0.0, ge=-180.0, le=180.0)
 
 
 class Supplier(BaseModel):

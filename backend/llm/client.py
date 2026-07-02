@@ -134,13 +134,13 @@ def invoke_structured(
     from langchain_core.messages import HumanMessage
 
     retries = max_retries if max_retries is not None else settings.LLM_RETRY_COUNT
-    llm = get_llm()
     last_error = None
     had_retry = False
 
     for attempt in range(retries + 1):
         start = time.time()
         try:
+            llm = get_llm()
             # Invoke LLM
             response = llm.invoke([HumanMessage(content=prompt)])
             latency_ms = (time.time() - start) * 1000
@@ -171,7 +171,7 @@ def invoke_structured(
             _record_metric(agent_name, latency_ms, tokens, had_retry, False)
             return result
 
-        except (json.JSONDecodeError, ValueError, Exception) as e:
+        except (json.JSONDecodeError, ValueError) as e:
             latency_ms = (time.time() - start) * 1000
             last_error = e
             had_retry = True
@@ -187,12 +187,19 @@ def invoke_structured(
                 backoff = 2 ** attempt
                 time.sleep(backoff)
             continue
+        except Exception as e:
+            latency_ms = (time.time() - start) * 1000
+            _record_metric(agent_name, latency_ms, 0, False, True)
+            raise StrandLLMError(
+                message=f"LLM invocation failed: {e}",
+                agent=agent_name,
+            ) from e
 
     _record_metric(agent_name, 0, 0, True, True)
     raise StrandLLMParseError(
         message=f"Failed to parse LLM response after {retries + 1} attempts: {last_error}",
         agent=agent_name,
-    )
+    ) from last_error
 
 
 # ── Raw invoke (for non-structured use cases) ────────────────────────
@@ -208,10 +215,10 @@ def invoke_raw(
     """
     from langchain_core.messages import HumanMessage
 
-    llm = get_llm()
     start = time.time()
 
     try:
+        llm = get_llm()
         response = llm.invoke([HumanMessage(content=prompt)])
         latency_ms = (time.time() - start) * 1000
 
@@ -238,7 +245,7 @@ def invoke_raw(
         raise StrandLLMError(
             message=f"LLM invocation failed: {e}",
             agent=agent_name,
-        )
+        ) from e
 
 
 # ── JSON extraction helpers ──────────────────────────────────────────

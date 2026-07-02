@@ -27,8 +27,16 @@ def get_spec_dna_chain(submittal_id: str) -> list[dict]:
             GET_SPEC_DNA_CHAIN,
             {"submittal_id": submittal_id},
         )
-        if results:
-            return results
+        if results and results[0].get("chain"):
+            chain = results[0]["chain"]
+            rank = {
+                "ContractClause": 0,
+                "BOQLine": 1,
+                "POLine": 2,
+                "VendorSubmittal": 3,
+                "TestStep": 4
+            }
+            return sorted(chain, key=lambda x: rank.get(x.get("label", ""), 99))
         return []
     except Exception as e:
         logger.warning(f"Spec-DNA chain query failed for {submittal_id}: {e}")

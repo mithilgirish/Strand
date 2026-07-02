@@ -58,6 +58,15 @@ class HybridRetriever:
         # Merge via Reciprocal Rank Fusion
         fused = self._reciprocal_rank_fusion(dense_results, bm25_results, k=k)
 
+        # Sort by document source and chunk index to maintain reading order for LLM
+        fused.sort(
+            key=lambda x: (
+                x.get("metadata", {}).get("document_source", ""),
+                x.get("metadata", {}).get("page_number", 0),
+                x.get("metadata", {}).get("chunk_index", 0),
+            )
+        )
+
         logger.debug(
             f"Hybrid retrieval: {len(dense_results)} dense, "
             f"{len(bm25_results)} BM25, {len(fused)} fused"
