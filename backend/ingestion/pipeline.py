@@ -136,7 +136,12 @@ def _ingest_pdf(
                     logger.warning(f"Vendor name regex failed to match on page {page_data['page']}, falling back")
 
         # Create submittal node
-        spec_dna = generate_spec_dna_id(filename, "submittal", equipment_tag, vendor_name)
+        spec_dna = generate_spec_dna_id(
+            parameter_name=equipment_tag,
+            parameter_value=vendor_name,
+            document_source=filename,
+            section="submittal",
+        )
         import json
 
         neo4j_client.execute_write(

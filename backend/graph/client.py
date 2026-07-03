@@ -64,7 +64,10 @@ class Neo4jClient:
                 result = session.run("MATCH ...", param=value)
         """
         if self._driver:
-            session = self._driver.session()
+            session_kwargs = {}
+            if settings.NEO4J_DATABASE:
+                session_kwargs["database"] = settings.NEO4J_DATABASE
+            session = self._driver.session(**session_kwargs)
             try:
                 yield session
             except Exception as e:
@@ -74,6 +77,17 @@ class Neo4jClient:
                 session.close()
         else:
             yield _NetworkXSession(self._fallback_graph)
+
+    def verify_connectivity(self) -> bool:
+        """Return True when the configured Neo4j driver can connect."""
+        if not self._driver:
+            return False
+        try:
+            self._driver.verify_connectivity()
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j connectivity check failed: {e}")
+            return False
 
     def execute_query(self, query: str, parameters: Optional[dict] = None) -> list[dict]:
         """Execute a Cypher query and return results as list of dicts."""
@@ -128,7 +142,7 @@ class _NetworkXSession:
     def __init__(self, graph: nx.DiGraph):
         self.graph = graph
 
-    def run(self, query: str, **kwargs) -> "_NetworkXResult":
+    def run(self, query: str, parameters: Optional[dict] = None, **kwargs) -> "_NetworkXResult":
         logger.debug(f"NetworkX fallback — query not executed: {query[:60]}...")
         raise StrandGraphUnavailableError(message="Graph operations are not supported in fallback mode")
 

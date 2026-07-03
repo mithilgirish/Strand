@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
-import { UploadCloud, File, CheckCircle } from 'lucide-react';
+import { UploadCloud, File } from 'lucide-react';
 
 interface UploadZoneProps {
-  onUpload: () => void;
+  onUpload: (file: File) => Promise<void>;
 }
 
 export default function UploadZone({ onUpload }: UploadZoneProps) {
@@ -15,7 +15,10 @@ export default function UploadZone({ onUpload }: UploadZoneProps) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    startMockUpload();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      startUpload(file);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -30,25 +33,25 @@ export default function UploadZone({ onUpload }: UploadZoneProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      startMockUpload();
+      startUpload(e.target.files[0]);
     }
   };
 
-  const startMockUpload = () => {
+  const startUpload = async (file: File) => {
     setIsUploading(true);
-    let current = 0;
-    const interval = setInterval(() => {
-      current += 10;
-      setProgress(current);
-      if (current >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsUploading(false);
-          setProgress(0);
-          onUpload();
-        }, 500);
-      }
-    }, 150);
+    setProgress(20);
+    try {
+      setProgress(65);
+      await onUpload(file);
+      setProgress(100);
+    } catch {
+      setProgress(0);
+    } finally {
+      setTimeout(() => {
+        setIsUploading(false);
+        setProgress(0);
+      }, 350);
+    }
   };
 
   return (

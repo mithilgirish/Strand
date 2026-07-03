@@ -16,7 +16,7 @@ from typing import TypedDict, Optional
 from loguru import logger
 
 from backend.ingestion.parsers.pdf_parser import extract_parameters_from_pdf
-from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
+from backend.ingestion.spec_dna.fingerprint import generate_submittal_spec_dna
 from backend.ingestion.spec_dna.chain import get_spec_dna_chain
 from backend.graph.client import neo4j_client
 from backend.graph import queries
@@ -26,6 +26,8 @@ from backend.r0.classifier import r0_to_severity
 from backend.llm.client import invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.redis_client import redis_client
+from backend.config import settings
+from backend.demo_data import get_demo_clause, demo_chain
 
 
 class GuardianState(TypedDict):
@@ -56,10 +58,18 @@ def check_against_spec(state: GuardianState) -> GuardianState:
         if param_name in ("equipment_type", "output_power", "emissions_tier"):
             continue  # Skip non-constraint parameters
 
-        result = neo4j_client.execute_query(
-            queries.GET_CLAUSE_BY_PARAMETER,
-            {"parameter_name": param_name},
-        )
+        try:
+            result = neo4j_client.execute_query(
+                queries.GET_CLAUSE_BY_PARAMETER,
+                {"parameter_name": param_name},
+            )
+        except Exception as e:
+            logger.warning(f"Guardian: clause lookup failed for {param_name}: {e}")
+            result = []
+
+        if not result:
+            demo_clause = get_demo_clause(param_name)
+            result = [demo_clause] if demo_clause else []
 
         if result:
             clause = result[0]
@@ -68,7 +78,9 @@ def check_against_spec(state: GuardianState) -> GuardianState:
             actual = param_data["value"]
 
             if not passes_constraint(actual, required, operator=operator, parameter_name=param_name):
-                violations.append({
+                violation = {
+                    "id": f"{state['submittal_id']}:{param_name}",
+                    "submittal_id": state["submittal_id"],
                     "parameter": param_name,
                     "required": required,
                     "actual": actual,
@@ -77,7 +89,8 @@ def check_against_spec(state: GuardianState) -> GuardianState:
                     "section": clause.get("section", ""),
                     "page": param_data.get("page", 0),
                     "deviation_type": "out_of_spec",
-                })
+                }
+                violations.append(violation)
                 logger.info(
                     f"Guardian: VIOLATION — {param_name}: "
                     f"actual={actual} {operator} required={required}"
@@ -92,6 +105,8 @@ def compute_spec_dna(state: GuardianState) -> GuardianState:
     chains = {}
     for v in state["violations"]:
         chain = get_spec_dna_chain(state["submittal_id"])
+        if not chain:
+            chain = demo_chain(state["submittal_id"], v)
         chains[v["parameter"]] = chain
     return {**state, "spec_dna_chain": chains}
 
@@ -104,6 +119,30 @@ def score_r0(state: GuardianState) -> GuardianState:
     scored = []
     r0_max = 0.0
 
+    submittal_spec_dna = generate_submittal_spec_dna(
+        state["submittal_id"],
+        "Unknown Vendor",
+        state["submittal_id"],
+    )
+
+    try:
+        neo4j_client.execute_write(
+            queries.MERGE_VENDOR_SUBMITTAL,
+            {
+                "submittal_id": state["submittal_id"],
+                "spec_dna_id": submittal_spec_dna,
+                "vendor_name": "Unknown Vendor",
+                "equipment_tag": state["submittal_id"],
+                "document_path": state["document_path"],
+                "status": "flagged" if state["violations"] else "approved",
+                "extracted_parameters": json.dumps(state["extracted_parameters"], default=str),
+                "r0_score": 0.0,
+                "violation_count": len(state["violations"]),
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Guardian: submittal write skipped: {e}")
+
     for v in state["violations"]:
         r0 = compute_r0_from_pkg(spec_dna_id=v.get("spec_dna_id", ""))
         v["r0_score"] = r0
@@ -113,18 +152,21 @@ def score_r0(state: GuardianState) -> GuardianState:
 
         # Write violation to PKG (idempotent: delete-then-recreate §4.5)
         if v.get("spec_dna_id"):
-            neo4j_client.execute_write(
-                queries.WRITE_VIOLATION,
-                {
-                    "submittal_id": state["submittal_id"],
-                    "spec_dna_id": v["spec_dna_id"],
-                    "deviation_type": v.get("deviation_type", "out_of_spec"),
-                    "expected_value": v["required"],
-                    "actual_value": v["actual"],
-                    "severity": v["severity"],
-                    "r0_score": r0,
-                },
-            )
+            try:
+                neo4j_client.execute_write(
+                    queries.WRITE_VIOLATION,
+                    {
+                        "submittal_id": state["submittal_id"],
+                        "spec_dna_id": v["spec_dna_id"],
+                        "deviation_type": v.get("deviation_type", "out_of_spec"),
+                        "expected_value": v["required"],
+                        "actual_value": v["actual"],
+                        "severity": v["severity"],
+                        "r0_score": r0,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Guardian: violation write skipped: {e}")
 
     return {**state, "violations": scored, "r0_max": r0_max}
 
@@ -143,14 +185,44 @@ def draft_rfi(state: GuardianState) -> GuardianState:
         violation_summary=violation_summary,
     )
 
-    rfi_text = invoke_raw(
-        prompt=prompt,
-        agent_name="guardian",
-        prompt_name="guardian_rfi_draft",
-        prompt_version=get_prompt_version("guardian_rfi_draft"),
-    )
+    try:
+        if settings.LLM_PROVIDER == "groq" and not settings.GROQ_API_KEY:
+            raise RuntimeError("GROQ_API_KEY is not configured")
+        if settings.LLM_PROVIDER == "anthropic" and not settings.ANTHROPIC_API_KEY:
+            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+
+        rfi_text = invoke_raw(
+            prompt=prompt,
+            agent_name="guardian",
+            prompt_name="guardian_rfi_draft",
+            prompt_version=get_prompt_version("guardian_rfi_draft"),
+        )
+    except Exception as e:
+        logger.warning(f"Guardian: RFI LLM draft failed, using fallback: {e}")
+        rfi_text = _fallback_rfi(state)
 
     return {**state, "rfi_draft": rfi_text}
+
+
+def _fallback_rfi(state: GuardianState) -> str:
+    violation = state["violations"][0]
+    unit = violation.get("unit", "")
+    return (
+        "Project: Hyperscale Data Centre\n"
+        f"Date: {datetime.now().strftime('%d %B %Y')}\n"
+        f"Submittal ID: {state['submittal_id']}\n"
+        "From: STRAND Guardian\n"
+        "To: Vendor / Engineering Lead\n\n"
+        f"Subject: {violation['severity']} specification deviation detected\n\n"
+        "Parameter | Required | Actual | Deviation\n"
+        "--- | --- | --- | ---\n"
+        f"{violation['parameter']} | {violation['required']}{unit} | {violation['actual']}{unit} | out_of_spec\n\n"
+        f"Regulatory citation: TIA-942-B §{violation.get('section', '')}.\n"
+        f"R0 contagion score: {violation.get('r0_score', 0.0)}.\n"
+        f"Spec-DNA mutation point: {violation.get('spec_dna_id', 'unavailable')}.\n\n"
+        "Tier III impact: unresolved deviation may affect certification evidence and downstream commissioning.\n\n"
+        "Requested action: resubmit compliant technical documentation or corrective justification within 5 business days."
+    )
 
 
 # ── Agent runner ─────────────────────────────────────────────────────
@@ -209,3 +281,22 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
     finally:
         if acquired:
             redis_client.release_lock(lock_key)
+
+
+class GuardianGraph:
+    """Plan-compatible async graph facade for the Guardian pipeline."""
+
+    async def ainvoke(self, state: GuardianState) -> dict:
+        result = await run_guardian(state["submittal_id"], state["document_path"])
+        return {
+            **state,
+            "extracted_parameters": result.get("extracted_parameters", state.get("extracted_parameters", {})),
+            "violations": result.get("violations", []),
+            "spec_dna_chain": result.get("spec_dna_chain", {}),
+            "rfi_draft": result.get("rfi_draft", ""),
+            "r0_max": result.get("r0_max", 0.0),
+            "messages": state.get("messages", []),
+        }
+
+
+guardian_graph = GuardianGraph()

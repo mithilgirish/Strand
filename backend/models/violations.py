@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 
 class Violation(BaseModel):
+    id: str = ""
+    submittal_id: str = ""
     parameter: str
     required: float | str
     actual: float | str

@@ -1,0 +1,121 @@
+{
+    "checklist_id": "IST-23",
+    "title": "Generator Commissioning Checklist",
+    "steps": [
+        {
+            "step": 1,
+            "description": "Verify generator test 1",
+            "status": "pending"
+        },
+        {
+            "step": 2,
+            "description": "Verify generator test 2",
+            "status": "pending"
+        },
+        {
+            "step": 3,
+            "description": "Verify generator test 3",
+            "status": "pending"
+        },
+        {
+            "step": 4,
+            "description": "Verify generator test 4",
+            "status": "pending"
+        },
+        {
+            "step": 5,
+            "description": "Verify generator test 5",
+            "status": "pending"
+        },
+        {
+            "step": 6,
+            "description": "Verify generator test 6",
+            "status": "pending"
+        },
+        {
+            "step": 7,
+            "description": "Verify generator test 7",
+            "status": "pending"
+        },
+        {
+            "step": 8,
+            "description": "Verify generator test 8",
+            "status": "pending"
+        },
+        {
+            "step": 9,
+            "description": "Verify generator test 9",
+            "status": "pending"
+        },
+        {
+            "step": 10,
+            "description": "Verify generator test 10",
+            "status": "pending"
+        },
+        {
+            "step": 11,
+            "description": "Verify generator test 11",
+            "status": "pending"
+        },
+        {
+            "step": 12,
+            "description": "Verify generator test 12",
+            "status": "pending"
+        },
+        {
+            "step": 13,
+            "description": "Verify generator test 13",
+            "status": "pending"
+        },
+        {
+            "step": 14,
+            "description": "Verify generator test 14",
+            "status": "pending"
+        },
+        {
+            "step": 15,
+            "description": "Verify generator test 15",
+            "status": "pending"
+        },
+        {
+            "step": 16,
+            "description": "Verify generator test 16",
+            "status": "pending"
+        },
+        {
+            "step": 17,
+            "description": "Verify generator test 17",
+            "status": "pending"
+        },
+        {
+            "step": 18,
+            "description": "Verify generator test 18",
+            "status": "pending"
+        },
+        {
+            "step": 19,
+            "description": "Verify generator test 19",
+            "status": "pending"
+        },
+        {
+            "step": 20,
+            "description": "Verify generator test 20",
+            "status": "pending"
+        },
+        {
+            "step": 21,
+            "description": "Verify generator test 21",
+            "status": "pending"
+        },
+        {
+            "step": 22,
+            "description": "Verify generator test 22",
+            "status": "pending"
+        },
+        {
+            "step": 23,
+            "description": "Verify generator test 23",
+            "status": "pending"
+        }
+    ]
+}

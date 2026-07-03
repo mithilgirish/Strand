@@ -52,11 +52,23 @@ class HybridRetriever:
         Returns:
             List of {text, metadata, score, source} dicts, ranked by RRF score
         """
+        self._ensure_bm25_index()
+
         dense_results = self._dense_retrieve(query, k=k)
         bm25_results = self._bm25_retrieve(query, k=k)
 
         # Merge via Reciprocal Rank Fusion
         fused = self._reciprocal_rank_fusion(dense_results, bm25_results, k=k)
+        if len(fused) < k:
+            from backend.demo_data import demo_spec_chunks
+            seen = {doc["text"][:100] for doc in fused}
+            for doc in demo_spec_chunks(""):
+                key = doc["text"][:100]
+                if key not in seen:
+                    fused.append(doc)
+                    seen.add(key)
+                if len(fused) >= k:
+                    break
 
         # Sort by document source and chunk index to maintain reading order for LLM
         fused.sort(
@@ -72,6 +84,21 @@ class HybridRetriever:
             f"{len(bm25_results)} BM25, {len(fused)} fused"
         )
         return fused
+
+    def _ensure_bm25_index(self) -> None:
+        """Build a small local BM25 corpus when no persisted runtime index exists."""
+        if self._bm25_index and self._bm25_corpus:
+            return
+        try:
+            from backend.demo_data import demo_spec_chunks
+            self.build_bm25_index(
+                [
+                    {"text": chunk["text"], "metadata": chunk.get("metadata", {})}
+                    for chunk in demo_spec_chunks("")
+                ]
+            )
+        except Exception as e:
+            logger.debug(f"BM25 lazy index build skipped: {e}")
 
     def _dense_retrieve(self, query: str, k: int = 8) -> list[dict]:
         """Dense (semantic) retrieval via Chroma."""
@@ -91,8 +118,10 @@ class HybridRetriever:
                 docs.append({
                     "text": doc_text,
                     "metadata": metadata,
+                    "source": metadata.get("document_source", "dense"),
+                    "page": metadata.get("page_number", 0),
+                    "section": metadata.get("section", ""),
                     "score": 1.0 - distance,  # Convert distance to similarity
-                    "source": "dense",
                 })
         return docs
 
@@ -112,8 +141,10 @@ class HybridRetriever:
             {
                 "text": doc["text"],
                 "metadata": doc.get("metadata", {}),
+                "source": doc.get("metadata", {}).get("document_source", "bm25"),
+                "page": doc.get("metadata", {}).get("page_number", 0),
+                "section": doc.get("metadata", {}).get("section", ""),
                 "score": float(score),
-                "source": "bm25",
             }
             for score, doc in scored_docs[:k]
             if score > 0
@@ -142,6 +173,9 @@ class HybridRetriever:
                 doc_scores[key] = {
                     "text": doc["text"],
                     "metadata": doc["metadata"],
+                    "source": doc.get("source", doc["metadata"].get("document_source", "dense")),
+                    "page": doc["metadata"].get("page_number", 0),
+                    "section": doc["metadata"].get("section", ""),
                     "rrf_score": 0.0,
                     "sources": [],
                 }
@@ -155,6 +189,9 @@ class HybridRetriever:
                 doc_scores[key] = {
                     "text": doc["text"],
                     "metadata": doc["metadata"],
+                    "source": doc.get("source", doc["metadata"].get("document_source", "bm25")),
+                    "page": doc["metadata"].get("page_number", 0),
+                    "section": doc["metadata"].get("section", ""),
                     "rrf_score": 0.0,
                     "sources": [],
                 }
@@ -168,3 +205,8 @@ class HybridRetriever:
 
 # ── Singleton ────────────────────────────────────────────────────────
 hybrid_retriever = HybridRetriever()
+
+
+def hybrid_retrieve(query: str, k: int = 8) -> list[dict]:
+    """Plan-compatible function wrapper around the singleton retriever."""
+    return hybrid_retriever.retrieve(query, k=k)

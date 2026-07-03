@@ -9,6 +9,11 @@ class BrainQuery(BaseModel):
     project_id: str = "default"
 
 
+class QueryRequest(BrainQuery):
+    """Plan-compatible request model name."""
+    pass
+
+
 class Citation(BaseModel):
     document: str = ""
     page: int = 0
@@ -28,3 +33,9 @@ class BrainAnswer(BaseModel):
     confidence: str = "Medium"
     spec_dna_ids: list[str] = []
     graph_context: Optional[dict] = None
+    response_time_ms: int = 0
+
+
+class QueryResponse(BrainAnswer):
+    """Plan-compatible response model name."""
+    pass

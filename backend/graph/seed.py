@@ -16,9 +16,9 @@ from loguru import logger
 from backend.graph.client import neo4j_client
 from backend.graph.schema import init_schema
 from backend.graph import queries
-from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
 from backend.vector.store import chroma_store
 from backend.vector.embedder import prepare_chunks_for_storage
+from backend.demo_data import demo_contract_clauses
 
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -49,37 +49,20 @@ def seed_all():
 
 def seed_contract_clauses():
     """Seed ContractClause nodes from the TIA-942 spec."""
-    clauses = [
-        {"section": "6.7.1", "parameter_name": "ambient_temperature_max", "value": 50.0, "unit": "°C", "operator": "gte"},
-        {"section": "5.2.3", "parameter_name": "ups_redundancy", "value": "N+1", "unit": "", "operator": "gte"},
-        {"section": "7.4.2", "parameter_name": "fire_suppression", "value": "FM-200", "unit": "", "operator": "eq"},
-        {"section": "8.3.4", "parameter_name": "generator_fuel_consumption", "value": 260.0, "unit": "l/hr", "operator": "lte"},
-        {"section": "9.1.2", "parameter_name": "cable_derating", "value": 0.75, "unit": "", "operator": "gte"},
-        {"section": "10.2.1", "parameter_name": "cooling_capacity", "value": 500.0, "unit": "kW", "operator": "gte"},
-        {"section": "4.3", "parameter_name": "floor_loading", "value": 12.0, "unit": "kN/m²", "operator": "gte"},
-        {"section": "4.5.1", "parameter_name": "seismic_bracing", "value": "Zone 4", "unit": "", "operator": "eq"},
-        {"section": "11.1", "parameter_name": "chilled_water_supply_temp", "value": 10.0, "unit": "°C", "operator": "lte"},
-        {"section": "12.2", "parameter_name": "pdu_efficiency", "value": 98.0, "unit": "%", "operator": "gte"},
-    ]
+    clauses = demo_contract_clauses()
 
     for clause in clauses:
-        spec_dna_id = generate_spec_dna_id(
-            document_source="spec_tia942_synthetic.pdf",
-            section=clause["section"],
-            parameter_name=clause["parameter_name"],
-            parameter_value=str(clause["value"]),
-        )
         neo4j_client.execute_write(
             queries.MERGE_CONTRACT_CLAUSE,
             {
-                "spec_dna_id": spec_dna_id,
+                "spec_dna_id": clause["spec_dna_id"],
                 "section": clause["section"],
                 "parameter_name": clause["parameter_name"],
-                "parameter_value": clause["value"],
+                "parameter_value": clause["required_value"],
                 "unit": clause["unit"],
                 "operator": clause["operator"],
-                "document_source": "spec_tia942_synthetic.pdf",
-                "page_number": 1,
+                "document_source": clause["document_source"],
+                "page_number": clause["page"],
             },
         )
 
@@ -194,6 +177,7 @@ def seed_spec_to_chroma():
         return
 
     pages = extract_text_from_pdf(str(pdf_file))
+    bm25_corpus = []
     total_chunks = 0
 
     for page_data in pages:
@@ -204,7 +188,12 @@ def seed_spec_to_chroma():
         )
         if documents:
             chroma_store.add_documents(documents, metadatas, ids)
+            bm25_corpus.extend({"text": doc, "metadata": meta} for doc, meta in zip(documents, metadatas))
             total_chunks += len(documents)
+
+    if bm25_corpus:
+        from backend.vector.retriever import hybrid_retriever
+        hybrid_retriever.build_bm25_index(bm25_corpus)
 
     logger.info(f"Seeded {total_chunks} spec chunks to Chroma")
 

@@ -3,13 +3,44 @@
 import React from 'react';
 import { FileText, HardDrive, ShoppingCart, FileCheck, AlertTriangle } from 'lucide-react';
 
-export default function SpecDnaChain() {
-  const nodes = [
-    { id: 'n1', label: 'Contract Clause', value: '50°C', icon: FileText, color: 'bg-[#111c30] border-slate-600 text-slate-300' },
-    { id: 'n2', label: 'BOQ', value: '50°C', icon: HardDrive, color: 'bg-[#0f2d59] border-blue-600 text-blue-300' },
-    { id: 'n3', label: 'Purchase Order', value: '50°C', icon: ShoppingCart, color: 'bg-[#064e43] border-teal-600 text-teal-300' },
-    { id: 'n4', label: 'Vendor Submittal', value: '45°C', icon: FileCheck, color: 'bg-[rgba(105,0,5,0.45)] border-tertiary text-tertiary', isMutation: true },
-  ];
+interface SpecDnaChainProps {
+  chain?: Array<Record<string, unknown>>;
+}
+
+const iconMap = {
+  ContractClause: FileText,
+  BOQLine: HardDrive,
+  POLine: ShoppingCart,
+  VendorSubmittal: FileCheck,
+};
+
+const colorMap = {
+  ContractClause: 'bg-[#111c30] border-slate-600 text-slate-300',
+  BOQLine: 'bg-[#0f2d59] border-blue-600 text-blue-300',
+  POLine: 'bg-[#064e43] border-teal-600 text-teal-300',
+  VendorSubmittal: 'bg-[rgba(105,0,5,0.45)] border-tertiary text-tertiary',
+};
+
+function prettyLabel(label: string) {
+  return label
+    .replace('ContractClause', 'Contract Clause')
+    .replace('BOQLine', 'BOQ')
+    .replace('POLine', 'Purchase Order')
+    .replace('VendorSubmittal', 'Vendor Submittal');
+}
+
+export default function SpecDnaChain({ chain = [] }: SpecDnaChainProps) {
+  const nodes = chain.map((node, index) => {
+    const label = String(node.label || `Node ${index + 1}`);
+    return {
+      id: String(node.id || index),
+      label,
+      value: String(node.parameter_value ?? ''),
+      icon: iconMap[label as keyof typeof iconMap] || FileText,
+      color: colorMap[label as keyof typeof colorMap] || 'bg-surface-container border-outline text-on-surface',
+      isMutation: Boolean(node.mutation) || label === 'VendorSubmittal',
+    };
+  });
 
   return (
     <div className="mt-6 p-5 bg-[#0a0a0a] rounded-lg border border-outline-variant relative">
@@ -30,7 +61,7 @@ export default function SpecDnaChain() {
                 <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center mb-2.5 shadow-lg transition-transform hover:scale-105 cursor-pointer ${node.color} ${node.isMutation ? 'shadow-[0_0_15px_rgba(255,179,173,0.30)] border-tertiary' : 'border-t-2 border-l-2'}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] uppercase font-bold text-center tracking-[0.05em] leading-tight h-6 text-on-surface-variant font-sans">{node.label}</span>
+                <span className="text-[10px] uppercase font-bold text-center tracking-[0.05em] leading-tight h-6 text-on-surface-variant font-sans">{prettyLabel(node.label)}</span>
                 <span className={`text-[13px] font-semibold mt-1 font-mono tracking-[0.02em] ${node.isMutation ? 'text-tertiary' : 'text-on-surface'}`}>{node.value}</span>
               </div>
               

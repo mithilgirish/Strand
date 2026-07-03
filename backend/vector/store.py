@@ -65,12 +65,12 @@ class ChromaStore:
             return
 
         try:
-            self._collection.add(
+            self._collection.upsert(
                 documents=documents,
                 metadatas=metadatas,
                 ids=ids,
             )
-            logger.info(f"Added {len(documents)} chunks to Chroma")
+            logger.info(f"Upserted {len(documents)} chunks to Chroma")
         except Exception as e:
             logger.error(f"Failed to add documents to Chroma: {e}")
 

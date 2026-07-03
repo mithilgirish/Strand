@@ -28,3 +28,14 @@ def severity_to_action(severity: str) -> str:
         "Critical": "Immediate corrective action required — stop work if safety-related",
         "Systemic": "HALT — systemic failure across multiple subsystems, executive escalation",
     }.get(severity, "Unknown severity level")
+
+
+def r0_to_action(r0: float) -> str:
+    """Map R0 score directly to the recommended action from the Phase 1 plan."""
+    if r0 < 1.0:
+        return "Monitor — resolve within standard cycle"
+    if r0 < 2.5:
+        return "Escalate to discipline lead within 48h"
+    if r0 < 5.0:
+        return "PM escalation — same day action required"
+    return "EMERGENCY — senior team, 24h resolution window"
