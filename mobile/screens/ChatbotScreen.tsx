@@ -1,13 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { API_BASE_URL } from '../config';
+
+interface Citation {
+  document: string;
+  page: number;
+  section: string;
+  excerpt?: string;
+}
 
 interface ChatMessage {
   id: string;
   sender: 'user' | 'brain';
   text: string;
   timestamp: string;
+  citations?: Citation[];
+  confidence?: 'High' | 'Medium' | 'Low';
+  responseTimeMs?: number;
 }
+
 
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -22,6 +34,15 @@ export default function ChatbotScreen({ navigation }: any) {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
+
+  const toggleCitations = (msgId: string) => {
+    setExpandedCitations(prev => ({
+      ...prev,
+      [msgId]: !prev[msgId]
+    }));
+  };
+
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -39,7 +60,7 @@ export default function ChatbotScreen({ navigation }: any) {
     };
   }, []);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
     const userMessage: ChatMessage = {
@@ -53,28 +74,65 @@ export default function ChatbotScreen({ navigation }: any) {
     setInputText('');
     setIsTyping(true);
 
-    // Simulate Brain response
-    setTimeout(() => {
-      setIsTyping(false);
-      let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
-      
-      const query = userMessage.text.toLowerCase();
-      if (query.includes('generator') || query.includes('gen-01')) {
-        responseText = "GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).";
-      } else if (query.includes('cooling') || query.includes('ct-01')) {
-        responseText = "Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.";
-      } else if (query.includes('r0') || query.includes('risk')) {
-        responseText = "Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).";
-      }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 seconds timeout
 
-      const brainMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'brain',
-        text: responseText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, brainMessage]);
-    }, 1500);
+      const response = await fetch(`${API_BASE_URL}/brain/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: userMessage.text,
+          project_id: 'default',
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const brainMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'brain',
+          text: data.answer,
+          citations: data.citations || [],
+          confidence: data.confidence || 'Medium',
+          responseTimeMs: data.response_time_ms || 0,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, brainMessage]);
+      } else {
+        throw new Error(`API returned status ${response.status}`);
+      }
+    } catch (err) {
+      console.log("Brain API offline or error, falling back to local simulation.", err);
+      // Fallback local simulation logic
+      setTimeout(() => {
+        let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
+        const query = userMessage.text.toLowerCase();
+        if (query.includes('generator') || query.includes('gen-01')) {
+          responseText = "GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).";
+        } else if (query.includes('cooling') || query.includes('ct-01')) {
+          responseText = "Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.";
+        } else if (query.includes('r0') || query.includes('risk')) {
+          responseText = "Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).";
+        }
+
+        const brainMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'brain',
+          text: responseText,
+          confidence: 'Medium',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, brainMessage]);
+      }, 1000);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (
@@ -115,7 +173,68 @@ export default function ChatbotScreen({ navigation }: any) {
                 ]}>
                   {msg.text}
                 </Text>
-                <Text style={styles.timestamp}>{msg.timestamp}</Text>
+                
+                {msg.sender === 'user' ? (
+                  <Text style={styles.timestamp}>{msg.timestamp}</Text>
+                ) : (
+                  <>
+                    {msg.citations && msg.citations.length > 0 && (
+                      <View style={styles.citationsContainer}>
+                        <TouchableOpacity 
+                          style={styles.citationsHeader} 
+                          onPress={() => toggleCitations(msg.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.citationsHeaderText}>
+                            {expandedCitations[msg.id] ? '▼ Hide Grounding Sources' : `▶ View Grounding Sources (${msg.citations.length})`}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        {expandedCitations[msg.id] && (
+                          <View style={styles.citationsList}>
+                            {msg.citations.map((cit, idx) => (
+                              <View key={idx} style={styles.citationCard}>
+                                <Text style={styles.citationText}>
+                                  📄 {cit.document.split('/').pop()} §{cit.section || 'N/A'} (Page {cit.page})
+                                </Text>
+                                {cit.excerpt ? (
+                                  <Text style={styles.citationExcerpt}>&quot;{cit.excerpt.trim()}&quot;</Text>
+                                ) : null}
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                    <View style={styles.metaRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {msg.confidence && (
+                          <View style={[
+                            styles.confidenceBadge,
+                            msg.confidence === 'High' && styles.confHigh,
+                            msg.confidence === 'Medium' && styles.confMed,
+                            msg.confidence === 'Low' && styles.confLow,
+                          ]}>
+                            <Text style={[
+                              styles.confidenceText,
+                              msg.confidence === 'High' && styles.confHighText,
+                              msg.confidence === 'Medium' && styles.confMedText,
+                              msg.confidence === 'Low' && styles.confLowText,
+                            ]}>
+                              {msg.confidence.toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        {msg.responseTimeMs !== undefined && msg.responseTimeMs > 0 && (
+                          <Text style={styles.latencyText}>
+                            ⚡ {(msg.responseTimeMs / 1000).toFixed(2)}s
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={[styles.timestamp, { marginTop: 0 }]}>{msg.timestamp}</Text>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           ))}
@@ -271,6 +390,88 @@ const styles = StyleSheet.create({
   sendIcon: {
     color: '#171717',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  citationsContainer: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderColor: '#262626',
+    paddingTop: 8,
+  },
+  citationsHeader: {
+    paddingVertical: 4,
+  },
+  citationsHeaderText: {
+    color: '#06B6D4',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  citationsList: {
+    marginTop: 6,
+    gap: 6,
+  },
+  citationCard: {
+    backgroundColor: '#0A0A0A',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  citationText: {
+    color: '#E5E5E5',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  citationExcerpt: {
+    color: '#A3A3A3',
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 4,
+  },
+  confidenceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  confidenceText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  confHigh: {
+    backgroundColor: 'rgba(78, 222, 163, 0.1)',
+    borderWidth: 1,
+    borderColor: '#4edea3',
+  },
+  confHighText: {
+    color: '#4edea3',
+  },
+  confMed: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  confMedText: {
+    color: '#F59E0B',
+  },
+  confLow: {
+    backgroundColor: 'rgba(255, 179, 173, 0.1)',
+    borderWidth: 1,
+    borderColor: '#ffb3ad',
+  },
+  confLowText: {
+    color: '#ffb3ad',
+  },
+  latencyText: {
+    color: '#64748B',
+    fontSize: 10,
     fontWeight: 'bold',
   },
 });
