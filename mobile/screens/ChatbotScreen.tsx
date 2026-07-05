@@ -60,6 +60,24 @@ export default function ChatbotScreen({ navigation }: any) {
     };
   }, []);
 
+  /** Factory to build a brain ChatMessage – single source of truth for the shape. */
+  const buildBrainMessage = (opts: {
+    text: string;
+    citations?: Citation[];
+    confidence?: ChatMessage['confidence'];
+    responseTimeMs?: number;
+  }): ChatMessage => ({
+    id: (Date.now() + 1).toString(),
+    sender: 'brain',
+    text: opts.text,
+    citations: opts.citations ?? [],
+    confidence: opts.confidence ?? 'Medium',
+    responseTimeMs: opts.responseTimeMs ?? 0,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  });
+
+  const VALID_CONFIDENCE = new Set<ChatMessage['confidence']>(['High', 'Medium', 'Low']);
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -76,17 +94,12 @@ export default function ChatbotScreen({ navigation }: any) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 seconds timeout
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const response = await fetch(`${API_BASE_URL}/brain/query`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: userMessage.text,
-          project_id: 'default',
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userMessage.text, project_id: 'default' }),
         signal: controller.signal,
       });
 
@@ -94,44 +107,43 @@ export default function ChatbotScreen({ navigation }: any) {
 
       if (response.ok) {
         const data = await response.json();
-        const brainMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          sender: 'brain',
-          text: data.answer,
-          citations: data.citations || [],
-          confidence: data.confidence || 'Medium',
-          responseTimeMs: data.response_time_ms || 0,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages(prev => [...prev, brainMessage]);
+        // Validate: guard against blank answer and illegal confidence value
+        const answerText =
+          typeof data.answer === 'string' && data.answer.trim()
+            ? data.answer
+            : 'No answer returned. Please check the backend connection.';
+        const confidence: ChatMessage['confidence'] = VALID_CONFIDENCE.has(data.confidence)
+          ? data.confidence
+          : 'Medium';
+        setMessages(prev => [
+          ...prev,
+          buildBrainMessage({ text: answerText, citations: data.citations, confidence, responseTimeMs: data.response_time_ms }),
+        ]);
       } else {
         throw new Error(`API returned status ${response.status}`);
       }
-    } catch (err) {
-      console.log("Brain API offline or error, falling back to local simulation.", err);
-      // Fallback local simulation logic
-      setTimeout(() => {
-        let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
-        const query = userMessage.text.toLowerCase();
-        if (query.includes('generator') || query.includes('gen-01')) {
-          responseText = "GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).";
-        } else if (query.includes('cooling') || query.includes('ct-01')) {
-          responseText = "Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.";
-        } else if (query.includes('r0') || query.includes('risk')) {
-          responseText = "Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).";
-        }
-
-        const brainMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          sender: 'brain',
-          text: responseText,
-          confidence: 'Medium',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages(prev => [...prev, brainMessage]);
-      }, 1000);
-    } finally {
+      // Typing ends only after the success message is in state
       setIsTyping(false);
+    } catch (err) {
+      console.log('Brain API offline or error, falling back to local simulation.', err);
+      // Keep the typing indicator alive until the fallback message is actually appended
+      setTimeout(() => {
+        const query = userMessage.text.toLowerCase();
+        let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
+        if (query.includes('generator') || query.includes('gen-01')) {
+          responseText =
+            'GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).';
+        } else if (query.includes('cooling') || query.includes('ct-01')) {
+          responseText =
+            'Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.';
+        } else if (query.includes('r0') || query.includes('risk')) {
+          responseText =
+            'Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).';
+        }
+        setMessages(prev => [...prev, buildBrainMessage({ text: responseText, confidence: 'Medium' })]);
+        // Typing ends only after the fallback message is in state
+        setIsTyping(false);
+      }, 1000);
     }
   };
 
