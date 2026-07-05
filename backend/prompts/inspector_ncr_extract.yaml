@@ -1,0 +1,22 @@
+version: 1
+template: |
+  Convert this field engineer voice observation into a structured NCR (Non-Conformance Report).
+
+  OBSERVATION: "{transcript}"
+  EQUIPMENT TAG: {equipment_tag}
+  TEST STEP: {step_id}
+
+  Return ONLY valid JSON with these fields:
+  {{
+    "title": "short NCR title",
+    "description": "detailed description of the non-conformance",
+    "parameter_name": "the parameter that failed (snake_case)",
+    "actual_value": <number or string>,
+    "unit": "unit of measurement",
+    "severity_suggestion": "Critical|Major|Minor",
+    "immediate_action": "what should happen next"
+  }}
+variables:
+  - transcript
+  - equipment_tag
+  - step_id

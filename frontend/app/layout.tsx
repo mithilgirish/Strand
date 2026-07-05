@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 // Layout components
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
-
-const outfit = Outfit({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "STRAND Platform",
@@ -28,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased dark" data-theme="dark">
-      <body className={`${outfit.variable} ${jetbrainsMono.variable} h-full bg-background text-on-background flex overflow-hidden font-sans`}>
+      <body className="h-full bg-background text-on-background flex overflow-hidden font-sans">
         {/* Sidebar */}
         <Sidebar />
 

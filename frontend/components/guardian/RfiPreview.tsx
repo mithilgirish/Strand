@@ -1,9 +1,45 @@
 "use client";
 
-import React from 'react';
-import { Send, FileSignature } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle2, FileSignature, Loader2, Send } from 'lucide-react';
 
-export default function RfiPreview() {
+interface RfiPreviewProps {
+  rfiDraft: string;
+  violationId: string;
+}
+
+export default function RfiPreview({ rfiDraft, violationId }: RfiPreviewProps) {
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const handleApprove = async () => {
+    if (!violationId || status === 'sending' || status === 'sent') {
+      return;
+    }
+
+    setStatus('sending');
+    setMessage('');
+
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiBase}/api/v1/guardian/rfi/${encodeURIComponent(violationId)}/approve`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `RFI approval failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setStatus('sent');
+      setMessage(result.message || 'RFI approved and queued for sending.');
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'RFI approval failed.');
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-surface-container rounded-xl border border-outline-variant overflow-hidden">
       <div className="p-4 border-b border-outline-variant bg-surface-container-high flex items-center justify-between">
@@ -16,34 +52,30 @@ export default function RfiPreview() {
       
       <div className="flex-1 p-5 overflow-y-auto">
         <div className="bg-surface-container-lowest p-4 rounded-md border border-outline-variant text-sm text-on-surface leading-relaxed font-sans shadow-inner whitespace-pre-wrap">
-{`Project: Strand Facility Upgrade
-Date: July 2, 2026
-To: CoolTech Industrial
-Submittal: DEMO-CT-01
-
-SUBJECT: Critical Deviation in Cooling Tower Specification
-
-We have identified a deviation in the recently submitted equipment specifications that violates the Tier III facility requirements.
-
-PARAMETER            | REQUIRED | SUBMITTED | STATUS
-------------------------------------------------------
-Max Ambient Temp     | 50°C     | 45°C      | FAIL
-
-REGULATORY CITATION:
-TIA-942-B §6.7.1 dictates a minimum operating threshold of 50°C for all external cooling infrastructure to maintain redundancy during peak summer conditions.
-
-IMPACT:
-This deviation results in an R0 Contagion Score of 4.2. Failure to comply will jeopardize the Tier III certification.
-
-REQUESTED ACTION:
-Please resubmit compliance documentation for a model supporting the 50°C requirement within 5 business days.`}
+          {rfiDraft || 'No RFI draft available.'}
         </div>
       </div>
       
       <div className="p-4 border-t border-outline-variant bg-surface-container-high">
-        <button className="w-full py-3 bg-primary text-on-primary rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors shadow-md">
-          <Send className="w-4 h-4" />
-          Approve & Send RFI
+        {message && (
+          <p className={`mb-3 text-xs font-semibold ${status === 'error' ? 'text-tertiary' : 'text-secondary'}`}>
+            {message}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={handleApprove}
+          disabled={!rfiDraft || status === 'sending' || status === 'sent'}
+          className="w-full py-3 bg-primary text-on-primary rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-md"
+        >
+          {status === 'sending' ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : status === 'sent' ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+          {status === 'sent' ? 'RFI Approved' : status === 'sending' ? 'Sending RFI...' : 'Approve & Send RFI'}
         </button>
       </div>
     </div>

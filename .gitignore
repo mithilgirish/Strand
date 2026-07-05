@@ -1,2 +1,8 @@
 .traz/
 .env
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+chroma_db/
+backend/mock_ncr_db.json

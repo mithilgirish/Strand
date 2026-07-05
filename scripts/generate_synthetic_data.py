@@ -50,7 +50,7 @@ def create_spec_tia942(filepath):
         "Seismic bracing: Zone 4 compliance required (§4.5.1)",
         "Chilled water supply temperature: 10°C maximum (§11.1)",
         "Aisle containment: Cold aisle containment mandatory (§11.4)",
-        "PDU efficiency: ≥98% at 50% load (§12.2)"
+        "PDU efficiency: ≥96% at 50% load (§12.2)"
     ]
     create_pdf(filepath, "TIA-942-B Facility Specification (Synthetic)", paragraphs)
 

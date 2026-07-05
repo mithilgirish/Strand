@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ClipboardCheck, Search, ShieldAlert, RefreshCw, AlertTriangle, ArrowRight, User, Clock } from 'lucide-react';
 
 interface NcrRecord {
@@ -23,7 +23,7 @@ export default function InspectorAgent() {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [selectedNcr, setSelectedNcr] = useState<NcrRecord | null>(null);
 
-  const fetchNcrs = async () => {
+  const fetchNcrs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -34,11 +34,10 @@ export default function InspectorAgent() {
       }
       const data = await response.json();
       setNcrs(data);
-      if (data.length > 0 && !selectedNcr) {
-        setSelectedNcr(data[0]);
-      }
-    } catch (err: any) {
-      setError(err.message || 'API Server unreachable. Please ensure the backend is running.');
+      setSelectedNcr((current) => current || data[0] || null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'API Server unreachable. Please ensure the backend is running.';
+      setError(message);
       // Fallback seeds for visual presentation if server is offline
       const seedData: NcrRecord[] = [
         {
@@ -65,15 +64,18 @@ export default function InspectorAgent() {
         }
       ];
       setNcrs(seedData);
-      setSelectedNcr(seedData[0]);
+      setSelectedNcr((current) => current || seedData[0]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchNcrs();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void fetchNcrs();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchNcrs]);
 
   const filteredNcrs = ncrs.filter(ncr => {
     const matchesSearch = 
@@ -269,7 +271,7 @@ export default function InspectorAgent() {
                 <div className="space-y-1">
                   <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Observation (Whisper Audio Transcript)</span>
                   <div className="bg-[#0A0A0A] p-3 rounded-lg border border-[#262626] italic text-sm text-[#F5F5F5]">
-                    "{selectedNcr.transcript}"
+                    &quot;{selectedNcr.transcript}&quot;
                   </div>
                 </div>
 

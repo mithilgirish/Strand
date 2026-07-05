@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Server, AlertCircle } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 export default function TopBar() {
   const pathname = usePathname();

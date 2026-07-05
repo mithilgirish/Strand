@@ -1,0 +1,575 @@
+{
+    "suppliers": [
+        {
+            "id": "SUPP-001",
+            "name": "Supplier 1",
+            "tier": 1,
+            "risk_score": 0.778340988066962
+        },
+        {
+            "id": "SUPP-002",
+            "name": "Supplier 2",
+            "tier": 1,
+            "risk_score": 0.5679592957685026
+        },
+        {
+            "id": "SUPP-003",
+            "name": "Supplier 3",
+            "tier": 1,
+            "risk_score": 0.7382116835256555
+        },
+        {
+            "id": "SUPP-004",
+            "name": "Supplier 4",
+            "tier": 1,
+            "risk_score": 0.7342675507376811
+        },
+        {
+            "id": "SUPP-005",
+            "name": "Supplier 5",
+            "tier": 1,
+            "risk_score": 0.2010009098266494
+        },
+        {
+            "id": "SUPP-006",
+            "name": "Supplier 6",
+            "tier": 1,
+            "risk_score": 0.4085507369601754
+        },
+        {
+            "id": "SUPP-007",
+            "name": "Supplier 7",
+            "tier": 1,
+            "risk_score": 0.2228642441763607
+        },
+        {
+            "id": "SUPP-008",
+            "name": "Supplier 8",
+            "tier": 1,
+            "risk_score": 0.46654051543549613
+        },
+        {
+            "id": "SUPP-009",
+            "name": "Supplier 9",
+            "tier": 1,
+            "risk_score": 0.8194432603879187
+        },
+        {
+            "id": "SUPP-010",
+            "name": "Supplier 10",
+            "tier": 1,
+            "risk_score": 0.176400583866002
+        },
+        {
+            "id": "SUPP-011",
+            "name": "Supplier 11",
+            "tier": 2,
+            "risk_score": 0.7525897235346398
+        },
+        {
+            "id": "SUPP-012",
+            "name": "Supplier 12",
+            "tier": 2,
+            "risk_score": 0.5785962242634948
+        },
+        {
+            "id": "SUPP-013",
+            "name": "Supplier 13",
+            "tier": 2,
+            "risk_score": 0.15014796251154863
+        },
+        {
+            "id": "SUPP-014",
+            "name": "Supplier 14",
+            "tier": 2,
+            "risk_score": 0.6041699650214557
+        },
+        {
+            "id": "SUPP-015",
+            "name": "Supplier 15",
+            "tier": 2,
+            "risk_score": 0.8117618425441818
+        },
+        {
+            "id": "SUPP-016",
+            "name": "Supplier 16",
+            "tier": 2,
+            "risk_score": 0.7093277440400493
+        },
+        {
+            "id": "SUPP-017",
+            "name": "Supplier 17",
+            "tier": 2,
+            "risk_score": 0.789012866098619
+        },
+        {
+            "id": "SUPP-018",
+            "name": "Supplier 18",
+            "tier": 2,
+            "risk_score": 0.6946569734941145
+        },
+        {
+            "id": "SUPP-019",
+            "name": "Supplier 19",
+            "tier": 2,
+            "risk_score": 0.39270090739981434
+        },
+        {
+            "id": "SUPP-020",
+            "name": "Supplier 20",
+            "tier": 2,
+            "risk_score": 0.49998788872052924
+        },
+        {
+            "id": "SUPP-021",
+            "name": "Supplier 21",
+            "tier": 2,
+            "risk_score": 0.510274669291907
+        },
+        {
+            "id": "SUPP-022",
+            "name": "Supplier 22",
+            "tier": 2,
+            "risk_score": 0.5804434008025509
+        },
+        {
+            "id": "SUPP-023",
+            "name": "Supplier 23",
+            "tier": 2,
+            "risk_score": 0.7967045280260359
+        },
+        {
+            "id": "SUPP-024",
+            "name": "Supplier 24",
+            "tier": 2,
+            "risk_score": 0.15734495066242493
+        },
+        {
+            "id": "SUPP-025",
+            "name": "Supplier 25",
+            "tier": 2,
+            "risk_score": 0.16516084632804845
+        },
+        {
+            "id": "SUPP-026",
+            "name": "Supplier 26",
+            "tier": 2,
+            "risk_score": 0.6425240184907921
+        },
+        {
+            "id": "SUPP-027",
+            "name": "Supplier 27",
+            "tier": 2,
+            "risk_score": 0.35856283954526746
+        },
+        {
+            "id": "SUPP-028",
+            "name": "Supplier 28",
+            "tier": 2,
+            "risk_score": 0.5480709047158256
+        },
+        {
+            "id": "SUPP-029",
+            "name": "Supplier 29",
+            "tier": 3,
+            "risk_score": 0.24434230336742857
+        },
+        {
+            "id": "SUPP-030",
+            "name": "Supplier 30",
+            "tier": 3,
+            "risk_score": 0.5946182404437002
+        },
+        {
+            "id": "SUPP-031",
+            "name": "Supplier 31",
+            "tier": 3,
+            "risk_score": 0.849877837644372
+        },
+        {
+            "id": "SUPP-032",
+            "name": "Supplier 32",
+            "tier": 3,
+            "risk_score": 0.4812621836234644
+        },
+        {
+            "id": "SUPP-033",
+            "name": "Supplier 33",
+            "tier": 3,
+            "risk_score": 0.20185194563563905
+        },
+        {
+            "id": "SUPP-034",
+            "name": "Supplier 34",
+            "tier": 3,
+            "risk_score": 0.7310479108222057
+        },
+        {
+            "id": "SUPP-035",
+            "name": "Supplier 35",
+            "tier": 3,
+            "risk_score": 0.29707970205735573
+        },
+        {
+            "id": "SUPP-036",
+            "name": "Supplier 36",
+            "tier": 3,
+            "risk_score": 0.6730427677081999
+        },
+        {
+            "id": "SUPP-037",
+            "name": "Supplier 37",
+            "tier": 3,
+            "risk_score": 0.7500087088514505
+        },
+        {
+            "id": "SUPP-038",
+            "name": "Supplier 38",
+            "tier": 3,
+            "risk_score": 0.7295852531471243
+        },
+        {
+            "id": "SUPP-039",
+            "name": "Supplier 39",
+            "tier": 3,
+            "risk_score": 0.49267771395533766
+        },
+        {
+            "id": "SUPP-040",
+            "name": "Supplier 40",
+            "tier": 3,
+            "risk_score": 0.6986501546094471
+        }
+    ],
+    "shipments": [
+        {
+            "id": "SHIP-001",
+            "origin_supplier": "SUPP-028",
+            "destination": "Site A",
+            "eta": "2026-07-29",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-002",
+            "origin_supplier": "SUPP-008",
+            "destination": "Site A",
+            "eta": "2026-07-18",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-003",
+            "origin_supplier": "SUPP-035",
+            "destination": "Site A",
+            "eta": "2026-07-09",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-004",
+            "origin_supplier": "SUPP-023",
+            "destination": "Site A",
+            "eta": "2026-07-25",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-005",
+            "origin_supplier": "SUPP-006",
+            "destination": "Site A",
+            "eta": "2026-07-11",
+            "risk_flag": true
+        },
+        {
+            "id": "SHIP-006",
+            "origin_supplier": "SUPP-018",
+            "destination": "Site A",
+            "eta": "2026-07-22",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-007",
+            "origin_supplier": "SUPP-035",
+            "destination": "Site A",
+            "eta": "2026-07-28",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-008",
+            "origin_supplier": "SUPP-028",
+            "destination": "Site A",
+            "eta": "2026-07-04",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-009",
+            "origin_supplier": "SUPP-012",
+            "destination": "Site A",
+            "eta": "2026-07-09",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-010",
+            "origin_supplier": "SUPP-021",
+            "destination": "Site A",
+            "eta": "2026-07-04",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-011",
+            "origin_supplier": "SUPP-026",
+            "destination": "Site A",
+            "eta": "2026-07-11",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-012",
+            "origin_supplier": "SUPP-033",
+            "destination": "Site A",
+            "eta": "2026-07-17",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-013",
+            "origin_supplier": "SUPP-038",
+            "destination": "Site A",
+            "eta": "2026-07-16",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-014",
+            "origin_supplier": "SUPP-014",
+            "destination": "Site A",
+            "eta": "2026-08-01",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-015",
+            "origin_supplier": "SUPP-033",
+            "destination": "Site A",
+            "eta": "2026-07-13",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-016",
+            "origin_supplier": "SUPP-001",
+            "destination": "Site A",
+            "eta": "2026-07-18",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-017",
+            "origin_supplier": "SUPP-007",
+            "destination": "Site A",
+            "eta": "2026-07-29",
+            "risk_flag": true
+        },
+        {
+            "id": "SHIP-018",
+            "origin_supplier": "SUPP-022",
+            "destination": "Site A",
+            "eta": "2026-07-12",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-019",
+            "origin_supplier": "SUPP-025",
+            "destination": "Site A",
+            "eta": "2026-07-17",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-020",
+            "origin_supplier": "SUPP-038",
+            "destination": "Site A",
+            "eta": "2026-07-05",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-021",
+            "origin_supplier": "SUPP-007",
+            "destination": "Site A",
+            "eta": "2026-07-05",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-022",
+            "origin_supplier": "SUPP-016",
+            "destination": "Site A",
+            "eta": "2026-07-22",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-023",
+            "origin_supplier": "SUPP-006",
+            "destination": "Site A",
+            "eta": "2026-07-25",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-024",
+            "origin_supplier": "SUPP-003",
+            "destination": "Site A",
+            "eta": "2026-07-09",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-025",
+            "origin_supplier": "SUPP-017",
+            "destination": "Site A",
+            "eta": "2026-07-15",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-026",
+            "origin_supplier": "SUPP-028",
+            "destination": "Site A",
+            "eta": "2026-07-09",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-027",
+            "origin_supplier": "SUPP-035",
+            "destination": "Site A",
+            "eta": "2026-07-28",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-028",
+            "origin_supplier": "SUPP-013",
+            "destination": "Site A",
+            "eta": "2026-07-31",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-029",
+            "origin_supplier": "SUPP-035",
+            "destination": "Site A",
+            "eta": "2026-07-11",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-030",
+            "origin_supplier": "SUPP-026",
+            "destination": "Site A",
+            "eta": "2026-07-12",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-031",
+            "origin_supplier": "SUPP-040",
+            "destination": "Site A",
+            "eta": "2026-07-22",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-032",
+            "origin_supplier": "SUPP-006",
+            "destination": "Site A",
+            "eta": "2026-07-26",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-033",
+            "origin_supplier": "SUPP-003",
+            "destination": "Site A",
+            "eta": "2026-07-18",
+            "risk_flag": true
+        },
+        {
+            "id": "SHIP-034",
+            "origin_supplier": "SUPP-031",
+            "destination": "Site A",
+            "eta": "2026-07-12",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-035",
+            "origin_supplier": "SUPP-031",
+            "destination": "Site A",
+            "eta": "2026-07-15",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-036",
+            "origin_supplier": "SUPP-009",
+            "destination": "Site A",
+            "eta": "2026-07-13",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-037",
+            "origin_supplier": "SUPP-020",
+            "destination": "Site A",
+            "eta": "2026-07-11",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-038",
+            "origin_supplier": "SUPP-005",
+            "destination": "Site A",
+            "eta": "2026-07-31",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-039",
+            "origin_supplier": "SUPP-029",
+            "destination": "Site A",
+            "eta": "2026-07-05",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-040",
+            "origin_supplier": "SUPP-040",
+            "destination": "Site A",
+            "eta": "2026-07-31",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-041",
+            "origin_supplier": "SUPP-019",
+            "destination": "Site A",
+            "eta": "2026-07-18",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-042",
+            "origin_supplier": "SUPP-014",
+            "destination": "Site A",
+            "eta": "2026-07-22",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-043",
+            "origin_supplier": "SUPP-038",
+            "destination": "Site A",
+            "eta": "2026-07-06",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-044",
+            "origin_supplier": "SUPP-015",
+            "destination": "Site A",
+            "eta": "2026-07-20",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-045",
+            "origin_supplier": "SUPP-031",
+            "destination": "Site A",
+            "eta": "2026-07-07",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-046",
+            "origin_supplier": "SUPP-038",
+            "destination": "Site A",
+            "eta": "2026-07-11",
+            "risk_flag": false
+        },
+        {
+            "id": "SHIP-047",
+            "origin_supplier": "SUPP-010",
+            "destination": "Site A",
+            "eta": "2026-07-15",
+            "risk_flag": false
+        }
+    ]
+}

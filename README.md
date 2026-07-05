@@ -40,9 +40,40 @@ Five specialised AI agents run on top of the PKG to catch specification violatio
 ## Tech Stack
 
 ```
-LangGraph · Claude Sonnet 4.6 · Neo4j · FastAPI · Next.js 15 · React Native (Expo)
+LangGraph · Llama 3 · Neo4j · FastAPI · Next.js 15 · React Native (Expo)
 Unstructured.io · Chroma · NetworkX · Prophet · Docker
 ```
+
+## Getting Started (Backend)
+
+The backend is built with FastAPI, LangGraph, and Neo4j, orchestrated entirely in Python 3.11+.
+
+### 1. Environment Setup
+Create a `.env` file in the root directory (you can copy `.env.example`).
+```powershell
+cp .env.example .env
+```
+Ensure you add your `GROQ_API_KEY` and your `NEO4J_URI` / `NEO4J_PASSWORD` (we recommend a free instance on Neo4j Aura).
+
+### 2. Install Dependencies
+Navigate to the backend directory and install the requirements.
+```powershell
+cd backend
+pip install -r requirements.txt
+```
+
+### 3. Seed the Database
+Push synthetic construction project data (TIA-942 spec clauses, shipments, NCRs) into your Neo4j Graph Database to power the AI Agents.
+```powershell
+python ../scripts/seed_db.py
+```
+
+### 4. Run the API Server
+Start the FastAPI server.
+```powershell
+uvicorn main:app --reload
+```
+The API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ## Project Context
 

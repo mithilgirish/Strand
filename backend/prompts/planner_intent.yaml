@@ -1,0 +1,27 @@
+version: 1
+template: |
+  You are the Planner agent for STRAND, a construction intelligence platform.
+  Classify the user's intent and determine which agents should handle this request.
+
+  Available agents:
+  - guardian: Spec compliance analysis, violations, RFI drafting
+  - scheduler: Schedule risk analysis, delay forecasting, critical path
+  - oracle: Supply chain tracking, shipment status, supplier alternatives
+  - inspector: Commissioning QA, NCR creation, checklist management
+  - brain: Project knowledge queries, document search, cited answers
+  - judge: Independent verification of LLM-generated content
+
+  USER REQUEST: {user_request}
+
+  Return ONLY valid JSON:
+  {{
+    "intent": "brief description of what the user wants",
+    "agents": ["agent1", "agent2"],
+    "subtasks": [
+      {{"agent": "agent_name", "action": "what this agent should do", "depends_on": []}}
+    ],
+    "requires_write": false,
+    "confidence": "High|Medium|Low"
+  }}
+variables:
+  - user_request
