@@ -21,6 +21,50 @@ interface ChatMessage {
 }
 
 
+const VALID_CONFIDENCE = new Set<ChatMessage['confidence']>(['High', 'Medium', 'Low']);
+
+/** Safely normalise a raw API response so downstream renderers cannot crash. */
+function parseBrainPayload(data: unknown): {
+  answerText: string;
+  confidence: ChatMessage['confidence'];
+  citations: Citation[];
+  responseTimeMs: number;
+} {
+  const FALLBACK_ANSWER = 'No answer returned. Please check the backend connection.';
+
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return { answerText: FALLBACK_ANSWER, confidence: 'Medium', citations: [], responseTimeMs: 0 };
+  }
+
+  const d = data as Record<string, unknown>;
+
+  const answerText =
+    typeof d.answer === 'string' && d.answer.trim() ? d.answer : FALLBACK_ANSWER;
+
+  const confidence: ChatMessage['confidence'] = VALID_CONFIDENCE.has(
+    d.confidence as ChatMessage['confidence']
+  )
+    ? (d.confidence as ChatMessage['confidence'])
+    : 'Medium';
+
+  const citations: Citation[] = Array.isArray(d.citations)
+    ? (d.citations as unknown[]).filter(
+        (c): c is Citation =>
+          c !== null &&
+          typeof c === 'object' &&
+          !Array.isArray(c) &&
+          typeof (c as Record<string, unknown>).document === 'string'
+      )
+    : [];
+
+  const responseTimeMs =
+    typeof d.response_time_ms === 'number' && isFinite(d.response_time_ms)
+      ? d.response_time_ms
+      : 0;
+
+  return { answerText, confidence, citations, responseTimeMs };
+}
+
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -76,7 +120,6 @@ export default function ChatbotScreen({ navigation }: any) {
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   });
 
-  const VALID_CONFIDENCE = new Set<ChatMessage['confidence']>(['High', 'Medium', 'Low']);
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -106,18 +149,11 @@ export default function ChatbotScreen({ navigation }: any) {
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        const data = await response.json();
-        // Validate: guard against blank answer and illegal confidence value
-        const answerText =
-          typeof data.answer === 'string' && data.answer.trim()
-            ? data.answer
-            : 'No answer returned. Please check the backend connection.';
-        const confidence: ChatMessage['confidence'] = VALID_CONFIDENCE.has(data.confidence)
-          ? data.confidence
-          : 'Medium';
+        const raw = await response.json();
+        const { answerText, confidence, citations, responseTimeMs } = parseBrainPayload(raw);
         setMessages(prev => [
           ...prev,
-          buildBrainMessage({ text: answerText, citations: data.citations, confidence, responseTimeMs: data.response_time_ms }),
+          buildBrainMessage({ text: answerText, citations, confidence, responseTimeMs }),
         ]);
       } else {
         throw new Error(`API returned status ${response.status}`);
