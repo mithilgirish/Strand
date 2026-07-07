@@ -105,7 +105,7 @@ export default function QrScanScreen({ navigation }: any) {
                     barcodeScannerSettings={{
                       barcodeTypes: ['qr'],
                     }}
-                    style={StyleSheet.absoluteFillObject}
+                    style={StyleSheet.absoluteFill}
                   />
                 )}
                 
