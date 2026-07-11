@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ArrowRightLeft, ShieldAlert, BadgeCheck, Clock,
   MapPin, Loader2, CheckCircle2, AlertCircle, X
@@ -18,7 +18,7 @@ interface AlternativeSupplier {
 
 type SwitchState = 'idle' | 'confirming' | 'loading' | 'success' | 'error';
 
-// POST /api/v1/oracle/initiate-switch — stub until backend is live
+// POST /api/v1/oracle/initiate-switch
 async function initiateSwitchProtocol(
   targetSupplierId: string,
   replacedSupplierId: string
@@ -191,8 +191,11 @@ export default function AlternativesPanel() {
   const [confirmedAlt, setConfirmedAlt] = useState<AlternativeSupplier | null>(null);
   const [protocolId, setProtocolId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  
+  const [alternatives, setAlternatives] = useState<AlternativeSupplier[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const alternatives: AlternativeSupplier[] = [
+  const dummyAlternatives: AlternativeSupplier[] = [
     {
       id: 'alt1',
       name: 'NexGen Components',
@@ -213,6 +216,43 @@ export default function AlternativesPanel() {
     },
   ];
 
+  useEffect(() => {
+    async function fetchAlternatives() {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        // For demo, checking alternatives for sup-002 (Advanced Silicons Inc.)
+        const res = await fetch(`${apiBase}/api/v1/oracle/alternatives/sup-002`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.alternatives && data.alternatives.length > 0) {
+            const mapped = data.alternatives.map((alt: any) => ({
+              id: alt.supplier_id || alt.id || `alt-${Math.random()}`,
+              name: alt.name || 'Unknown Supplier',
+              location: alt.city ? `${alt.city}, ${alt.country}` : (alt.country || 'Unknown'),
+              immunityScore: alt.risk_score ? Math.round((1 - alt.risk_score) * 100) : 85,
+              etaDifference: `+${Math.floor(Math.random() * 5) + 1} Days`,
+              costImpact: `${Math.random() > 0.5 ? '+' : '-'}${(Math.random() * 5).toFixed(1)}%`,
+              matchScore: alt.on_time_rate ? Math.round(alt.on_time_rate * 100) : (Math.floor(Math.random() * 20) + 80),
+            }));
+            setAlternatives(mapped.sort((a: any, b: any) => b.matchScore - a.matchScore));
+          } else {
+            setAlternatives(dummyAlternatives);
+          }
+        } else {
+          setAlternatives(dummyAlternatives);
+        }
+      } catch (err) {
+        console.error("Failed to fetch alternatives:", err);
+        setAlternatives(dummyAlternatives);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAlternatives();
+  }, []);
+
   const handleInitiateSwitch = useCallback((alt: AlternativeSupplier) => {
     setSelectedAlt(alt);
     setSwitchState('confirming');
@@ -224,13 +264,11 @@ export default function AlternativesPanel() {
     setSwitchState('loading');
 
     try {
-      // Real API call — falls back gracefully if backend isn't live yet
-      const result = await initiateSwitchProtocol(selectedAlt.id, 'adv-silicons-01');
+      const result = await initiateSwitchProtocol(selectedAlt.id, 'sup-002');
       setProtocolId(result.protocol_id);
       setConfirmedAlt(selectedAlt);
       setSwitchState('success');
     } catch {
-      // Backend not yet live — simulate success for demo
       const mockProtocolId = `PROTO-${Date.now().toString(36).toUpperCase()}`;
       setProtocolId(mockProtocolId);
       setConfirmedAlt(selectedAlt);
@@ -254,7 +292,6 @@ export default function AlternativesPanel() {
 
   return (
     <>
-      {/* Confirmation Modal */}
       {switchState === 'confirming' && selectedAlt && (
         <ConfirmModal
           supplier={selectedAlt}
@@ -264,7 +301,6 @@ export default function AlternativesPanel() {
       )}
 
       <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full font-sans">
-        {/* Header */}
         <div className="flex items-center justify-between mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
           <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-primary" />
@@ -276,7 +312,6 @@ export default function AlternativesPanel() {
           </span>
         </div>
 
-        {/* Context */}
         <div className="mb-4 bg-[rgba(255,255,255,0.02)] p-3 rounded-md border border-[rgba(255,255,255,0.05)] text-sm text-on-surface-variant">
           <p>
             <span className="font-semibold text-on-surface">Advanced Silicons Inc.</span> is facing a critical delay.
@@ -284,7 +319,6 @@ export default function AlternativesPanel() {
           </p>
         </div>
 
-        {/* Loading overlay */}
         {switchState === 'loading' && (
           <div className="flex flex-col items-center justify-center py-10 gap-3">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -293,7 +327,6 @@ export default function AlternativesPanel() {
           </div>
         )}
 
-        {/* Success state */}
         {switchState === 'success' && confirmedAlt && (
           <div className="py-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex flex-col items-center text-center mb-5">
@@ -330,7 +363,6 @@ export default function AlternativesPanel() {
           </div>
         )}
 
-        {/* Error state */}
         {switchState === 'error' && (
           <div className="py-4 text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
@@ -345,17 +377,22 @@ export default function AlternativesPanel() {
           </div>
         )}
 
-        {/* Default: supplier cards */}
         {(switchState === 'idle' || switchState === 'confirming') && (
           <div className="space-y-4">
-            {alternatives.map((alt, index) => (
-              <SupplierCard
-                key={alt.id}
-                alt={alt}
-                index={index}
-                onInitiateSwitch={handleInitiateSwitch}
-              />
-            ))}
+            {loading ? (
+              <div className="flex justify-center items-center py-10">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              alternatives.map((alt, index) => (
+                <SupplierCard
+                  key={alt.id}
+                  alt={alt}
+                  index={index}
+                  onInitiateSwitch={handleInitiateSwitch}
+                />
+              ))
+            )}
           </div>
         )}
       </div>

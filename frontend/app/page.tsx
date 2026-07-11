@@ -13,63 +13,117 @@ interface ProjectSummary {
   violationsToday: number;
   openNCRs: number;
   atRiskShipments: number;
+  criticalR0Max: number;
+}
+
+interface SchedulerAlert {
+  taskId: string;
+  taskName: string;
+  severity: string;
+  r0Score: number;
+  delayProbability: number;
+  discipline: string;
 }
 
 export default function RiskCockpit() {
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   const [violations, setViolations] = useState<GuardianViolation[]>([]);
+  const [topAlert, setTopAlert] = useState<SchedulerAlert | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const agents = [
+  const [agents, setAgents] = useState([
     { name: 'Guardian', status: 'active' as const },
     { name: 'Scheduler', status: 'active' as const },
     { name: 'Oracle', status: 'active' as const },
     { name: 'Inspector', status: 'idle' as const },
     { name: 'Brain', status: 'active' as const },
-  ];
+  ]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        // Attempt to fetch from real APIs
-        const [summaryRes, violationsRes] = await Promise.all([
-          fetch('/api/v1/project/summary').catch(() => null),
-          fetch('/api/v1/guardian/violations').catch(() => null)
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+        // Fetch from real APIs with graceful fallback
+        const [summaryRes, violationsRes, schedulerRes] = await Promise.allSettled([
+          fetch(`${apiBase}/api/v1/project/summary`),
+          fetch(`${apiBase}/api/v1/guardian/violations`),
+          fetch(`${apiBase}/api/v1/scheduler/risks`),
         ]);
 
-        let summaryData = null;
-        let violationsData = null;
+        // Project Summary
+        let summaryData: ProjectSummary | null = null;
+        if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
+          const raw = await summaryRes.value.json();
+          summaryData = {
+            immunityScore: raw.immunity_score ?? 67.5,
+            violationsToday: raw.violations_today ?? 2,
+            openNCRs: raw.open_ncrs ?? 5,
+            atRiskShipments: raw.at_risk_shipments ?? 3,
+            criticalR0Max: raw.critical_r0_max ?? 4.2,
+          };
 
-        if (summaryRes && summaryRes.ok) {
-          summaryData = await summaryRes.json();
-        }
-        
-        if (violationsRes && violationsRes.ok) {
-          violationsData = await violationsRes.json();
+          // Update agent statuses from API
+          if (raw.agents) {
+            setAgents([
+              { name: 'Guardian', status: raw.agents.guardian === 'active' ? 'active' : 'idle' },
+              { name: 'Scheduler', status: raw.agents.scheduler === 'active' ? 'active' : 'idle' },
+              { name: 'Oracle', status: raw.agents.oracle === 'active' ? 'active' : 'idle' },
+              { name: 'Inspector', status: raw.agents.inspector === 'active' ? 'active' : 'idle' },
+              { name: 'Brain', status: raw.agents.brain === 'active' ? 'active' : 'idle' },
+            ]);
+          }
         }
 
-        // Fallback to mock data if API is not available
         setSummary(summaryData || {
           immunityScore: 67.5,
           violationsToday: 2,
           openNCRs: 5,
-          atRiskShipments: 3
+          atRiskShipments: 3,
+          criticalR0Max: 4.2,
         });
 
-        setViolations(violationsData || [
-          {
-            id: 'DEMO-CT-01:ambient_temperature_max',
-            submittal_id: 'DEMO-CT-01',
-            parameter: 'ambient_temperature_max',
-            required: 50,
-            actual: 45,
-            unit: '°C',
-            section: '6.7.1',
-            r0_score: 3.0,
-            severity: 'Critical',
+        // Guardian Violations
+        if (violationsRes.status === 'fulfilled' && violationsRes.value.ok) {
+          const violData = await violationsRes.value.json();
+          const viols = violData.violations || violData;
+          setViolations(Array.isArray(viols) ? viols : []);
+        } else {
+          setViolations([
+            {
+              id: 'DEMO-CT-01:ambient_temperature_max',
+              submittal_id: 'DEMO-CT-01',
+              parameter: 'ambient_temperature_max',
+              required: 50,
+              actual: 45,
+              unit: '°C',
+              section: '6.7.1',
+              r0_score: 3.0,
+              severity: 'Critical',
+            }
+          ]);
+        }
+
+        // Scheduler top alert
+        if (schedulerRes.status === 'fulfilled' && schedulerRes.value.ok) {
+          const schedData = await schedulerRes.value.json();
+          const atRiskTasks = schedData.at_risk_tasks || [];
+          if (atRiskTasks.length > 0) {
+            // Pick the highest R0 task
+            const top = atRiskTasks.reduce((a: any, b: any) =>
+              (a.r0_score || 0) > (b.r0_score || 0) ? a : b
+            );
+            setTopAlert({
+              taskId: top.task_id,
+              taskName: top.task_name || top.task_id,
+              severity: top.severity || 'Critical',
+              r0Score: top.r0_score || 0,
+              delayProbability: Math.round((top.delay_probability || 0) * 100),
+              discipline: top.discipline || '',
+            });
           }
-        ]);
+        }
+
       } catch (error) {
         console.error("Error fetching dashboard data", error);
       } finally {
@@ -165,24 +219,38 @@ export default function RiskCockpit() {
           
           <div className="bg-[rgba(255,255,255,0.02)] p-5 rounded-md border border-[rgba(255,255,255,0.05)] relative overflow-hidden">
             {/* Warning Alert bar uses rounded-none */}
-            <div className="absolute left-0 top-0 w-1.5 h-full bg-yellow-500 rounded-none"></div>
+            <div className={`absolute left-0 top-0 w-1.5 h-full rounded-none ${
+              topAlert && topAlert.r0Score >= 5.0 ? 'bg-red-500' :
+              topAlert && topAlert.r0Score >= 2.5 ? 'bg-yellow-500' :
+              'bg-yellow-500'
+            }`}></div>
             
             <div className="flex justify-between items-center mb-3.5 pl-3">
-              <span className="px-2 py-0.5 rounded-none text-[10px] font-bold tracking-[0.08em] uppercase bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-                At Risk
+              <span className={`px-2 py-0.5 rounded-none text-[10px] font-bold tracking-[0.08em] uppercase border ${
+                topAlert?.severity === 'Critical' || topAlert?.severity === 'Systemic'
+                  ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                  : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+              }`}>
+                {topAlert?.severity || 'At Risk'}
               </span>
-              <span className="text-[12px] font-medium tracking-[0.02em] text-on-surface-variant font-mono">R0: 2.8</span>
+              <span className="text-[12px] font-medium tracking-[0.02em] text-on-surface-variant font-mono">
+                R0: {topAlert?.r0Score?.toFixed(1) || summary?.criticalR0Max?.toFixed(1) || '2.8'}
+              </span>
             </div>
             
-            <h4 className="font-bold text-on-surface font-sans text-base pl-3">Generator Installation Delay</h4>
+            <h4 className="font-bold text-on-surface font-sans text-base pl-3">
+              {topAlert?.taskName || 'Generator Installation Delay'}
+            </h4>
             <p className="text-sm text-on-surface-variant font-sans mt-2 mb-5 pl-3 leading-relaxed">
-              Delay probability estimated at <span className="text-on-surface font-semibold font-mono">85%</span> due to predecessor cooling tower procurement hold. Downstream cascading risk detected.
+              Delay probability estimated at <span className="text-on-surface font-semibold font-mono">
+                {topAlert ? `${topAlert.delayProbability}%` : '85%'}
+              </span> {topAlert?.discipline ? `in ${topAlert.discipline} discipline.` : 'due to predecessor cooling tower procurement hold.'} Downstream cascading risk detected.
             </p>
             
             <div className="pl-3">
-              <button className="px-4 py-2 text-xs font-bold rounded-md bg-primary text-on-primary hover:bg-opacity-90 shadow-md border-t border-l border-[rgba(255,255,255,0.20)] border-r border-b border-[rgba(0,0,0,0.40)] transition-all font-sans">
+              <a href="/scheduler" className="px-4 py-2 text-xs font-bold rounded-md bg-primary text-on-primary hover:bg-opacity-90 shadow-md border-t border-l border-[rgba(255,255,255,0.20)] border-r border-b border-[rgba(0,0,0,0.40)] transition-all font-sans inline-block">
                 View Critical Path
-              </button>
+              </a>
             </div>
           </div>
         </div>

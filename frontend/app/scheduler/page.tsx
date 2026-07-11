@@ -19,12 +19,11 @@ export default function SchedulerAgent() {
     async function fetchSchedulerData() {
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        // In a real app, these endpoints would exist. Here we use Promise.allSettled
-        // to gracefully degrade if the backend is not yet fully implemented.
-        const [timelineRes, milestonesRes, r0Res] = await Promise.allSettled([
+
+        const [timelineRes, risksRes, r0Res] = await Promise.allSettled([
           fetch(`${apiBase}/api/v1/scheduler/timeline`),
           fetch(`${apiBase}/api/v1/scheduler/milestones`),
-          fetch(`${apiBase}/api/v1/scheduler/r0`)
+          fetch(`${apiBase}/api/v1/scheduler/r0`),
         ]);
 
         // Fallback dummy data if backend is offline or 404
@@ -45,20 +44,29 @@ export default function SchedulerAgent() {
 
         const mockR0 = 2.8;
 
-        setTasks(
-          timelineRes.status === 'fulfilled' && timelineRes.value.ok 
-            ? await timelineRes.value.json() : mockTasks
-        );
-        
-        setMilestones(
-          milestonesRes.status === 'fulfilled' && milestonesRes.value.ok 
-            ? await milestonesRes.value.json() : mockMilestones
-        );
-        
-        setR0Score(
-          r0Res.status === 'fulfilled' && r0Res.value.ok 
-            ? (await r0Res.value.json()).score : mockR0
-        );
+        // Timeline
+        if (timelineRes.status === 'fulfilled' && timelineRes.value.ok) {
+          const timelineData = await timelineRes.value.json();
+          setTasks(Array.isArray(timelineData) ? timelineData : mockTasks);
+        } else {
+          setTasks(mockTasks);
+        }
+
+        // Milestones from at-risk tasks
+        if (risksRes.status === 'fulfilled' && risksRes.value.ok) {
+          const milestonesData = await risksRes.value.json();
+          setMilestones(Array.isArray(milestonesData) ? milestonesData : mockMilestones);
+        } else {
+          setMilestones(mockMilestones);
+        }
+
+        // R0 score
+        if (r0Res.status === 'fulfilled' && r0Res.value.ok) {
+          const r0Data = await r0Res.value.json();
+          setR0Score(r0Data.score ?? mockR0);
+        } else {
+          setR0Score(mockR0);
+        }
 
       } catch (err) {
         console.error("Scheduler fetch error:", err);
@@ -91,7 +99,7 @@ export default function SchedulerAgent() {
               <Calendar className="w-5 h-5 text-primary" />
             </div>
             <h1 className="text-2xl font-black text-on-surface tracking-wide label-caps">
-              Scheduler & Delay Analysis
+              Scheduler &amp; Delay Analysis
             </h1>
           </div>
           <p className="text-on-surface-variant text-sm max-w-2xl">

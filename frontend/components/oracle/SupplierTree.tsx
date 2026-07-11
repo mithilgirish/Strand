@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Building2, Factory, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, ChevronDown, Building2, Factory, Zap, AlertCircle } from 'lucide-react';
 
 interface SupplierNode {
   id: string;
@@ -63,6 +63,10 @@ const TreeNode = ({ node }: { node: SupplierNode }) => {
 };
 
 export default function SupplierTree() {
+  const [treeData, setTreeData] = useState<SupplierNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const dummyTreeData: SupplierNode[] = [
     {
       id: 's1',
@@ -93,15 +97,91 @@ export default function SupplierTree() {
     }
   ];
 
+  useEffect(() => {
+    async function fetchSupplyChain() {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        // For the hackathon demo, we'll fetch the chain for a known shipment or rely on a fallback
+        const res = await fetch(`${apiBase}/api/v1/oracle/supply-chain/shp-002`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          
+          if (data.supply_chain) {
+            // Map the nested dicts to SupplierNode array
+            const mapTier = (supplierData: any, tierNum: number): SupplierNode | null => {
+              if (!supplierData || !supplierData.name) return null;
+              let status: 'critical' | 'warning' | 'healthy' = 'healthy';
+              if (supplierData.risk_score > 0.7) status = 'critical';
+              else if (supplierData.risk_score > 0.4) status = 'warning';
+              
+              // If it's a list (like tier_2 might be an array of suppliers)
+              let children: SupplierNode[] = [];
+              if (tierNum === 1 && data.supply_chain.tier_2) {
+                 const t2 = Array.isArray(data.supply_chain.tier_2) ? data.supply_chain.tier_2 : [data.supply_chain.tier_2];
+                 children = t2.map((t: any) => mapTier(t, 2)).filter(Boolean) as SupplierNode[];
+              }
+              if (tierNum === 2 && data.supply_chain.tier_3) {
+                 const t3 = Array.isArray(data.supply_chain.tier_3) ? data.supply_chain.tier_3 : [data.supply_chain.tier_3];
+                 children = t3.map((t: any) => mapTier(t, 3)).filter(Boolean) as SupplierNode[];
+              }
+
+              return {
+                id: supplierData.supplier_id || supplierData.id || `sup-${Math.random()}`,
+                name: supplierData.name,
+                tier: tierNum,
+                status,
+                children
+              };
+            };
+
+            const rootNode = mapTier(data.supply_chain.tier_1, 1);
+            if (rootNode) {
+              setTreeData([rootNode]);
+            } else {
+              setTreeData(dummyTreeData);
+            }
+          } else {
+            setTreeData(dummyTreeData);
+          }
+        } else {
+          setTreeData(dummyTreeData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch supply chain tree:", err);
+        setTreeData(dummyTreeData);
+        setError("Using mock data due to API failure");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSupplyChain();
+  }, []);
+
   return (
     <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full font-sans overflow-hidden">
-      <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant flex items-center gap-2 mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
-        Supplier Dependency Tree
-      </h3>
-      <div className="overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
-        {dummyTreeData.map((node) => (
-          <TreeNode key={node.id} node={node} />
-        ))}
+      <div className="flex items-center justify-between mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
+        <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant flex items-center gap-2">
+          Supplier Dependency Tree
+        </h3>
+        {error && (
+          <span className="text-[10px] text-yellow-500 flex items-center gap-1 bg-yellow-500/10 px-2 py-0.5 rounded">
+            <AlertCircle className="w-3 h-3" /> Offline
+          </span>
+        )}
+      </div>
+      
+      <div className="overflow-y-auto max-h-[400px] pr-2 custom-scrollbar relative min-h-[100px]">
+        {loading ? (
+           <div className="absolute inset-0 flex items-center justify-center">
+             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+           </div>
+        ) : (
+          treeData.map((node) => (
+            <TreeNode key={node.id} node={node} />
+          ))
+        )}
       </div>
     </div>
   );

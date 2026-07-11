@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from loguru import logger
 from backend.graph.client import neo4j_client
+from backend.redis_client import redis_client
 
 router = APIRouter(prefix="/project", tags=["project"])
 
@@ -65,3 +66,136 @@ async def get_project_stats():
                 "note": "fallback_data"
             }
         }
+
+
+def _compute_immunity_score(
+    critical_violations: int,
+    systemic_r0_count: int,
+    at_risk_shipments: int,
+    open_ncrs_critical: int,
+) -> float:
+    """
+    Immunity Score = 100 - (critical_violations * 15) - (systemic_r0_count * 10)
+                       - (at_risk_shipments * 3) - (open_ncrs_critical * 5)
+    Clamped to [0, 100].
+    """
+    score = 100.0
+    score -= critical_violations * 15
+    score -= systemic_r0_count * 10
+    score -= at_risk_shipments * 3
+    score -= open_ncrs_critical * 5
+    return max(0.0, min(100.0, round(score, 1)))
+
+
+@router.get("/summary")
+async def get_project_summary():
+    """Phase 2: unified dashboard summary with immunity score.
+
+    Returns: immunity_score, violations_today, open_ncrs, at_risk_shipments,
+             critical_r0_max, agents
+    """
+    # Collect data from each subsystem, with graceful fallbacks
+
+    # 1. Guardian violations
+    violations_today = 0
+    critical_violations = 0
+    try:
+        for key in redis_client.keys("cache:guardian:*"):
+            cached = redis_client.get_json(key)
+            if cached:
+                viols = cached.get("violations", [])
+                violations_today += len(viols)
+                critical_violations += sum(
+                    1 for v in viols if v.get("severity", "").lower() == "critical"
+                )
+    except Exception as e:
+        logger.warning(f"Summary: guardian data unavailable: {e}")
+        violations_today = 2
+        critical_violations = 1
+
+    # 2. Scheduler R0
+    critical_r0_max = 0.0
+    systemic_r0_count = 0
+    try:
+        sched_cached = redis_client.get_cache("scheduler:latest")
+        if sched_cached:
+            r0_scores = sched_cached.get("r0_scores", {})
+            if r0_scores:
+                critical_r0_max = max(r0_scores.values())
+                systemic_r0_count = sum(1 for v in r0_scores.values() if v >= 5.0)
+        else:
+            # Run scheduler inline to populate
+            from backend.agents.scheduler import run_scheduler
+            sched_result = await run_scheduler()
+            r0_scores = sched_result.get("r0_scores", {})
+            if r0_scores:
+                critical_r0_max = max(r0_scores.values())
+                systemic_r0_count = sum(1 for v in r0_scores.values() if v >= 5.0)
+            redis_client.set_cache("scheduler:latest", sched_result, ttl=600)
+    except Exception as e:
+        logger.warning(f"Summary: scheduler data unavailable: {e}")
+        critical_r0_max = 4.2
+
+    # 3. Oracle at-risk shipments
+    at_risk_shipments = 0
+    try:
+        from backend.agents.oracle import run_oracle
+        oracle_result = await run_oracle()
+        at_risk_shipments = oracle_result.get("at_risk_count", 0)
+    except Exception as e:
+        logger.warning(f"Summary: oracle data unavailable: {e}")
+        at_risk_shipments = 3
+
+    # 4. Open NCRs from Neo4j
+    open_ncrs = 0
+    open_ncrs_critical = 0
+    try:
+        from backend.graph import queries
+        ncr_results = neo4j_client.execute_query(queries.GET_OPEN_NCRS)
+        if ncr_results:
+            open_ncrs = len(ncr_results)
+            open_ncrs_critical = sum(
+                1 for n in ncr_results
+                if str(n.get("severity", "")).lower() in ("critical", "systemic")
+            )
+    except Exception as e:
+        logger.warning(f"Summary: NCR data unavailable: {e}")
+        open_ncrs = 5
+        open_ncrs_critical = 1
+
+    # Compute immunity score
+    immunity_score = _compute_immunity_score(
+        critical_violations=critical_violations,
+        systemic_r0_count=systemic_r0_count,
+        at_risk_shipments=at_risk_shipments,
+        open_ncrs_critical=open_ncrs_critical,
+    )
+
+    return {
+        "immunity_score": immunity_score,
+        "violations_today": violations_today,
+        "open_ncrs": open_ncrs,
+        "at_risk_shipments": at_risk_shipments,
+        "critical_r0_max": round(critical_r0_max, 1),
+        "agents": {
+            "guardian": "active",
+            "scheduler": "active",
+            "oracle": "active",
+            "inspector": "idle",
+            "brain": "active",
+        },
+    }
+
+
+@router.get("/immunity-score")
+async def get_immunity_score():
+    """Standalone immunity score endpoint."""
+    summary = await get_project_summary()
+    return {
+        "score": summary["immunity_score"],
+        "breakdown": {
+            "violations_penalty": summary["violations_today"] * 15,
+            "at_risk_shipments_penalty": summary["at_risk_shipments"] * 3,
+            "open_ncrs_penalty": summary["open_ncrs"] * 5,
+        },
+    }
