@@ -104,7 +104,7 @@ export default function RiskCockpit() {
       {/* Row 1: KPI Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         <div className="col-span-1">
-          <ImmunityScore score={summary?.immunityScore || 0} />
+          <ImmunityScore score={summary?.immunityScore ?? 0} />
         </div>
         <div className="col-span-1 lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatCard label="Violations Today" value={summary?.violationsToday || 0} trend="up" color="tertiary" />
@@ -140,8 +140,8 @@ export default function RiskCockpit() {
           </div>
           
           <div className="space-y-6">
-            {violations.map((violation, idx) => (
-              <ViolationCard key={violation.id || idx} violation={violation} />
+            {violations.map((violation) => (
+              <ViolationCard key={violation.id} violation={violation} />
             ))}
             {violations.length === 0 && !loading && (
               <div className="text-center py-8 text-on-surface-variant">

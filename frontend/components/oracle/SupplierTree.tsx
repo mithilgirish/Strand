@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown, Building2, Factory, Zap } from 'lucide-react';
 

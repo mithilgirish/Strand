@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,9 +13,9 @@ const createCustomIcon = (status: 'green' | 'amber' | 'red') => {
     amber: '#eab308',
     green: '#22c55e'
   };
-  
+
   const bgColor = colorMap[status];
-  
+
   return L.divIcon({
     className: 'custom-leaflet-marker',
     html: `
@@ -26,15 +26,8 @@ const createCustomIcon = (status: 'green' | 'amber' | 'red') => {
         border-radius: 50%;
         border: 3px solid white;
         box-shadow: 0 0 10px ${bgColor};
-        animation: pulse 2s infinite;
+        animation: shipment-pulse 2s infinite;
       "></div>
-      <style>
-        @keyframes pulse {
-          0% { box-shadow: 0 0 0 0 ${bgColor}80; }
-          70% { box-shadow: 0 0 0 10px ${bgColor}00; }
-          100% { box-shadow: 0 0 0 0 ${bgColor}00; }
-        }
-      </style>
     `,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
@@ -86,16 +79,8 @@ const dummyShipments: (ShipmentData & { lat: number; lng: number })[] = [
 ];
 
 export default function SupplyMap() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <div className="w-full h-full bg-surface-container-low flex items-center justify-center border border-[rgba(255,255,255,0.1)] rounded-lg">Loading Map...</div>;
-  }
-
+  // This component is dynamically imported with ssr: false in oracle/page.tsx,
+  // so it is guaranteed to only run on the client — no mounted guard needed.
   return (
     <div className="w-full h-full min-h-[400px] bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.30)] relative">
       <div className="absolute top-4 left-4 z-[1000] bg-surface-container/90 backdrop-blur-sm border border-[rgba(255,255,255,0.1)] rounded-md px-3 py-2 shadow-lg">
@@ -103,9 +88,9 @@ export default function SupplyMap() {
         <p className="text-[10px] text-on-surface-variant">Real-time geospatial intelligence</p>
       </div>
 
-      <MapContainer 
-        center={[20.5937, 78.9629]} // Center of India
-        zoom={5} 
+      <MapContainer
+        center={[20.5937, 78.9629]}
+        zoom={5}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%', zIndex: 1 }}
         zoomControl={false}
@@ -115,9 +100,9 @@ export default function SupplyMap() {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         <ZoomControl position="bottomright" />
-        
+
         {dummyShipments.map(shipment => (
-          <Marker 
+          <Marker
             key={shipment.id}
             position={[shipment.lat, shipment.lng]}
             icon={createCustomIcon(shipment.status)}
@@ -128,36 +113,6 @@ export default function SupplyMap() {
           </Marker>
         ))}
       </MapContainer>
-
-      <style jsx global>{`
-        .oracle-custom-popup .leaflet-popup-content-wrapper {
-          background: #ffffff;
-          color: #1f2937;
-          border-radius: 8px;
-          padding: 0;
-          overflow: hidden;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-        }
-        .oracle-custom-popup .leaflet-popup-tip {
-          background: #ffffff;
-        }
-        .oracle-custom-popup .leaflet-popup-content {
-          margin: 0;
-          width: auto !important;
-        }
-        .leaflet-container {
-          background: #0f1115;
-          font-family: inherit;
-        }
-        .leaflet-bar a, .leaflet-bar a:hover {
-          background-color: #1a1d24;
-          color: #e2e2e2;
-          border-color: rgba(255,255,255,0.1);
-        }
-        .leaflet-control-zoom-in, .leaflet-control-zoom-out {
-          color: #e2e2e2 !important;
-        }
-      `}</style>
     </div>
   );
 }
