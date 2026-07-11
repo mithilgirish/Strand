@@ -233,3 +233,17 @@
 .leaflet-control-zoom-out {
   color: #e2e2e2 !important;
 }
+
+/* ── Brain / Chatbot animations ─────────────────────────────────────────── */
+@keyframes brain-ring-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(78, 222, 163, 0.5); opacity: 1; }
+  70%  { box-shadow: 0 0 0 8px rgba(78, 222, 163, 0); opacity: 0; }
+  100% { box-shadow: 0 0 0 0 rgba(78, 222, 163, 0); opacity: 0; }
+}
+
+.brain-pulse-ring {
+  animation: brain-ring-pulse 2s ease-out infinite;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
