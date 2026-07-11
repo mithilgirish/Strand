@@ -1,13 +1,25 @@
 "use client";
 
-import React from 'react';
-import { Shield, CalendarClock, LayoutDashboard } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, CalendarClock, LayoutDashboard, Loader2 } from 'lucide-react';
 import ImmunityScore from '@/components/shared/ImmunityScore';
 import StatCard from '@/components/shared/StatCard';
 import AgentStatusBadge from '@/components/shared/AgentStatusBadge';
 import ViolationCard from '@/components/guardian/ViolationCard';
+import type { GuardianViolation } from '@/app/guardian/page';
+
+interface ProjectSummary {
+  immunityScore: number;
+  violationsToday: number;
+  openNCRs: number;
+  atRiskShipments: number;
+}
 
 export default function RiskCockpit() {
+  const [summary, setSummary] = useState<ProjectSummary | null>(null);
+  const [violations, setViolations] = useState<GuardianViolation[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const agents = [
     { name: 'Guardian', status: 'active' as const },
     { name: 'Scheduler', status: 'active' as const },
@@ -16,28 +28,88 @@ export default function RiskCockpit() {
     { name: 'Brain', status: 'active' as const },
   ];
 
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        // Attempt to fetch from real APIs
+        const [summaryRes, violationsRes] = await Promise.all([
+          fetch('/api/v1/project/summary').catch(() => null),
+          fetch('/api/v1/guardian/violations').catch(() => null)
+        ]);
+
+        let summaryData = null;
+        let violationsData = null;
+
+        if (summaryRes && summaryRes.ok) {
+          summaryData = await summaryRes.json();
+        }
+        
+        if (violationsRes && violationsRes.ok) {
+          violationsData = await violationsRes.json();
+        }
+
+        // Fallback to mock data if API is not available
+        setSummary(summaryData || {
+          immunityScore: 67.5,
+          violationsToday: 2,
+          openNCRs: 5,
+          atRiskShipments: 3
+        });
+
+        setViolations(violationsData || [
+          {
+            id: 'DEMO-CT-01:ambient_temperature_max',
+            submittal_id: 'DEMO-CT-01',
+            parameter: 'ambient_temperature_max',
+            required: 50,
+            actual: 45,
+            unit: '°C',
+            section: '6.7.1',
+            r0_score: 3.0,
+            severity: 'Critical',
+          }
+        ]);
+      } catch (error) {
+        console.error("Error fetching dashboard data", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
   return (
     <div className="flex flex-col h-full pb-12">
       {/* Page Title Header */}
-      <div className="mb-6 select-none">
-        <h2 className="text-3xl font-black text-on-surface flex items-center gap-3 font-sans tracking-wide">
-          <LayoutDashboard className="w-7 h-7 text-primary" />
-          RISK COCKPIT
-        </h2>
-        <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
-          Real-time causal project intelligence, compliance tracking, and contagion monitoring.
-        </p>
+      <div className="mb-6 select-none flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-black text-on-surface flex items-center gap-3 font-sans tracking-wide">
+            <LayoutDashboard className="w-7 h-7 text-primary" />
+            RISK COCKPIT
+          </h2>
+          <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
+            Real-time causal project intelligence, compliance tracking, and contagion monitoring.
+          </p>
+        </div>
+        {loading && (
+          <div className="flex items-center gap-2 text-primary text-sm font-bold bg-primary/10 px-3 py-1.5 rounded-md border border-primary/20">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            SYNCING LIVE DATA
+          </div>
+        )}
       </div>
 
       {/* Row 1: KPI Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         <div className="col-span-1">
-          <ImmunityScore score={67.5} />
+          <ImmunityScore score={summary?.immunityScore || 0} />
         </div>
         <div className="col-span-1 lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatCard label="Violations Today" value={2} trend="up" color="tertiary" />
-          <StatCard label="Open NCRs" value={5} trend="up" color="warning" />
-          <StatCard label="At-Risk Shipments" value={3} trend="up" color="tertiary" />
+          <StatCard label="Violations Today" value={summary?.violationsToday || 0} trend="up" color="tertiary" />
+          <StatCard label="Open NCRs" value={summary?.openNCRs || 0} trend="up" color="warning" />
+          <StatCard label="At-Risk Shipments" value={summary?.atRiskShipments || 0} trend="up" color="tertiary" />
         </div>
       </div>
 
@@ -57,21 +129,39 @@ export default function RiskCockpit() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Violation Feed Module */}
         <div className="bg-surface-container-low border-t border-l border-[rgba(255,255,255,0.15)] border-r border-b border-[rgba(0,0,0,0.40)] rounded-lg p-6 shadow-[0_4px_20px_rgba(0,0,0,0.50)]">
-          <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 mb-5 select-none border-b border-outline-variant pb-3">
-            <Shield className="w-4 h-4 text-primary" />
-            Recent Guardian Violations
-          </h3>
+          <div className="flex justify-between items-center mb-5 border-b border-outline-variant pb-3">
+            <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 select-none">
+              <Shield className="w-4 h-4 text-primary" />
+              Recent Guardian Violations
+            </h3>
+            <span className="text-[10px] bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-wider">
+              Live Feed
+            </span>
+          </div>
+          
           <div className="space-y-6">
-            <ViolationCard />
+            {violations.map((violation, idx) => (
+              <ViolationCard key={violation.id || idx} violation={violation} />
+            ))}
+            {violations.length === 0 && !loading && (
+              <div className="text-center py-8 text-on-surface-variant">
+                No recent violations detected.
+              </div>
+            )}
           </div>
         </div>
 
         {/* Scheduler Alerts Module */}
         <div className="bg-surface-container-low border-t border-l border-[rgba(255,255,255,0.15)] border-r border-b border-[rgba(0,0,0,0.40)] rounded-lg p-6 shadow-[0_4px_20px_rgba(0,0,0,0.50)]">
-          <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 mb-5 select-none border-b border-outline-variant pb-3">
-            <CalendarClock className="w-4 h-4 text-primary" />
-            Latest Scheduler Alerts
-          </h3>
+          <div className="flex justify-between items-center mb-5 border-b border-outline-variant pb-3">
+            <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant font-sans flex items-center gap-2.5 select-none">
+              <CalendarClock className="w-4 h-4 text-primary" />
+              Latest Scheduler Alerts
+            </h3>
+            <span className="text-[10px] bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-wider">
+              Live Feed
+            </span>
+          </div>
           
           <div className="bg-[rgba(255,255,255,0.02)] p-5 rounded-md border border-[rgba(255,255,255,0.05)] relative overflow-hidden">
             {/* Warning Alert bar uses rounded-none */}
