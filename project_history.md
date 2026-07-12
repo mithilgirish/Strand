@@ -9,59 +9,51 @@ This document tracks the history of the STRAND Backend & Agentic AI architecture
 
 ---
 
-## Phase 1: Shared Infrastructure (Completed)
-**Goal:** Establish the foundational databases, connections, and extraction pipelines.
+## Phase 1: Core Intelligence Layer (Completed)
+**Goal:** Establish the foundational databases, pipelines, Guardian (Spec Auditing), and Brain (RAG).
 **Status:** ✅ Completed
 
 ### Key Components Built:
-- **Configuration & Error Handling (`backend/config.py`, `backend/errors.py`):** Configured application settings, rate limits, and standardized error envelopes.
-- **Database Clients (`backend/graph/client.py`, `backend/vector/store.py`, `backend/redis_client.py`):** Implemented Neo4j driver with NetworkX fallback, ChromaDB vector store, and Redis client with in-memory fallback.
-- **Graph Schema & Queries (`backend/graph/schema.py`, `backend/graph/queries.py`):** Defined constraint logic (`passes_constraint`) and all Cypher queries using idempotent `MERGE` statements.
-- **R0 Contagion Engine (`backend/r0/`):** Built the core physics engine that calculates cascading supply chain risk and maps it to severity levels. (Note: Resolved mathematical discrepancy by adding a critical-path weight multiplier `2 * critical_path_downstream` normalized to a 0-10 scale).
-- **Spec-DNA Ingestion (`backend/ingestion/`):** Created the deterministic SHA-256 fingerprinting system for document lineage. Built parsers for PDFs (PyMuPDF) and CSVs, along with NER parameter extractors.
-- **LLM Wrappers (`backend/llm/client.py`):** Established robust Pydantic structured output extraction using `langchain-groq`.
-- **Prompt Registry (`backend/prompts/`):** Externalized all LLM prompts into YAML files for easier editing and versioning.
+- **Database Clients & Graph Schema:** Neo4j driver with NetworkX fallback, ChromaDB vector store, Redis cache.
+- **Spec-DNA Ingestion:** Deterministic SHA-256 fingerprinting system for document lineage. PDF layout parsing and NER parameter extraction.
+- **Agent 1 - The Guardian:** Automated spec compliance auditor. Extracts parameters from submittals and drafts RFIs.
+- **Agent 5 - The Brain:** Project knowledge copilot using BM25 + Dense retrieval (RRF fusion).
 
 ---
 
-## Phase 2: Agent Architecture (Completed)
-**Goal:** Implement the 6 core AI agents defined in the PRD.
+## Phase 2: Operational Intelligence (Completed)
+**Goal:** Implement the Scheduler and Oracle agents, expose API routers, and wire live frontend dashboards.
 **Status:** ✅ Completed
 
 ### Key Components Built:
-- **Pydantic Models (`backend/models/`):** Created robust data schemas for violations, risks, shipments, NCRs, queries, and planner intents.
-- **The Guardian (`backend/agents/guardian.py`):** Automated spec compliance auditor. Extracts parameters from submittals, checks them against the Neo4j PKG, and drafts RFIs for violations.
-- **The Scheduler (`backend/agents/scheduler.py`):** Predictive risk engine. Builds CPM dependency graphs from CSVs and forecasts delays.
-- **The Oracle (`backend/agents/oracle.py`):** Supply chain intelligence. Traverses the Neo4j graph to find at-risk shipments and outputs map-ready GeoJSON.
-- **The Inspector (`backend/agents/inspector.py`):** Commissioning QA. Converts raw field engineer voice transcripts into structured Non-Conformance Reports (NCRs) and links them to Spec-DNA.
-- **The Brain (`backend/agents/brain.py`):** Project knowledge copilot. Uses Reciprocal Rank Fusion (RRF) for hybrid search (BM25 + Dense) and enriches answers with 1-hop Neo4j graph context.
-- **The Judge (`backend/agents/judge.py`):** Independent verification agent. Checks LLM-authored content (e.g., Guardian's RFIs) against hard PKG facts before a human sees them.
+- **Agent 2 - The Scheduler (`backend/agents/scheduler.py`):** Predictive risk engine building CPM dependency graphs from CSVs to compute contagion R0 scores.
+- **Agent 3 - The Oracle (`backend/agents/oracle.py`):** Supply chain intelligence. Computes supplier alternatives, at-risk logistics, and multi-tier cascades.
+- **API Routers (`backend/routers/`):** Exposed endpoints for Scheduler (`/api/v1/scheduler/risks`), Oracle (`/api/v1/oracle/shipments`), and central Project Summary (`/api/v1/project/summary`) computing the global Immunity Score.
+- **Data Enrichment:** Ran scripts to inject realistic Indian geospatial coordinates, delivery delays, and equipment tags into the JSON/CSV fixtures.
+- **Frontend Live Dashboards (`frontend/`):** Hooked up `SupplyMap.tsx` (Leaflet GeoJSON), `SupplierTree.tsx`, `AlternativesPanel.tsx`, and the Risk Cockpit (`page.tsx`) to real API data with graceful offline fallbacks.
 
 ---
 
-## Phase 3: Orchestration & APIs (In Progress)
-**Goal:** Build the central Planner, tool registry, and FastAPI endpoints.
+## Phase 3: Field Operations (In Progress)
+**Goal:** Build the Inspector app (QA), the Planner (Orchestrator), and Human-in-the-Loop approvals.
 **Status:** 🔄 In Progress
 
-### Key Components Built So Far:
-- **Tool Registry (`backend/tools/`):** Established Tier-1 (Agents) and Tier-2 (Primitives) tool registry with RBAC policy controls.
-- **The Planner (`backend/agents/planner.py`):** Central orchestrator that classifies user intent, decomposes subtasks, and executes agents in parallel.
-- **HITL Approval Manager (`backend/approvals/manager.py`):** Enforces a Human-in-the-Loop gate for all write operations, ensuring no agent can commit changes without explicit approval (auto-approves in DEMO_MODE).
-
 ### Next Steps:
-- Build FastAPI routers (`backend/routers/`) to expose the agents and Planner to the frontend.
-- Implement WebSocket endpoints for real-time agent logging.
-- Wire up `main.py` and finalize the REST API.
+- **The Inspector (`backend/agents/inspector.py`):** Commissioning QA converting field engineer voice transcripts into structured Non-Conformance Reports (NCRs).
+- **The Planner (`backend/agents/planner.py`):** Central orchestrator routing user intent to appropriate agents.
+- **Tool Registry (`backend/tools/`):** Implement Tier-1 and Tier-2 tools with RBAC policy controls.
+- **HITL Manager (`backend/approvals/manager.py`):** Enforce manual human approval gates for write operations.
 
 ---
 
-## Phase 4: Testing & Handoff (Pending)
-**Goal:** Seed the database, run end-to-end tests, and prepare for presentation.
+## Phase 4: Integration & Demo Prep (Pending)
+**Goal:** End-to-end orchestration, UI polish, and final presentation demo ops.
 **Status:** ⏳ Pending
 
 ### Next Steps:
-- Execute `scripts/seed_db.py` to populate Neo4j and Chroma with synthetic TIA-942 spec data and project schedules.
-- Run `scripts/test_agents.py` to verify functionality.
+- Execute comprehensive `scripts/seed_db.py` seeding scripts for all databases.
+- Test fallback modes (NetworkX and Redis dict) end-to-end.
+- Prepare demo environment.
 
 ---
 *This file will be updated as the project progresses towards completion.*

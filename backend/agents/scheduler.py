@@ -5,15 +5,16 @@ Builds CPM dependency graph, forecasts delays, computes R0, suggests mitigations
 from __future__ import annotations
 
 import json
-from typing import TypedDict, Optional
+import os
+from typing import Any, Optional, TypedDict
 
 import networkx as nx
-import pandas as pd
 from loguru import logger
 
 from backend.ingestion.parsers.csv_parser import parse_schedule_csv
 from backend.r0.engine import compute_r0_from_task_graph
 from backend.r0.classifier import r0_to_severity
+from backend.config import settings
 from backend.llm.client import invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
 
@@ -66,6 +67,7 @@ def forecast_delays(state: SchedulerState) -> SchedulerState:
         delay_prob = _estimate_delay_probability(data, G)
 
         if delay_prob > 0.6:
+            downstream = sorted(nx.descendants(G, task_id))
             at_risk.append({
                 "task_id": task_id,
                 "task_name": data.get("task_name", ""),
@@ -74,6 +76,11 @@ def forecast_delays(state: SchedulerState) -> SchedulerState:
                 "on_critical_path": task_id in state["critical_path"],
                 "discipline": data.get("discipline", ""),
                 "equipment_tag": data.get("equipment_tag", ""),
+                "status": data.get("status", "on_track"),
+                "start_date": data.get("start_date", ""),
+                "end_date": data.get("end_date", ""),
+                "downstream_count": len(downstream),
+                "downstream_task_ids": downstream,
             })
 
     logger.info(f"Scheduler: identified {len(at_risk)} at-risk tasks")
@@ -89,7 +96,9 @@ def compute_task_r0(state: SchedulerState) -> SchedulerState:
 
     for task in state["at_risk_tasks"]:
         task_id = task["task_id"]
-        r0 = compute_r0_from_task_graph(task_id, G, state["critical_path"])
+        propagation_r0 = compute_r0_from_task_graph(task_id, G, state["critical_path"])
+        probability_floor = task.get("delay_probability", 0) * 3
+        r0 = round(min(10.0, max(propagation_r0, probability_floor)), 1)
         r0_scores[task_id] = r0
         task["r0_score"] = r0
         task["severity"] = r0_to_severity(r0)
@@ -108,12 +117,13 @@ def suggest_mitigations(state: SchedulerState) -> SchedulerState:
     if not top_risks:
         return {**state, "mitigation_suggestions": []}
 
-    prompt = load_prompt(
-        "scheduler_mitigation",
-        at_risk_tasks=json.dumps(top_risks, indent=2, default=str),
-    )
-
     try:
+        if not (settings.GROQ_API_KEY or settings.ANTHROPIC_API_KEY):
+            raise RuntimeError("No LLM provider configured")
+        prompt = load_prompt(
+            "scheduler_mitigation",
+            at_risk_tasks=json.dumps(top_risks, indent=2, default=str),
+        )
         response_text = invoke_raw(
             prompt=prompt,
             agent_name="scheduler",
@@ -142,19 +152,27 @@ def suggest_mitigations(state: SchedulerState) -> SchedulerState:
 
 
 def _estimate_delay_probability(task_data: dict, G: nx.DiGraph) -> float:
-    """Heuristic delay model for MVP. Replace with trained XGBoost in production."""
+    """Phase 2 delay heuristic, including delayed predecessor contagion."""
     progress = float(task_data.get("progress_pct", 0)) / 100
     status = str(task_data.get("status", "")).lower()
+    task_id = task_data.get("task_id")
+    delayed_predecessors = 0
+    if task_id in G:
+        delayed_predecessors = sum(
+            1
+            for predecessor in G.predecessors(task_id)
+            if str(G.nodes[predecessor].get("status", "")).lower() == "delayed"
+        )
 
-    if status == "delayed":
-        return 0.9
-    if status == "at_risk":
-        return 0.75
-    if progress < 0.2:
-        return 0.65
-    if progress < 0.5 and status != "completed":
-        return 0.45
-    return 0.3
+    base = {
+        "delayed": 0.9,
+        "at_risk": 0.75,
+        "on_track": 0.25,
+        "completed": 0.05,
+    }.get(status, 0.3)
+    predecessor_penalty = min(0.3, delayed_predecessors * 0.15)
+    progress_penalty = 0.0 if status == "completed" else max(0.0, 0.3 - progress * 0.4)
+    return min(0.99, base + predecessor_penalty + progress_penalty)
 
 
 def _estimate_delay_days(task_data: dict) -> int:
@@ -174,7 +192,6 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
         schedule_data = parse_schedule_csv(csv_path)
     elif schedule_data is None:
         # Load default schedule
-        import os
         default_csv = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "data", "project_schedule_100tasks.csv",
@@ -195,6 +212,11 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
     state = compute_task_r0(state)
     state = suggest_mitigations(state)
 
+    state["at_risk_tasks"].sort(
+        key=lambda task: (task.get("r0_score", 0), task.get("delay_probability", 0)),
+        reverse=True,
+    )
+
     return {
         "at_risk_tasks": state["at_risk_tasks"],
         "critical_path": state["critical_path"],
@@ -203,3 +225,20 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
         "total_tasks": len(schedule_data),
         "at_risk_count": len(state["at_risk_tasks"]),
     }
+
+
+class SchedulerGraph:
+    """Small LangGraph-compatible adapter used by the published smoke test."""
+
+    async def ainvoke(self, state: dict[str, Any]) -> dict[str, Any]:
+        result = await run_scheduler(schedule_data=state.get("schedule_data"))
+        return {
+            **state,
+            "at_risk_tasks": result["at_risk_tasks"],
+            "critical_path": result["critical_path"],
+            "mitigation_suggestions": result["mitigations"],
+            "r0_scores": result["r0_scores"],
+        }
+
+
+scheduler_graph = SchedulerGraph()

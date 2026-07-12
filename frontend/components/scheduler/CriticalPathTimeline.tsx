@@ -1,40 +1,14 @@
 "use client";
 
-import React from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-
-export interface TaskActivity {
-  id: string;
-  name: string;
-  startDay: number;
-  duration: number;
-  critical: boolean;
-}
+import type { TaskActivity } from './types';
+export type { TaskActivity } from './types';
 
 interface CriticalPathTimelineProps {
   data: TaskActivity[];
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-surface-container border border-[rgba(255,255,255,0.1)] p-3 rounded-md shadow-lg font-sans text-sm">
-        <p className="font-bold text-on-surface mb-1">{data.name}</p>
-        <p className="text-on-surface-variant">Start: Day {data.offset}</p>
-        <p className="text-on-surface-variant">Duration: {data.duration} Days</p>
-        <p className="text-on-surface-variant">End: Day {data.endDay}</p>
-        {data.critical && (
-          <p className="text-red-500 font-bold mt-1 text-xs uppercase tracking-wider">Critical Path</p>
-        )}
-      </div>
-    );
-  }
-  return null;
-};
-
 export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps) {
   // Format data for stacked bar chart to simulate Gantt
   const chartData = data.map((task) => ({
@@ -42,12 +16,14 @@ export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps
     offset: task.startDay,
     duration: task.duration,
     critical: task.critical,
+    atRisk: task.atRisk,
+    r0Score: task.r0Score,
     // Add end day for tooltip
     endDay: task.startDay + task.duration,
   }));
 
   return (
-    <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full h-[400px] flex flex-col font-sans">
+    <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full h-[460px] flex flex-col font-sans">
       <div className="flex items-center justify-between mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
         <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant">
           Critical Path Timeline
@@ -83,9 +59,10 @@ export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps
               type="category" 
               stroke="#76777d"
               tick={{ fill: '#c6c6cd', fontSize: 12 }}
-              width={150}
+              width={210}
+              interval={0}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#24252b', border: '1px solid rgba(255,255,255,.12)', borderRadius: 4 }} />
             
             {/* The invisible offset bar to push the duration bar to the start day */}
             <Bar dataKey="offset" stackId="a" fill="transparent" isAnimationActive={false} />
@@ -95,7 +72,7 @@ export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps
               {chartData.map((entry, index) => (
                 <Cell 
                   key={`cell-${index}`} 
-                  fill={entry.critical ? 'rgba(239, 68, 68, 0.8)' : 'var(--color-primary)'} 
+                  fill={entry.atRisk ? 'rgba(239, 68, 68, 0.85)' : entry.critical ? 'rgba(245, 158, 11, 0.8)' : 'var(--color-primary)'}
                 />
               ))}
             </Bar>
