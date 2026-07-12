@@ -1,159 +1,102 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import R0Gauge from '@/components/scheduler/R0Gauge';
-import CriticalPathTimeline, { TaskActivity } from '@/components/scheduler/CriticalPathTimeline';
-import MilestoneCard, { Milestone } from '@/components/scheduler/MilestoneCard';
-import R0ContagionTree from '@/components/scheduler/R0ContagionTree';
-import MitigationPanel from '@/components/scheduler/MitigationPanel';
-import { Calendar, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { AlertCircle, Calendar, RefreshCw } from "lucide-react";
+import CriticalPathTimeline from "@/components/scheduler/CriticalPathTimeline";
+import MilestoneCard, { type Milestone } from "@/components/scheduler/MilestoneCard";
+import MitigationPanel from "@/components/scheduler/MitigationPanel";
+import R0ContagionTree from "@/components/scheduler/R0ContagionTree";
+import R0Gauge from "@/components/scheduler/R0Gauge";
+import type { SchedulerMitigation, SchedulerRisk, TaskActivity } from "@/components/scheduler/types";
+
+interface RisksResponse {
+  at_risk_tasks: SchedulerRisk[];
+  mitigations: SchedulerMitigation[];
+}
 
 export default function SchedulerAgent() {
   const [tasks, setTasks] = useState<TaskActivity[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [r0Score, setR0Score] = useState<number>(0);
+  const [risks, setRisks] = useState<SchedulerRisk[]>([]);
+  const [mitigations, setMitigations] = useState<SchedulerMitigation[]>([]);
+  const [selectedRisk, setSelectedRisk] = useState<SchedulerRisk | null>(null);
+  const [r0Score, setR0Score] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    async function fetchSchedulerData() {
+    const controller = new AbortController();
+    async function load() {
+      setLoading(true);
+      setError(null);
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-        const [timelineRes, risksRes, r0Res] = await Promise.allSettled([
-          fetch(`${apiBase}/api/v1/scheduler/timeline`),
-          fetch(`${apiBase}/api/v1/scheduler/milestones`),
-          fetch(`${apiBase}/api/v1/scheduler/r0`),
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const [timelineResponse, milestonesResponse, r0Response, risksResponse] = await Promise.all([
+          fetch(`${apiBase}/api/v1/scheduler/timeline`, { signal: controller.signal }),
+          fetch(`${apiBase}/api/v1/scheduler/milestones`, { signal: controller.signal }),
+          fetch(`${apiBase}/api/v1/scheduler/r0`, { signal: controller.signal }),
+          fetch(`${apiBase}/api/v1/scheduler/risks`, { signal: controller.signal }),
         ]);
-
-        // Fallback dummy data if backend is offline or 404
-        const mockTasks: TaskActivity[] = [
-          { id: 't1', name: 'Site Prep', startDay: 0, duration: 5, critical: false },
-          { id: 't2', name: 'Foundation', startDay: 5, duration: 10, critical: true },
-          { id: 't3', name: 'Steel Framing', startDay: 15, duration: 12, critical: true },
-          { id: 't4', name: 'Generator Install', startDay: 27, duration: 8, critical: true },
-          { id: 't5', name: 'Cooling Setup', startDay: 20, duration: 6, critical: false },
-        ];
-
-        const mockMilestones: Milestone[] = [
-          { id: 'm1', name: 'Foundation Complete', status: 'completed', plannedDate: '2026-07-01', delayRisk: 0, impactScore: 0 },
-          { id: 'm2', name: 'Steel Erected', status: 'in_progress', plannedDate: '2026-07-20', delayRisk: 15, impactScore: 4.5 },
-          { id: 'm3', name: 'Generator Operational', status: 'delayed', plannedDate: '2026-08-05', projectedDate: '2026-08-10', delayRisk: 85, impactScore: 9.2 },
-          { id: 'm4', name: 'Cooling Live', status: 'pending', plannedDate: '2026-08-12', delayRisk: 30, impactScore: 6.0 },
-        ];
-
-        const mockR0 = 2.8;
-
-        // Timeline
-        if (timelineRes.status === 'fulfilled' && timelineRes.value.ok) {
-          const timelineData = await timelineRes.value.json();
-          setTasks(Array.isArray(timelineData) ? timelineData : mockTasks);
-        } else {
-          setTasks(mockTasks);
+        if (![timelineResponse, milestonesResponse, r0Response, risksResponse].every((response) => response.ok)) {
+          throw new Error("A scheduler endpoint failed");
         }
-
-        // Milestones from at-risk tasks
-        if (risksRes.status === 'fulfilled' && risksRes.value.ok) {
-          const milestonesData = await risksRes.value.json();
-          setMilestones(Array.isArray(milestonesData) ? milestonesData : mockMilestones);
-        } else {
-          setMilestones(mockMilestones);
-        }
-
-        // R0 score
-        if (r0Res.status === 'fulfilled' && r0Res.value.ok) {
-          const r0Data = await r0Res.value.json();
-          setR0Score(r0Data.score ?? mockR0);
-        } else {
-          setR0Score(mockR0);
-        }
-
-      } catch (err) {
-        console.error("Scheduler fetch error:", err);
-        setError("Failed to load scheduler data.");
+        const [timelineData, milestoneData, r0Data, riskData] = await Promise.all([
+          timelineResponse.json() as Promise<TaskActivity[]>,
+          milestonesResponse.json() as Promise<Milestone[]>,
+          r0Response.json() as Promise<{ score: number }>,
+          risksResponse.json() as Promise<RisksResponse>,
+        ]);
+        const timelineById = new Map(timelineData.map((task) => [task.id, task]));
+        setTasks(
+          riskData.at_risk_tasks
+            .map((risk) => timelineById.get(risk.task_id))
+            .filter((task): task is TaskActivity => Boolean(task))
+            .slice(0, 12)
+            .map((task) => ({ ...task, name: `${task.id} · ${task.name}` })),
+        );
+        setMilestones(milestoneData.slice(0, 6));
+        setRisks(riskData.at_risk_tasks);
+        setMitigations(riskData.mitigations);
+        setR0Score(r0Data.score);
+        setSelectedRisk(riskData.at_risk_tasks[0] ?? null);
+      } catch (loadError) {
+        if ((loadError as Error).name !== "AbortError") setError("Scheduler intelligence is unavailable.");
       } finally {
         setLoading(false);
       }
     }
-
-    fetchSchedulerData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col min-h-[400px] h-full items-center justify-center p-8">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-on-surface-variant text-sm font-bold uppercase tracking-wider">Analyzing Critical Path...</p>
-      </div>
-    );
-  }
+    void load();
+    return () => controller.abort();
+  }, [reloadKey]);
 
   return (
-    <div className="flex flex-col min-h-full p-6 space-y-6 max-w-[1600px] mx-auto w-full">
-      
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-surface-container rounded-lg flex items-center justify-center border border-outline-variant">
-              <Calendar className="w-5 h-5 text-primary" />
+    <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col space-y-5 pb-10">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
+        <div><h1 className="flex items-center gap-3 text-2xl font-black text-on-surface"><Calendar className="h-6 w-6 text-primary" />Schedule Risk Control</h1><p className="mt-1 text-sm text-on-surface-variant">Critical-path exposure and downstream delay containment.</p></div>
+        <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="flex items-center gap-2 border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-on-surface hover:bg-white/10"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh analysis</button>
+      </header>
+
+      {error && <div className="flex items-center gap-2 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"><AlertCircle className="h-4 w-4" />{error}</div>}
+      {loading && <div className="grid min-h-[420px] place-items-center text-sm text-on-surface-variant">Calculating schedule contagion...</div>}
+
+      {!loading && !error && (
+        <>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,3fr)_280px]"><CriticalPathTimeline data={tasks} /><R0Gauge score={r0Score} /></div>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,3fr)_360px]">
+            <div className="space-y-5">
+              <R0ContagionTree risk={selectedRisk} tasks={tasks} />
+              <section className="border border-white/10 bg-surface-container-low p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)]">
+                <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3"><h3 className="text-[11px] font-bold uppercase text-on-surface-variant">Priority schedule risks</h3><span className="font-mono text-[10px] text-on-surface-variant">{risks.length} active</span></div>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {milestones.map((milestone) => <MilestoneCard key={milestone.id} milestone={milestone} selected={selectedRisk?.task_id === milestone.id} onSelect={() => setSelectedRisk(risks.find((risk) => risk.task_id === milestone.id) ?? null)} />)}
+                </div>
+              </section>
             </div>
-            <h1 className="text-2xl font-black text-on-surface tracking-wide label-caps">
-              Scheduler &amp; Delay Analysis
-            </h1>
+            <MitigationPanel risk={selectedRisk} mitigations={mitigations} />
           </div>
-          <p className="text-on-surface-variant text-sm max-w-2xl">
-            Live critical path monitoring and AI-driven contagion tracking for delay risk mitigation.
-          </p>
-        </div>
-        
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-3 py-1.5 rounded flex items-center gap-2 text-xs font-bold">
-            <AlertCircle className="w-4 h-4" />
-            {error} (Using Mock Data)
-          </div>
-        )}
-      </div>
-
-      {/* Top Grid: Timeline + R0 Gauge */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <div className="xl:col-span-3">
-          <CriticalPathTimeline data={tasks} />
-        </div>
-        <div className="xl:col-span-1">
-          <R0Gauge score={r0Score} />
-        </div>
-      </div>
-
-      {/* Bottom Grid: Milestones + Contagion Tree + Mitigations */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        
-        {/* Left Column: Milestones & Tree */}
-        <div className="xl:col-span-3 space-y-6">
-          {/* Contagion Tree */}
-          <div>
-            <R0ContagionTree />
-          </div>
-
-          {/* Milestone Cards */}
-          <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full">
-            <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
-              Key Project Milestones
-            </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {milestones.map((ms) => (
-                <MilestoneCard key={ms.id} milestone={ms} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Mitigations Sidebar */}
-        <div className="xl:col-span-1 h-full">
-          <MitigationPanel />
-        </div>
-        
-      </div>
+        </>
+      )}
     </div>
   );
 }

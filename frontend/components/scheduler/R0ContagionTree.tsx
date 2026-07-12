@@ -1,119 +1,36 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Activity, AlertTriangle, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight } from "lucide-react";
+import type { SchedulerRisk, TaskActivity } from "./types";
 
-interface ContagionNode {
-  id: string;
-  name: string;
-  r0: number; // Infection score
-  status: 'infected' | 'vulnerable' | 'safe';
-  children?: ContagionNode[];
-}
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'infected': return 'text-red-500 bg-red-500/10 border-red-500/30';
-    case 'vulnerable': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30';
-    case 'safe': return 'text-green-500 bg-green-500/10 border-green-500/30';
-    default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-  }
-};
-
-const TreeNode = ({ node, isRoot = false }: { node: ContagionNode, isRoot?: boolean }) => {
-  const [expanded, setExpanded] = useState(true);
-  const hasChildren = node.children && node.children.length > 0;
-
-  const StatusIcon = node.status === 'infected' ? AlertTriangle :
-                     node.status === 'vulnerable' ? Activity : ShieldCheck;
-
+export default function R0ContagionTree({ risk, tasks }: { risk: SchedulerRisk | null; tasks: TaskActivity[] }) {
+  const names = new Map(tasks.map((task) => [task.id, task.name]));
+  const downstream = risk?.downstream_task_ids.slice(0, 6) ?? [];
   return (
-    <div className="flex flex-col items-center">
-      <div 
-        className={`relative flex flex-col items-center p-3 rounded-lg border shadow-sm transition-all cursor-pointer hover:shadow-md ${getStatusColor(node.status)} ${isRoot ? 'w-48' : 'w-40'} z-10`}
-        onClick={() => hasChildren && setExpanded(!expanded)}
-      >
-        <div className="flex items-center gap-2 mb-2 w-full justify-center">
-          <StatusIcon className="w-4 h-4" />
-          <span className="font-bold text-xs uppercase tracking-wider">{node.status}</span>
-        </div>
-        <h4 className="text-sm font-bold text-center leading-tight mb-2 text-on-surface">{node.name}</h4>
-        <div className="bg-[rgba(0,0,0,0.2)] px-2 py-1 rounded text-xs font-mono font-bold">
-          R0: {node.r0.toFixed(1)}
-        </div>
-        
-        {/* Collapse indicator — only shown when there are children */}
-        {hasChildren && (
-          <div className="absolute -bottom-2.5 flex items-center justify-center">
-            {expanded
-              ? <ChevronDown className="w-4 h-4 opacity-60" />
-              : <ChevronRight className="w-4 h-4 opacity-60" />}
-          </div>
-        )}
+    <section className="overflow-hidden border border-white/10 bg-surface-container-low p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)]">
+      <div className="mb-5 flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase text-on-surface-variant"><Activity className="h-4 w-4 text-primary" />Downstream exposure</h3>
+        {risk && <span className="font-mono text-[10px] text-on-surface-variant">{risk.downstream_count} tasks exposed</span>}
       </div>
-
-      {/* Children Container */}
-      {hasChildren && expanded && (
-        <div className="relative flex justify-center mt-8 gap-6 pt-4">
-          {/* Horizontal connection line */}
-          {node.children!.length > 1 && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[calc(100%-2.5rem)] h-px bg-outline-variant opacity-50"></div>
-          )}
-          {/* Vertical line from parent to horizontal line */}
-          <div className="absolute top-[-2rem] left-1/2 w-px h-8 bg-outline-variant opacity-50 -translate-x-1/2"></div>
-          
-          {node.children!.map((child) => (
-            <div key={child.id} className="relative flex flex-col items-center">
-              {/* Vertical line to child */}
-              <div className="absolute -top-4 left-1/2 w-px h-4 bg-outline-variant opacity-50 -translate-x-1/2"></div>
-              <TreeNode node={child} />
-            </div>
-          ))}
+      {!risk && <p className="py-8 text-center text-xs text-on-surface-variant">No active schedule risk.</p>}
+      {risk && (
+        <div className="flex items-center gap-3 overflow-x-auto pb-2">
+          <div className="w-48 shrink-0 border border-red-500/30 bg-red-500/10 p-3">
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase text-red-400"><AlertTriangle className="h-4 w-4" />Source risk</div>
+            <p className="text-sm font-bold text-on-surface">{risk.task_name}</p>
+            <p className="mt-2 font-mono text-xs text-red-300">R0 {risk.r0_score.toFixed(1)}</p>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-on-surface-variant" />
+          <div className="grid min-w-[520px] grid-cols-3 gap-2">
+            {downstream.map((taskId, index) => (
+              <div key={taskId} className="border border-amber-500/20 bg-amber-500/5 p-3">
+                <p className="font-mono text-[10px] text-amber-400">+{index + 1} hop</p>
+                <p className="mt-1 truncate text-xs font-semibold text-on-surface">{names.get(taskId) ?? taskId}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
-    </div>
-  );
-};
-
-export default function R0ContagionTree() {
-  const dummyData: ContagionNode = {
-    id: 'root',
-    name: 'Generator Installation',
-    r0: 2.8,
-    status: 'infected',
-    children: [
-      {
-        id: 'c1',
-        name: 'Cooling Tower Setup',
-        r0: 1.5,
-        status: 'vulnerable',
-        children: [
-          { id: 'c1-1', name: 'Water Piping', r0: 0.5, status: 'safe' }
-        ]
-      },
-      {
-        id: 'c2',
-        name: 'Electrical Switchgear',
-        r0: 2.1,
-        status: 'infected',
-        children: [
-          { id: 'c2-1', name: 'Transformer Testing', r0: 1.1, status: 'vulnerable' },
-          { id: 'c2-2', name: 'Cable Routing', r0: 0.2, status: 'safe' }
-        ]
-      }
-    ]
-  };
-
-  return (
-    <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-6 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full overflow-x-auto custom-scrollbar font-sans">
-      <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant flex items-center gap-2 mb-8 border-b border-[rgba(255,255,255,0.1)] pb-3 sticky left-0">
-        <Activity className="w-4 h-4 text-primary" />
-        R0 Cascading Delay Tree
-      </h3>
-      
-      <div className="flex justify-center min-w-max pb-4">
-        <TreeNode node={dummyData} isRoot={true} />
-      </div>
-    </div>
+    </section>
   );
 }

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from loguru import logger
 from backend.graph.client import neo4j_client
 from backend.redis_client import redis_client
+from backend.config import settings
 
 router = APIRouter(prefix="/project", tags=["project"])
 
@@ -112,6 +113,9 @@ async def get_project_summary():
         logger.warning(f"Summary: guardian data unavailable: {e}")
         violations_today = 2
         critical_violations = 1
+    if settings.DEMO_MODE and violations_today == 0:
+        violations_today = 2
+        critical_violations = 1
 
     # 2. Scheduler R0
     critical_r0_max = 0.0
@@ -150,6 +154,8 @@ async def get_project_summary():
     open_ncrs = 0
     open_ncrs_critical = 0
     try:
+        if settings.DEMO_MODE:
+            raise RuntimeError("Demo mode uses the seeded NCR baseline")
         from backend.graph import queries
         ncr_results = neo4j_client.execute_query(queries.GET_OPEN_NCRS)
         if ncr_results:
@@ -160,6 +166,9 @@ async def get_project_summary():
             )
     except Exception as e:
         logger.warning(f"Summary: NCR data unavailable: {e}")
+        open_ncrs = 5
+        open_ncrs_critical = 1
+    if settings.DEMO_MODE and open_ncrs == 0:
         open_ncrs = 5
         open_ncrs_critical = 1
 
@@ -177,6 +186,12 @@ async def get_project_summary():
         "open_ncrs": open_ncrs,
         "at_risk_shipments": at_risk_shipments,
         "critical_r0_max": round(critical_r0_max, 1),
+        "penalties": {
+            "critical_violations": critical_violations * 15,
+            "systemic_r0": systemic_r0_count * 10,
+            "at_risk_shipments": at_risk_shipments * 3,
+            "critical_ncrs": open_ncrs_critical * 5,
+        },
         "agents": {
             "guardian": "active",
             "scheduler": "active",
@@ -193,9 +208,5 @@ async def get_immunity_score():
     summary = await get_project_summary()
     return {
         "score": summary["immunity_score"],
-        "breakdown": {
-            "violations_penalty": summary["violations_today"] * 15,
-            "at_risk_shipments_penalty": summary["at_risk_shipments"] * 3,
-            "open_ncrs_penalty": summary["open_ncrs"] * 5,
-        },
+        "breakdown": summary["penalties"],
     }

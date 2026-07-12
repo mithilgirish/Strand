@@ -36,7 +36,7 @@ def score_downstream_r0(
         R0 score as float, rounded to 1 decimal
     """
     raw = downstream_count + (2 * critical_downstream_count)
-    return round(raw / normaliser, 1)
+    return round(max(0.0, min(10.0, raw / normaliser)), 1)
 
 
 # ── PKG-based R0 (Guardian, Inspector) ───────────────────────────────
@@ -106,7 +106,15 @@ def compute_r0_from_task_graph(
         critical_set = set(critical_path)
         critical_downstream_count = len(downstream & critical_set)
 
-    return score_downstream_r0(downstream_count, critical_downstream_count)
+    # A fixed normaliser makes large schedules overflow the documented 0-10
+    # scale. Scale with project size while retaining the original behaviour for
+    # small graphs.
+    normaliser = max(10.0, task_graph.number_of_nodes() * 0.55)
+    return score_downstream_r0(
+        downstream_count,
+        critical_downstream_count,
+        normaliser=normaliser,
+    )
 
 
 # ── Convenience wrapper ──────────────────────────────────────────────

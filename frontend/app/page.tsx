@@ -7,6 +7,7 @@ import StatCard from '@/components/shared/StatCard';
 import AgentStatusBadge from '@/components/shared/AgentStatusBadge';
 import ViolationCard from '@/components/guardian/ViolationCard';
 import type { GuardianViolation } from '@/app/guardian/page';
+import type { SchedulerRisk } from '@/components/scheduler/types';
 
 interface ProjectSummary {
   immunityScore: number;
@@ -107,11 +108,10 @@ export default function RiskCockpit() {
         // Scheduler top alert
         if (schedulerRes.status === 'fulfilled' && schedulerRes.value.ok) {
           const schedData = await schedulerRes.value.json();
-          const atRiskTasks = schedData.at_risk_tasks || [];
+          const atRiskTasks = (schedData.at_risk_tasks || []) as SchedulerRisk[];
           if (atRiskTasks.length > 0) {
-            // Pick the highest R0 task
-            const top = atRiskTasks.reduce((a: any, b: any) =>
-              (a.r0_score || 0) > (b.r0_score || 0) ? a : b
+            const top = atRiskTasks.reduce((highest, candidate) =>
+              highest.r0_score > candidate.r0_score ? highest : candidate
             );
             setTopAlert({
               taskId: top.task_id,

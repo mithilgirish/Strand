@@ -7,10 +7,13 @@ interface R0GaugeProps {
 }
 
 const getColor = (val: number) => {
-  if (val >= 7) return '#ef4444'; // red — critical
-  if (val >= 4) return '#eab308'; // amber — elevated
-  return '#22c55e'; // green — healthy
+  if (val >= 5) return '#ef4444';
+  if (val >= 2.5) return '#f97316';
+  if (val >= 1) return '#f59e0b';
+  return '#22c55e';
 };
+
+const getSeverity = (val: number) => val >= 5 ? 'Systemic' : val >= 2.5 ? 'Critical' : val >= 1 ? 'Elevated' : 'Low';
 
 export default function R0Gauge({ score }: R0GaugeProps) {
   const [animated, setAnimated] = useState(false);
@@ -35,7 +38,7 @@ export default function R0Gauge({ score }: R0GaugeProps) {
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.30)] relative min-h-[200px]">
       <h3 className="absolute top-4 left-4 text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant">
-        System R0 Factor
+        Contagion Risk
       </h3>
 
       <div className="relative flex items-center justify-center mt-6" style={{ width: size, height: size }}>
@@ -80,14 +83,12 @@ export default function R0Gauge({ score }: R0GaugeProps) {
             {score.toFixed(1)}
           </span>
           <span className="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1">
-            R0 Risk
+            {getSeverity(score)}
           </span>
         </div>
       </div>
 
-      <p className="mt-4 text-sm text-center text-on-surface-variant max-w-[180px] leading-snug">
-        Contagion probability across dependent tasks.
-      </p>
+      <p className="mt-4 text-center text-xs text-on-surface-variant">Project schedule propagation score</p>
     </div>
   );
 }

@@ -1,63 +1,25 @@
 "use client";
 
-import React from 'react';
-import { Package, Truck, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Package, ShieldCheck, Truck } from "lucide-react";
+import type { OracleShipment } from "./SupplyMap";
 
-export interface ShipmentData {
-  id: string;
-  item: string;
-  supplier: string;
-  status: 'green' | 'amber' | 'red';
-  eta: string;
-  riskFactor: string;
-}
-
-interface ShipmentPopupProps {
-  shipment: ShipmentData;
-}
-
-export default function ShipmentPopup({ shipment }: ShipmentPopupProps) {
-  const getStatusColor = () => {
-    switch (shipment.status) {
-      case 'red': return 'text-red-500 bg-red-500/10 border-red-500/20';
-      case 'amber': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
-      case 'green': return 'text-green-500 bg-green-500/10 border-green-500/20';
-      default: return 'text-gray-500 bg-gray-500/10 border-gray-500/20';
-    }
-  };
-
-  const StatusIcon = shipment.status === 'red' ? AlertTriangle : 
-                     shipment.status === 'amber' ? Truck : ShieldCheck;
-
+export default function ShipmentPopup({ shipment, onInspect }: { shipment: OracleShipment; onInspect: () => void }) {
+  const Icon = shipment.status === "red" ? AlertTriangle : shipment.status === "amber" ? Truck : ShieldCheck;
   return (
-    <div className="p-1 min-w-[200px] font-sans">
-      <div className="flex items-center gap-2 mb-3 border-b border-gray-200/20 pb-2">
-        <Package className="w-5 h-5 text-primary" />
-        <h4 className="font-bold text-gray-800 m-0 text-base">{shipment.item}</h4>
+    <div className="min-w-[220px] p-1 font-sans text-gray-800">
+      <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
+        <Package className="h-5 w-5 text-blue-600" />
+        <div><p className="text-xs text-gray-500">{shipment.id}</p><h4 className="font-bold">{shipment.equipmentTag}</h4></div>
       </div>
-      
-      <div className="space-y-2 text-sm text-gray-600 mb-4">
-        <div className="flex justify-between">
-          <span className="font-semibold">Supplier:</span>
-          <span>{shipment.supplier}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="font-semibold">ETA:</span>
-          <span>{shipment.eta}</span>
-        </div>
-        {shipment.riskFactor && (
-          <div className="flex justify-between">
-            <span className="font-semibold">Risk:</span>
-            <span className="text-xs text-red-600 font-medium bg-red-50 px-1 rounded">{shipment.riskFactor}</span>
-          </div>
-        )}
+      <dl className="space-y-2 text-sm">
+        <div className="flex justify-between gap-4"><dt className="font-semibold">Supplier</dt><dd className="text-right">{shipment.supplierName}</dd></div>
+        <div className="flex justify-between gap-4"><dt className="font-semibold">ETA</dt><dd>{shipment.eta}</dd></div>
+        <div className="flex justify-between gap-4"><dt className="font-semibold">Delay</dt><dd>{shipment.delayDays} days</dd></div>
+      </dl>
+      <div className={`mt-3 flex items-center justify-center gap-2 border px-3 py-1.5 text-xs font-semibold uppercase ${shipment.status === "red" ? "border-red-200 bg-red-50 text-red-700" : shipment.status === "amber" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-green-200 bg-green-50 text-green-700"}`}>
+        <Icon className="h-4 w-4" />{shipment.riskReason || "On track"}
       </div>
-
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${getStatusColor()} font-semibold text-xs uppercase tracking-wider justify-center`}>
-        <StatusIcon className="w-4 h-4" />
-        {shipment.status === 'red' ? 'Critical Delay' : 
-         shipment.status === 'amber' ? 'At Risk' : 'On Track'}
-      </div>
+      <button type="button" onClick={onInspect} className="mt-3 w-full bg-gray-900 px-3 py-2 text-xs font-bold text-white">Inspect supply chain</button>
     </div>
   );
 }

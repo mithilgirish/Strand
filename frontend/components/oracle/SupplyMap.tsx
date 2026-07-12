@@ -1,177 +1,148 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import ShipmentPopup, { ShipmentData } from './ShipmentPopup';
+import { useEffect, useMemo, useState } from "react";
+import L from "leaflet";
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import ShipmentPopup from "./ShipmentPopup";
 
-// Create custom div icons to avoid default Leaflet icon path issues and match our theme
-const createCustomIcon = (status: 'green' | 'amber' | 'red') => {
-  const colorMap = {
-    red: '#ef4444',
-    amber: '#eab308',
-    green: '#22c55e'
-  };
+export type ShipmentStatus = "green" | "amber" | "red";
 
-  const bgColor = colorMap[status];
-
-  return L.divIcon({
-    className: 'custom-leaflet-marker',
-    html: `
-      <div style="
-        background-color: ${bgColor};
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 0 10px ${bgColor};
-        animation: shipment-pulse 2s infinite;
-      "></div>
-    `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10],
-  });
-};
-
-interface MapShipment extends ShipmentData {
+export interface OracleShipment {
+  id: string;
+  equipmentTag: string;
+  supplierId: string;
+  supplierName: string;
+  status: ShipmentStatus;
+  eta: string;
+  riskReason: string;
+  delayDays: number;
+  tier: number;
   lat: number;
   lng: number;
 }
 
-const fallbackShipments: MapShipment[] = [
-  {
-    id: 'shp1',
-    item: 'Precision Motors',
-    supplier: 'Global Tech Assembly',
-    status: 'green',
-    eta: 'Oct 24, 2026',
-    riskFactor: '',
-    lat: 18.5204,
-    lng: 73.8567
-  },
-  {
-    id: 'shp2',
-    item: 'Control Boards',
-    supplier: 'Advanced Silicons Inc.',
-    status: 'red',
-    eta: 'Oct 28, 2026 (Delayed)',
-    riskFactor: 'Port Strike',
-    lat: 13.0827,
-    lng: 80.2707
-  },
-  {
-    id: 'shp3',
-    item: 'Cooling Systems',
-    supplier: 'Thermal Dynamics Ltd',
-    status: 'amber',
-    eta: 'Oct 25, 2026',
-    riskFactor: 'Weather Alert',
-    lat: 19.0760,
-    lng: 72.8777
-  },
-  {
-    id: 'shp4',
-    item: 'Steel Frames',
-    supplier: 'Heavy Metals Co',
-    status: 'green',
-    eta: 'Oct 22, 2026',
-    riskFactor: '',
-    lat: 28.7041,
-    lng: 77.1025
-  }
-];
-
-function mapGeoJsonToShipments(geojson: any): MapShipment[] {
-  if (!geojson?.features) return [];
-
-  return geojson.features
-    .filter((f: any) => f.geometry?.coordinates)
-    .map((f: any) => {
-      const props = f.properties || {};
-      const [lng, lat] = f.geometry.coordinates;
-      const delayDays = props.delay_days || 0;
-      const riskFlag = props.risk_flag || false;
-
-      let status: 'green' | 'amber' | 'red' = 'green';
-      if (riskFlag || delayDays > 7) status = 'red';
-      else if (delayDays > 0 && delayDays <= 7) status = 'amber';
-
-      return {
-        id: props.shipment_id || f.id || `shp-${Math.random()}`,
-        item: props.equipment_tag || 'Unknown Equipment',
-        supplier: props.supplier_name || 'Unknown Supplier',
-        status,
-        eta: props.expected_delivery || props.eta || 'TBD',
-        riskFactor: riskFlag ? (props.status || 'At Risk') : '',
-        lat,
-        lng,
-      };
-    });
+interface GeoJsonFeature {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    shipment_id?: string;
+    equipment_tag?: string;
+    supplier_id?: string;
+    supplier_name?: string;
+    risk_flag?: boolean;
+    delay_days?: number;
+    status?: string;
+    expected_delivery?: string;
+    tier?: number;
+  };
 }
 
-export default function SupplyMap() {
-  const [shipments, setShipments] = useState<MapShipment[]>(fallbackShipments);
+interface GeoJsonCollection {
+  features?: GeoJsonFeature[];
+}
+
+interface SupplyMapProps {
+  selectedId: string | null;
+  onSelect: (shipment: OracleShipment) => void;
+}
+
+const COLORS: Record<ShipmentStatus, string> = {
+  green: "#22c55e",
+  amber: "#f59e0b",
+  red: "#ef4444",
+};
+
+function markerIcon(status: ShipmentStatus, selected: boolean) {
+  const color = COLORS[status];
+  const size = selected ? 24 : 18;
+  return L.divIcon({
+    className: "custom-leaflet-marker",
+    html: `<span style="display:block;width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${selected ? 4 : 3}px solid white;box-shadow:0 0 ${selected ? 18 : 10}px ${color};"></span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -(size / 2)],
+  });
+}
+
+function mapGeoJson(collection: GeoJsonCollection): OracleShipment[] {
+  return (collection.features ?? []).flatMap((feature) => {
+    const coordinates = feature.geometry?.coordinates;
+    if (!coordinates) return [];
+    const properties = feature.properties ?? {};
+    const delayDays = Number(properties.delay_days ?? 0);
+    const status: ShipmentStatus = properties.risk_flag || delayDays > 7
+      ? "red"
+      : delayDays > 0
+        ? "amber"
+        : "green";
+    return [{
+      id: properties.shipment_id ?? "unknown-shipment",
+      equipmentTag: properties.equipment_tag ?? "Unassigned equipment",
+      supplierId: properties.supplier_id ?? "",
+      supplierName: properties.supplier_name ?? "Unknown supplier",
+      status,
+      eta: properties.expected_delivery ?? "TBD",
+      riskReason: status === "green" ? "" : properties.status ?? "Delivery risk",
+      delayDays,
+      tier: Number(properties.tier ?? 1),
+      lng: Number(coordinates[0]),
+      lat: Number(coordinates[1]),
+    }];
+  });
+}
+
+export default function SupplyMap({ selectedId, onSelect }: SupplyMapProps) {
+  const [shipments, setShipments] = useState<OracleShipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    async function fetchShipments() {
+    const controller = new AbortController();
+    async function load() {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const res = await fetch(`${apiBase}/api/v1/oracle/shipments`);
-
-        if (res.ok) {
-          const geojson = await res.json();
-          const mapped = mapGeoJsonToShipments(geojson);
-          if (mapped.length > 0) {
-            setShipments(mapped);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch shipments, using fallback:", err);
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const response = await fetch(`${apiBase}/api/v1/oracle/shipments`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Oracle returned ${response.status}`);
+        const mapped = mapGeoJson(await response.json() as GeoJsonCollection);
+        if (mapped.length === 0) throw new Error("Oracle returned no shipments");
+        setShipments(mapped);
+        const initial = mapped.find((shipment) => shipment.status === "red") ?? mapped[0];
+        onSelect(initial);
+      } catch (loadError) {
+        if ((loadError as Error).name !== "AbortError") setError(true);
       } finally {
         setLoading(false);
       }
     }
+    void load();
+    return () => controller.abort();
+  }, [onSelect]);
 
-    fetchShipments();
-  }, []);
-
-  const atRiskCount = shipments.filter(s => s.status === 'red').length;
-  const totalCount = shipments.length;
+  const counts = useMemo(() => ({
+    total: shipments.length,
+    risk: shipments.filter((shipment) => shipment.status === "red").length,
+    delayed: shipments.filter((shipment) => shipment.status === "amber").length,
+  }), [shipments]);
 
   return (
-    <div className="w-full h-full min-h-[400px] bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.30)] relative">
-      <div className="absolute top-4 left-4 z-[1000] bg-surface-container/90 backdrop-blur-sm border border-[rgba(255,255,255,0.1)] rounded-md px-3 py-2 shadow-lg">
-        <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface">Oracle Live Tracking</h3>
-        <p className="text-[10px] text-on-surface-variant">
-          {totalCount} shipments · {atRiskCount} at-risk
-        </p>
+    <div className="relative h-full min-h-[440px] w-full overflow-hidden rounded-lg border border-white/10 bg-surface-container-low shadow-[0_4px_20px_rgba(0,0,0,0.30)]">
+      <div className="absolute left-4 top-4 z-[1000] border border-white/10 bg-surface-container/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+        <p className="text-[11px] font-bold uppercase text-on-surface">Live shipment network</p>
+        <p className="mt-1 text-[11px] text-on-surface-variant">{counts.total} tracked · {counts.risk} critical · {counts.delayed} delayed</p>
       </div>
-
-      <MapContainer
-        center={[20.5937, 78.9629]}
-        zoom={5}
-        scrollWheelZoom={true}
-        style={{ height: '100%', width: '100%', zIndex: 1 }}
-        zoomControl={false}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+      {loading && <div className="absolute inset-0 z-[1100] grid place-items-center bg-surface-container-low/80 text-sm text-on-surface-variant">Loading shipment telemetry...</div>}
+      {error && <div className="absolute inset-x-4 bottom-4 z-[1100] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">Shipment telemetry is unavailable.</div>}
+      <MapContainer center={[20.6, 79]} zoom={5} scrollWheelZoom zoomControl={false} style={{ height: "100%", width: "100%", zIndex: 1 }}>
+        <TileLayer attribution='&copy; OpenStreetMap &copy; CARTO' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         <ZoomControl position="bottomright" />
-
-        {shipments.map(shipment => (
+        {shipments.map((shipment) => (
           <Marker
             key={shipment.id}
             position={[shipment.lat, shipment.lng]}
-            icon={createCustomIcon(shipment.status)}
+            icon={markerIcon(shipment.status, shipment.id === selectedId)}
+            eventHandlers={{ click: () => onSelect(shipment) }}
           >
-            <Popup className="oracle-custom-popup">
-              <ShipmentPopup shipment={shipment} />
-            </Popup>
+            <Popup><ShipmentPopup shipment={shipment} onInspect={() => onSelect(shipment)} /></Popup>
           </Marker>
         ))}
       </MapContainer>

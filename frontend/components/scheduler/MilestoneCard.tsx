@@ -15,14 +15,16 @@ export interface Milestone {
 
 interface MilestoneCardProps {
   milestone: Milestone;
+  selected?: boolean;
+  onSelect?: () => void;
 }
 
-export default function MilestoneCard({ milestone }: MilestoneCardProps) {
+export default function MilestoneCard({ milestone, selected = false, onSelect }: MilestoneCardProps) {
   const isDelayed = milestone.status === 'delayed' || milestone.delayRisk > 50;
 
   return (
-    <div className={`p-4 rounded-lg border bg-surface-container relative overflow-hidden transition-colors ${
-      isDelayed ? 'border-red-500/30 hover:border-red-500/50' : 'border-[rgba(255,255,255,0.05)] hover:border-[rgba(255,255,255,0.15)]'
+    <button type="button" onClick={onSelect} className={`w-full p-4 rounded-lg border bg-surface-container relative overflow-hidden transition-colors text-left ${
+      selected ? 'border-primary ring-1 ring-primary/30' : isDelayed ? 'border-red-500/30 hover:border-red-500/50' : 'border-[rgba(255,255,255,0.05)] hover:border-[rgba(255,255,255,0.15)]'
     }`}>
       {isDelayed && (
         <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500 rounded-none"></div>
@@ -80,6 +82,6 @@ export default function MilestoneCard({ milestone }: MilestoneCardProps) {
           <span className="text-sm font-mono text-on-surface">{milestone.impactScore.toFixed(1)} / 10</span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
