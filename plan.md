@@ -1520,3 +1520,8 @@ Format:
 
 *STRAND · Build Plan v1.0 · June 25, 2026*  
 *Reference: `STRAND_AGENT.md` for code · `STRAND_Project_Document.pdf` for full PRD*
+
+---
+
+## Advanced Feature Specifications
+For detailed architecture, DB schemas, JWT contracts, and implementation blueprints for the **AI Custom Dashboard, Unified Auth (RBAC), and Admin/Super-Admin Console**, please refer to [custom_plan.md](custom_plan.md).
