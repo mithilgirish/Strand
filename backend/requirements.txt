@@ -22,7 +22,7 @@ networkx==3.3
 # Document Parsing
 pymupdf==1.24.0
 reportlab>=5.0.0
-unstructured[pdf]==0.14.0
+unstructured
 pytesseract==0.3.10
 pillow==10.3.0
 

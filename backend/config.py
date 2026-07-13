@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # ── Unstructured.io (optional fallback) ─────────────────────
     UNSTRUCTURED_API_KEY: str = ""
 
+    # ── Supabase ────────────────────────────────────────────────
+    SUPABASE_URL: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""  # Never expose this to clients — server only
+
     # ── API & Security ──────────────────────────────────────────
     API_KEY: str = "strand-dev-key"                # Static X-API-Key for write routes §9
     RATE_LIMIT_PER_MINUTE: int = 30                # §14.20 — per IP on LLM routes
