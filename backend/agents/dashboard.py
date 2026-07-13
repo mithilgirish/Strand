@@ -1,7 +1,7 @@
 import json
 import re
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from backend.config import settings
 
 # System prompt as specified in custom_plan.md Appendix

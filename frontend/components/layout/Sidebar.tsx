@@ -14,7 +14,8 @@ import {
   MessageSquare,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Layout
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -62,6 +63,7 @@ export default function Sidebar() {
     { name: "Oracle Agent", href: "/oracle", icon: MapPin },
     { name: "Inspector Agent", href: "/inspector", icon: ClipboardCheck },
     { name: "Brain Agent", href: "/brain", icon: MessageSquare },
+    { name: "Custom Dashboard", href: "/custom-dashboards", icon: Layout },
   ];
 
   if (userRole === "admin" || userRole === "super-admin") {
