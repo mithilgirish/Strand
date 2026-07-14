@@ -17,6 +17,10 @@ interface Tenant {
   name: string;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
 export default function UserDirectory({ tenantId, isSuper }: { tenantId: string, isSuper: boolean }) {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,8 +63,8 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
       setTenants(data || []);
     };
 
-    fetchUsers();
-    if (isSuper) fetchTenants();
+    void fetchUsers();
+    if (isSuper) void fetchTenants();
   }, [isSuper]);
 
   const handleInviteSubmit = async (e: React.FormEvent) => {
@@ -85,8 +89,8 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
       setSubmitStatus('success');
       setInviteEmail('');
       setTimeout(() => { setIsModalOpen(false); setSubmitStatus('idle'); }, 1500);
-    } catch (err: any) {
-      setSubmitError(err.message);
+    } catch (err: unknown) {
+      setSubmitError(errorMessage(err));
       setSubmitStatus('error');
     }
   };

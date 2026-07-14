@@ -84,6 +84,21 @@ def _get_llm():
 _llm_instance = None
 
 
+def has_configured_llm() -> bool:
+    """Return False for missing keys and checked-in template placeholders."""
+    provider = settings.LLM_PROVIDER.lower()
+    placeholder_keys = {
+        "",
+        "your_groq_api_key_here",
+        "your_anthropic_api_key_here",
+    }
+    if provider == "groq":
+        return settings.GROQ_API_KEY not in placeholder_keys
+    if provider == "anthropic":
+        return settings.ANTHROPIC_API_KEY not in placeholder_keys
+    return False
+
+
 def get_llm():
     """Return a cached LLM instance."""
     global _llm_instance

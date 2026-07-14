@@ -8,9 +8,14 @@ import TenantProvisioning from "@/components/admin/TenantProvisioning";
 import SystemTelemetry from "@/components/admin/SystemTelemetry";
 import { useRouter } from "next/navigation";
 
+interface AdminUser {
+  role: string;
+  tenant_id: string;
+}
+
 export default function AdminConsole() {
   const [activeTab, setActiveTab] = useState("users");
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -48,6 +53,10 @@ export default function AdminConsole() {
         <div className="animate-pulse">Authenticating Command Console...</div>
       </div>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   const isSuper = user?.role === "super-admin";

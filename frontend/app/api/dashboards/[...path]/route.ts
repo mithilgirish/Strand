@@ -79,7 +79,7 @@ async function proxyToBackend(
     const backendResp = await fetch(fullUrl, fetchOptions);
     const data = await backendResp.json();
     return NextResponse.json(data, { status: backendResp.status });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { detail: 'Backend service unavailable. Is the FastAPI server running?' },
       { status: 503 }

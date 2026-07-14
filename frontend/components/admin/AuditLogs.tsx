@@ -11,7 +11,7 @@ interface AuditLog {
   action: string;
   resource_type: string | null;
   resource_id: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 const ACTION_COLORS: Record<string, string> = {

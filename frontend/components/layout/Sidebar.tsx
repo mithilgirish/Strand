@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import { 
   Home, 
   ShieldAlert, 
@@ -18,11 +19,16 @@ import {
   Layout
 } from "lucide-react";
 
+interface SidebarProfile {
+  full_name: string | null;
+  role: string;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [isExpanded, setIsExpanded] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<SidebarProfile | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -41,7 +47,7 @@ export default function Sidebar() {
         }
       }
     };
-    fetchUser();
+    void fetchUser();
   }, []);
 
   const handleLogout = async () => {
@@ -73,7 +79,7 @@ export default function Sidebar() {
   return (
     <aside 
       className={`${
-        isExpanded ? "w-64" : "w-20"
+        isExpanded ? "w-64" : "w-16 sm:w-20"
       } bg-surface-container-lowest border-r border-outline-variant text-on-surface flex flex-col justify-between h-screen sticky top-0 z-50 transition-all duration-300 ease-in-out relative`}
     >
       {/* Expand/Collapse Toggle Button */}
@@ -109,7 +115,7 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={`relative flex items-center rounded-xl transition-all duration-200 group ${
-                  isExpanded ? 'px-4 py-3 gap-3 w-full' : 'w-12 h-12 justify-center'
+                  isExpanded ? 'px-4 py-3 gap-3 w-full' : 'h-10 w-10 justify-center sm:h-12 sm:w-12'
                 } ${
                   isActive
                     ? "bg-[rgba(255,255,255,0.08)] border-t border-t-[rgba(255,255,255,0.30)] border-b border-b-[rgba(0,0,0,0.40)] shadow-[0_4px_20px_rgba(0,0,0,0.50)] text-primary"
