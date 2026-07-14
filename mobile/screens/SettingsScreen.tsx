@@ -1,13 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../supabase';
+import { API_BASE_URL } from '../config';
 
 export default function SettingsScreen({ navigation }: any) {
   const [offlineSync, setOfflineSync] = useState(true);
   const [voiceAssisted, setVoiceAssisted] = useState(true);
+  const [profile, setProfile] = useState<{ email: string; name: string; role: string }>({
+    email: 'operator@strandplatform.com',
+    name: 'Operator',
+    role: 'qa-inspector'
+  });
+  const [nodeStatus, setNodeStatus] = useState('CHECKING...');
+  const [isOnline, setIsOnline] = useState(false);
 
-  const handleLogout = () => {
-    Alert.alert('Session Terminated', 'You have been successfully logged out.');
+  useEffect(() => {
+    void loadProfile();
+    void checkConnection();
+  }, []);
+
+  const checkConnection = async () => {
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      
+      const response = await fetch(API_BASE_URL.replace('/api/v1', '') + '/', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const latency = Date.now() - start;
+        setNodeStatus(`CONNECTED (${latency}ms)`);
+        setIsOnline(true);
+      } else {
+        setNodeStatus('DISCONNECTED');
+        setIsOnline(false);
+      }
+    } catch {
+      setNodeStatus('OFFLINE');
+      setIsOnline(false);
+    }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (data) {
+          setProfile({
+            email: user.email || '',
+            name: data.display_name || user.email?.split('@')[0] || 'Operator',
+            role: data.role || 'qa-inspector'
+          });
+        } else {
+          setProfile({
+            email: user.email || '',
+            name: user.email?.split('@')[0] || 'Operator',
+            role: (user.app_metadata?.role as string) || 'qa-inspector'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (err: any) {
+      Alert.alert('Sign Out Error', err.message || 'Failed to sign out.');
+    }
   };
 
   return (
@@ -25,12 +98,14 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>ME</Text>
+            <Text style={styles.avatarText}>
+              {profile.name.slice(0, 2).toUpperCase()}
+            </Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Mithil Girish</Text>
-            <Text style={styles.profileRole}>Lead Field QA Engineer</Text>
-            <Text style={styles.profileEmail}>mithil@strandplatform.com</Text>
+            <Text style={styles.profileName}>{profile.name}</Text>
+            <Text style={styles.profileRole}>{profile.role.toUpperCase()}</Text>
+            <Text style={styles.profileEmail}>{profile.email}</Text>
           </View>
         </View>
 
@@ -73,7 +148,7 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={styles.settingsCard}>
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Active Host</Text>
-            <Text style={styles.monoValue}>https://api.strand.internal</Text>
+            <Text style={styles.monoValue}>{API_BASE_URL}</Text>
           </View>
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>API Schema Version</Text>
@@ -81,7 +156,7 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
           <View style={[styles.settingRow, styles.lastRow]}>
             <Text style={styles.settingLabel}>Local Node Status</Text>
-            <Text style={styles.onlineValue}>CONNECTED (100ms)</Text>
+            <Text style={isOnline ? styles.onlineValue : styles.offlineValue}>{nodeStatus}</Text>
           </View>
         </View>
 
@@ -215,6 +290,11 @@ const styles = StyleSheet.create({
   },
   onlineValue: {
     color: '#4edea3',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  offlineValue: {
+    color: '#ffb3ad',
     fontSize: 12,
     fontWeight: '700',
   },

@@ -74,13 +74,13 @@ export default async function LoginPage({
               <span className="relative">Login</span>
             </button>
 
-            <div className="mt-8 flex justify-between text-center border-t border-[#262626] pt-5">
-              <Link href="/signup" className="text-[10px] text-[#a3a3a3] hover:text-[#e5e5e5] transition-colors uppercase tracking-widest font-mono">
-                Request Access
-              </Link>
+            <div className="mt-8 flex flex-col items-center space-y-3 border-t border-[#262626] pt-5">
               <Link href="/reset-password" className="text-[10px] text-[#a3a3a3] hover:text-[#e5e5e5] transition-colors uppercase tracking-widest font-mono">
                 Forgot Key?
               </Link>
+              <div className="text-[9px] text-[#525252] font-mono text-center leading-relaxed">
+                NO SELF-REGISTRATION // CONTACT YOUR TENANT ADMIN FOR CREDENTIALS
+              </div>
             </div>
           </form>
         </div>
