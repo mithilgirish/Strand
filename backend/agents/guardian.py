@@ -23,10 +23,9 @@ from backend.graph import queries
 from backend.graph.schema import passes_constraint, get_operator_for_parameter
 from backend.r0.engine import compute_r0_from_pkg
 from backend.r0.classifier import r0_to_severity
-from backend.llm.client import invoke_raw
+from backend.llm.client import has_configured_llm, invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.redis_client import redis_client
-from backend.config import settings
 from backend.demo_data import get_demo_clause, demo_chain
 
 
@@ -186,10 +185,8 @@ def draft_rfi(state: GuardianState) -> GuardianState:
     )
 
     try:
-        if settings.LLM_PROVIDER == "groq" and not settings.GROQ_API_KEY:
-            raise RuntimeError("GROQ_API_KEY is not configured")
-        if settings.LLM_PROVIDER == "anthropic" and not settings.ANTHROPIC_API_KEY:
-            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+        if not has_configured_llm():
+            raise RuntimeError("No LLM provider configured")
 
         rfi_text = invoke_raw(
             prompt=prompt,

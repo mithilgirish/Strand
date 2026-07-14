@@ -3,7 +3,7 @@
 import React from 'react';
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import SpecDnaChain from './SpecDnaChain';
-import type { GuardianViolation } from '@/app/guardian/page';
+import type { GuardianViolation } from '@/components/guardian/types';
 
 interface ViolationCardProps {
   violation?: GuardianViolation;

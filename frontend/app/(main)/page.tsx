@@ -6,7 +6,7 @@ import ImmunityScore from '@/components/shared/ImmunityScore';
 import StatCard from '@/components/shared/StatCard';
 import AgentStatusBadge from '@/components/shared/AgentStatusBadge';
 import ViolationCard from '@/components/guardian/ViolationCard';
-import type { GuardianViolation } from '@/app/guardian/page';
+import type { GuardianViolation } from '@/components/guardian/types';
 import type { SchedulerRisk } from '@/components/scheduler/types';
 
 interface ProjectSummary {

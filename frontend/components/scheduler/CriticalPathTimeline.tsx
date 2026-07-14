@@ -23,12 +23,12 @@ export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps
   }));
 
   return (
-    <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full h-[460px] flex flex-col font-sans">
-      <div className="flex items-center justify-between mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
+    <div className="bg-surface-container-low border border-[rgba(255,255,255,0.1)] rounded-lg p-3 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.30)] w-full h-auto sm:h-[460px] flex flex-col font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-[rgba(255,255,255,0.1)] pb-3">
         <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface-variant">
           Critical Path Timeline
         </h3>
-        <div className="flex items-center gap-4 text-xs font-medium">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-red-500/80"></div>
             <span className="text-on-surface-variant">Critical Path</span>
@@ -40,7 +40,24 @@ export default function CriticalPathTimeline({ data }: CriticalPathTimelineProps
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-0">
+      <div className="space-y-2 sm:hidden">
+        {chartData.slice(0, 10).map((task) => (
+          <div key={task.name} className="border border-white/10 bg-white/[0.025] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 text-xs font-semibold leading-snug text-on-surface">{task.name}</p>
+              <span className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase ${task.atRisk ? "bg-red-500/15 text-red-300" : task.critical ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-on-surface-variant"}`}>
+                {task.atRisk ? "Risk" : task.critical ? "Critical" : "Standard"}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-on-surface-variant">
+              <span>Day {task.offset}</span>
+              <span>{task.duration}d duration</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden flex-1 w-full min-h-0 sm:block">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"

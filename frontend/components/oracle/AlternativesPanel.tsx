@@ -15,6 +15,10 @@ interface AlternativeSupplier {
   lead_time_days: number;
 }
 
+function formatLocation(city: string, country: string) {
+  return [city, country].filter(Boolean).join(", ") || "Location pending";
+}
+
 export default function AlternativesPanel({ shipment }: { shipment: OracleShipment | null }) {
   const [alternatives, setAlternatives] = useState<AlternativeSupplier[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,7 +92,7 @@ export default function AlternativesPanel({ shipment }: { shipment: OracleShipme
         {shipment?.status === "red" && alternatives.map((alternative, index) => (
           <article key={alternative.supplier_id} className="border border-white/10 bg-white/[0.025] p-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-on-surface">{alternative.name}</h4>{index === 0 && <span className="bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">Best fit</span>}</div><p className="mt-1 flex items-center gap-1 text-[11px] text-on-surface-variant"><MapPin className="h-3 w-3" />{alternative.city}, {alternative.country}</p></div>
+              <div className="min-w-0"><div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-on-surface">{alternative.name}</h4>{index === 0 && <span className="bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">Best fit</span>}</div><p className="mt-1 flex items-center gap-1 text-[11px] text-on-surface-variant"><MapPin className="h-3 w-3" />{formatLocation(alternative.city, alternative.country)}</p></div>
               <div className="text-right"><p className="font-mono text-lg font-bold text-on-surface">{alternative.match_score}%</p><p className="text-[9px] uppercase text-on-surface-variant">Match</p></div>
             </div>
             <div className="my-3 grid grid-cols-3 gap-2 border-y border-white/5 py-2 text-[10px] text-on-surface-variant"><span>Risk <b className="block font-mono text-on-surface">{Math.round(alternative.risk_score * 100)}%</b></span><span>On time <b className="block font-mono text-on-surface">{Math.round(alternative.on_time_rate * 100)}%</b></span><span>Lead time <b className="block font-mono text-on-surface">{alternative.lead_time_days}d</b></span></div>

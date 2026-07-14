@@ -14,8 +14,7 @@ from loguru import logger
 from backend.ingestion.parsers.csv_parser import parse_schedule_csv
 from backend.r0.engine import compute_r0_from_task_graph
 from backend.r0.classifier import r0_to_severity
-from backend.config import settings
-from backend.llm.client import invoke_raw
+from backend.llm.client import has_configured_llm, invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
 
 
@@ -118,7 +117,7 @@ def suggest_mitigations(state: SchedulerState) -> SchedulerState:
         return {**state, "mitigation_suggestions": []}
 
     try:
-        if not (settings.GROQ_API_KEY or settings.ANTHROPIC_API_KEY):
+        if not has_configured_llm():
             raise RuntimeError("No LLM provider configured")
         prompt = load_prompt(
             "scheduler_mitigation",

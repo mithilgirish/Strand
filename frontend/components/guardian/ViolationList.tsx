@@ -2,7 +2,7 @@
 
 import React from 'react';
 import ViolationCard from './ViolationCard';
-import type { GuardianViolation } from '@/app/guardian/page';
+import type { GuardianViolation } from '@/components/guardian/types';
 
 interface ViolationListProps {
   violations: GuardianViolation[];

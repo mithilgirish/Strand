@@ -9,6 +9,10 @@ interface TelemetryMetrics {
   pending_invitations: number;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
 function MetricCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="p-5 border border-[#404040] rounded-lg bg-[#171717]/50 relative overflow-hidden group hover:border-[#4edea3]/30 transition-all">
@@ -31,22 +35,29 @@ export default function SystemTelemetry() {
       // Call our FastAPI backend which uses the service_role key
       const resp = await fetch('/api/admin/telemetry', { credentials: 'include' });
       if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const data = await resp.json();
+      const data = await resp.json() as { metrics: TelemetryMetrics };
       setMetrics(data.metrics);
       setLastRefreshed(new Date());
       setErrorMsg(null);
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMetrics();
+    const initialFetch = window.setTimeout(() => {
+      void fetchMetrics();
+    }, 0);
     // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchMetrics, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      void fetchMetrics();
+    }, 30000);
+    return () => {
+      window.clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, []);
 
   return (

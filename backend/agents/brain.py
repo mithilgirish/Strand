@@ -11,13 +11,12 @@ import time
 
 from loguru import logger
 
-from backend.config import settings
 from backend.demo_data import demo_spec_chunks
 from backend.vector.retriever import hybrid_retriever
 from backend.graph.client import neo4j_client
 from backend.graph import queries
 from backend.ingestion.spec_dna.chain import get_spec_dna_neighborhood
-from backend.llm.client import invoke_structured
+from backend.llm.client import has_configured_llm, invoke_structured
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.models.query import BrainAnswer
 import json
@@ -53,10 +52,8 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
     )
 
     try:
-        if settings.LLM_PROVIDER == "groq" and not settings.GROQ_API_KEY:
-            raise RuntimeError("GROQ_API_KEY is not configured")
-        if settings.LLM_PROVIDER == "anthropic" and not settings.ANTHROPIC_API_KEY:
-            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+        if not has_configured_llm():
+            raise RuntimeError("No LLM provider configured")
 
         answer = invoke_structured(
             prompt=prompt,

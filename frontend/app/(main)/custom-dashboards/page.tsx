@@ -25,6 +25,48 @@ interface SavedDashboard {
   created_at: string;
 }
 
+type DashboardCell = string | number | boolean | null | Record<string, unknown> | unknown[];
+type DashboardRow = Record<string, DashboardCell>;
+type WidgetData = DashboardRow[] | { error: string };
+
+interface DashboardListResponse {
+  dashboards?: SavedDashboard[];
+}
+
+interface GeneratedDashboard {
+  dashboard_name?: string;
+  layout: Widget[];
+  queries: Record<string, string>;
+}
+
+interface SaveDashboardResponse {
+  dashboard: SavedDashboard;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+function isWidgetError(data: WidgetData | undefined): data is { error: string } {
+  return Boolean(data && !Array.isArray(data) && "error" in data);
+}
+
+function getRows(data: WidgetData | undefined): DashboardRow[] {
+  return Array.isArray(data) ? data : [];
+}
+
+function firstValue(data: WidgetData | undefined): DashboardCell | null {
+  const rows = getRows(data);
+  if (!rows[0]) return null;
+  return Object.values(rows[0])[0] ?? null;
+}
+
+function formatCell(value: DashboardCell) {
+  if (value === null) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 // ---------------------------------------------------------------------------
 // Core Custom Dashboards Component
 // ---------------------------------------------------------------------------
@@ -37,7 +79,7 @@ export default function CustomDashboards() {
   const [currentDashboard, setCurrentDashboard] = useState<SavedDashboard | null>(null);
   
   // Dynamic data fetched for currently active widgets
-  const [widgetData, setWidgetData] = useState<Record<string, any>>({});
+  const [widgetData, setWidgetData] = useState<Record<string, WidgetData>>({});
   const [loadingData, setLoadingData] = useState<Record<string, boolean>>({});
 
   // Fetch user role on load
@@ -61,16 +103,16 @@ export default function CustomDashboards() {
     try {
       const resp = await fetch("/api/dashboards/list", { credentials: "include" });
       if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const data = await resp.json();
+      const data = await resp.json() as DashboardListResponse;
       setDashboards(data.dashboards || []);
-    } catch (err: any) {
-      setErrorMsg("Failed to load dashboards: " + err.message);
+    } catch (err: unknown) {
+      setErrorMsg("Failed to load dashboards: " + errorMessage(err));
     }
   };
 
   useEffect(() => {
-    fetchUserRole();
-    fetchDashboards();
+    void fetchUserRole();
+    void fetchDashboards();
   }, []);
 
   // Fetch query data for a specific widget query
@@ -84,10 +126,10 @@ export default function CustomDashboards() {
         body: JSON.stringify({ query }),
       });
       if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const result = await resp.json();
-      setWidgetData((prev) => ({ ...prev, [widgetId]: result.data }));
-    } catch (err: any) {
-      setWidgetData((prev) => ({ ...prev, [widgetId]: { error: err.message } }));
+      const result = await resp.json() as { data?: DashboardRow[] };
+      setWidgetData((prev) => ({ ...prev, [widgetId]: Array.isArray(result.data) ? result.data : [] }));
+    } catch (err: unknown) {
+      setWidgetData((prev) => ({ ...prev, [widgetId]: { error: errorMessage(err) } }));
     } finally {
       setLoadingData((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -98,7 +140,7 @@ export default function CustomDashboards() {
     if (currentDashboard) {
       setWidgetData({});
       Object.entries(currentDashboard.queries).forEach(([widgetId, query]) => {
-        fetchWidgetQuery(widgetId, query);
+        void fetchWidgetQuery(widgetId, query);
       });
     }
   }, [currentDashboard]);
@@ -120,7 +162,7 @@ export default function CustomDashboards() {
         const body = await resp.json();
         throw new Error(body.detail || resp.statusText);
       }
-      const data = await resp.json();
+      const data = await resp.json() as GeneratedDashboard;
       
       // Auto-save the generated dashboard
       const saveResp = await fetch("/api/dashboards/save", {
@@ -134,13 +176,13 @@ export default function CustomDashboards() {
         }),
       });
       if (!saveResp.ok) throw new Error("Generated successfully but failed to save to workspace.");
-      const savedData = await saveResp.json();
+      const savedData = await saveResp.json() as SaveDashboardResponse;
 
       setPrompt("");
-      fetchDashboards();
+      void fetchDashboards();
       setCurrentDashboard(savedData.dashboard);
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -158,9 +200,9 @@ export default function CustomDashboards() {
       if (currentDashboard?.id === id) {
         setCurrentDashboard(null);
       }
-      fetchDashboards();
-    } catch (err: any) {
-      setErrorMsg("Decommission failed: " + err.message);
+      void fetchDashboards();
+    } catch (err: unknown) {
+      setErrorMsg("Decommission failed: " + errorMessage(err));
     }
   };
 
@@ -261,7 +303,7 @@ export default function CustomDashboards() {
                     // Re-run queries
                     setWidgetData({});
                     Object.entries(currentDashboard.queries).forEach(([widgetId, query]) => {
-                      fetchWidgetQuery(widgetId, query);
+                      void fetchWidgetQuery(widgetId, query);
                     });
                   }}
                   className="px-3 py-1 border border-[#404040] rounded text-[10px] font-mono text-[#a3a3a3] hover:text-[#e5e5e5] transition-colors"
@@ -275,6 +317,9 @@ export default function CustomDashboards() {
                 {currentDashboard.layout.map((widget) => {
                   const data = widgetData[widget.id];
                   const isLoading = loadingData[widget.id];
+                  const rows = getRows(data);
+                  const primaryValue = firstValue(data);
+                  const primaryNumber = typeof primaryValue === "number" ? primaryValue : Number(primaryValue ?? 0);
                   
                   return (
                     <div
@@ -289,7 +334,7 @@ export default function CustomDashboards() {
                         <div className="flex-1 flex items-center justify-center text-xs font-mono text-[#525252]">
                           Executing Cypher transaction...
                         </div>
-                      ) : data?.error ? (
+                      ) : isWidgetError(data) ? (
                         <div className="flex-1 flex items-center justify-center text-xs font-mono text-red-400 p-4 text-center">
                           GraphQL Error: {data.error}
                         </div>
@@ -298,7 +343,7 @@ export default function CustomDashboards() {
                           {widget.type === "FormulaCard" && (
                             <div className="text-center font-mono py-8">
                               <span className="text-5xl font-extrabold text-[#f5f5f5]">
-                                {data && data[0] ? Object.values(data[0])[0]?.toLocaleString() : "—"}
+                                {primaryValue !== null && typeof primaryValue !== "object" ? primaryValue.toLocaleString() : "—"}
                               </span>
                             </div>
                           )}
@@ -307,7 +352,7 @@ export default function CustomDashboards() {
                             <div className="text-center font-mono py-6">
                               <div className="relative inline-flex flex-col items-center justify-center">
                                 <span className="text-6xl font-black text-[#4edea3]">
-                                  {data && data[0] ? parseFloat(Object.values(data[0])[0] as string).toFixed(1) : "0.0"}
+                                  {Number.isFinite(primaryNumber) ? primaryNumber.toFixed(1) : "0.0"}
                                 </span>
                                 <span className="text-[9px] uppercase tracking-widest text-[#525252] mt-1">R0 Severity Scale</span>
                               </div>
@@ -316,21 +361,21 @@ export default function CustomDashboards() {
 
                           {widget.type === "DataGrid" && (
                             <div className="overflow-x-auto w-full max-h-[200px] overflow-y-auto font-mono text-xs">
-                              {data && data.length > 0 ? (
+                              {rows.length > 0 ? (
                                 <table className="w-full text-left">
                                   <thead>
                                     <tr className="border-b border-[#333333] text-[#525252] uppercase text-[9px] tracking-wider">
-                                      {Object.keys(data[0]).map((key) => (
+                                      {Object.keys(rows[0]).map((key) => (
                                         <th key={key} className="pb-2 pr-4">{key}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-[#333333]/40 text-[#a3a3a3]">
-                                    {data.map((row: any, i: number) => (
+                                    {rows.map((row, i) => (
                                       <tr key={i} className="hover:bg-white/5">
-                                        {Object.values(row).map((val: any, j: number) => (
+                                        {Object.values(row).map((val, j) => (
                                           <td key={j} className="py-2 pr-4 truncate max-w-[150px]">
-                                            {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                                            {formatCell(val)}
                                           </td>
                                         ))}
                                       </tr>
@@ -345,9 +390,9 @@ export default function CustomDashboards() {
 
                           {widget.type === "PredictiveTrendChart" && (
                             <div className="h-44 w-full">
-                              {data && data.length > 0 ? (
+                              {rows.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={data}>
+                                  <AreaChart data={rows}>
                                     <defs>
                                       <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#4edea3" stopOpacity={0.3}/>

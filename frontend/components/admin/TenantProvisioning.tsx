@@ -18,6 +18,10 @@ const PLAN_COLORS: Record<string, string> = {
   trial:      'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
 };
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
 export default function TenantProvisioning() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +50,12 @@ export default function TenantProvisioning() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchTenants(); }, []);
+  useEffect(() => {
+    const initialFetch = window.setTimeout(() => {
+      void fetchTenants();
+    }, 0);
+    return () => window.clearTimeout(initialFetch);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,10 +78,10 @@ export default function TenantProvisioning() {
       setSubmitStatus('success');
       setTenantId('');
       setTenantName('');
-      fetchTenants(); // Refresh list
+      void fetchTenants(); // Refresh list
       setTimeout(() => setSubmitStatus('idle'), 2000);
-    } catch (err: any) {
-      setSubmitError(err.message);
+    } catch (err: unknown) {
+      setSubmitError(errorMessage(err));
       setSubmitStatus('error');
     }
   };

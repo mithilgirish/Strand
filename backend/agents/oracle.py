@@ -174,11 +174,35 @@ def get_supply_chain(shipment_id: str) -> dict[str, Any]:
     return get_supply_chain_tree(shipment_id)
 
 
+def _alternative_from_supplier(
+    supplier: dict[str, Any],
+    equipment_tag: str,
+    index: int,
+) -> dict[str, Any]:
+    risk = float(supplier.get("risk_score", 0.5) or 0.5)
+    on_time = float(supplier.get("on_time_rate", 0.8) or 0.8)
+    match_score = supplier.get("match_score")
+    lead_time = supplier.get("lead_time_days") or supplier.get("lead_time")
+    return {
+        "supplier_id": supplier.get("supplier_id") or supplier.get("id", ""),
+        "name": supplier.get("name") or supplier.get("supplier_name") or supplier.get("id", "Unknown supplier"),
+        "equipment_tag": supplier.get("equipment_tag") or equipment_tag,
+        "tier": int(supplier.get("tier", 1) or 1),
+        "risk_score": round(risk, 2),
+        "on_time_rate": round(on_time, 2),
+        "match_score": round(float(match_score), 1) if match_score is not None else round((1 - risk) * 55 + on_time * 45, 1),
+        "lead_time_days": int(lead_time) if lead_time is not None else 12 + index * 3,
+        "country": supplier.get("country", ""),
+        "city": supplier.get("city", ""),
+    }
+
+
 def find_alternative_suppliers(
     equipment_tag: str,
     failing_supplier_id: str = "",
 ) -> list[dict[str, Any]]:
     """Rank qualified Tier-1 alternatives for a failing equipment supplier."""
+    graph_results: list[dict[str, Any]] = []
     try:
         if settings.DEMO_MODE:
             raise RuntimeError("Demo mode uses deterministic supplier rankings")
@@ -187,7 +211,7 @@ def find_alternative_suppliers(
             {"failing_supplier_id": failing_supplier_id, "equipment_tag": equipment_tag},
         )
         if results:
-            return results
+            graph_results = results
     except Exception as exc:
         logger.debug(f"Oracle alternatives graph query unavailable: {exc}")
 
@@ -204,23 +228,23 @@ def find_alternative_suppliers(
     )
     alternatives = []
     for index, supplier in enumerate(suppliers[:3]):
-        risk = float(supplier.get("risk_score", 0.5))
-        on_time = float(supplier.get("on_time_rate", 0.8))
-        alternatives.append(
-            {
-                "supplier_id": supplier["id"],
-                "name": supplier.get("name", supplier["id"]),
-                "equipment_tag": equipment_tag,
-                "tier": 1,
-                "risk_score": round(risk, 2),
-                "on_time_rate": round(on_time, 2),
-                "match_score": round((1 - risk) * 55 + on_time * 45, 1),
-                "lead_time_days": 12 + index * 3,
-                "country": supplier.get("country", ""),
-                "city": supplier.get("city", ""),
-            }
-        )
-    return alternatives
+        alternatives.append(_alternative_from_supplier(supplier, equipment_tag, index))
+    if not graph_results:
+        return alternatives
+
+    supplemented = [
+        _alternative_from_supplier(supplier, equipment_tag, index)
+        for index, supplier in enumerate(graph_results)
+    ]
+    seen = {supplier.get("supplier_id") for supplier in supplemented}
+    for alternative in alternatives:
+        if alternative["supplier_id"] not in seen:
+            supplemented.append(alternative)
+            seen.add(alternative["supplier_id"])
+        if len(supplemented) >= 3:
+            break
+    supplemented.sort(key=lambda supplier: supplier.get("match_score", 0), reverse=True)
+    return supplemented[:3]
 
 
 def _fallback_from_json() -> dict[str, Any]:

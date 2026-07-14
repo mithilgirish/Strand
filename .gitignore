@@ -1,5 +1,11 @@
 .traz/
 .env
+.env.*
+!.env.example
+frontend/.env*
+!frontend/.env.example
+mobile/.env*
+!mobile/.env.example
 .venv/
 backend/.venv/
 __pycache__/
