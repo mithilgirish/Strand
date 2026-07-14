@@ -3,14 +3,15 @@ import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 
 interface BottomNavbarProps {
-  activeTab: 'QrScan' | 'Chatbot' | 'SyncStatus' | 'Settings';
-  onTabChange: (tabId: 'QrScan' | 'Chatbot' | 'SyncStatus' | 'Settings') => void;
+  activeTab: 'QrScan' | 'Chatbot' | 'Dashboards' | 'SyncStatus' | 'Settings';
+  onTabChange: (tabId: 'QrScan' | 'Chatbot' | 'Dashboards' | 'SyncStatus' | 'Settings') => void;
 }
 
 export default function BottomNavbar({ activeTab, onTabChange }: BottomNavbarProps) {
   const tabs = [
     { id: 'QrScan' as const, label: 'Scan', iconName: 'qr-code-outline' as const },
     { id: 'Chatbot' as const, label: 'Brain', iconName: 'chatbubble-ellipses-outline' as const },
+    { id: 'Dashboards' as const, label: 'Boards', iconName: 'stats-chart-outline' as const },
     { id: 'SyncStatus' as const, label: 'Sync', iconName: 'sync-outline' as const },
     { id: 'Settings' as const, label: 'Config', iconName: 'settings-outline' as const },
   ];

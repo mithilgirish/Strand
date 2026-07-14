@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../config';
+import { supabase } from '../supabase';
 
 interface Citation {
   document: string;
@@ -67,6 +68,7 @@ function parseBrainPayload(data: unknown): {
 
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -87,7 +89,6 @@ export default function ChatbotScreen({ navigation }: any) {
     }));
   };
 
-
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
@@ -98,11 +99,76 @@ export default function ChatbotScreen({ navigation }: any) {
       () => setKeyboardVisible(false)
     );
 
+    initializeSession();
+
     return () => {
       keyboardDidHideListener.remove();
       keyboardDidShowListener.remove();
     };
   }, []);
+
+  const initializeSession = async () => {
+    try {
+      // Load the most recent session or create one
+      const { data: sessions, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching sessions:', error);
+        return;
+      }
+
+      if (sessions && sessions.length > 0) {
+        setSessionId(sessions[0].id);
+        void fetchMessages(sessions[0].id);
+      } else {
+        const { data: userData } = await supabase.auth.getUser();
+        const tenantId = userData.user?.app_metadata?.tenant_id || 'default_tenant';
+        
+        const { data: newSession, error: createError } = await supabase
+          .from('chat_sessions')
+          .insert({
+            tenant_id: tenantId,
+            user_id: userData.user?.id,
+            title: 'Mobile Conversation'
+          })
+          .select()
+          .single();
+
+        if (newSession) {
+          setSessionId(newSession.id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to initialize mobile chat session:', err);
+    }
+  };
+
+  const fetchMessages = async (activeId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', activeId)
+        .order('created_at', { ascending: true });
+
+      if (data && data.length > 0) {
+        setMessages(data.map(m => ({
+          id: m.id,
+          sender: m.sender as 'user' | 'brain',
+          text: m.text,
+          citations: Array.isArray(m.citations) ? m.citations : [],
+          confidence: m.confidence as ChatMessage['confidence'] || 'Medium',
+          timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   /** Factory to build a brain ChatMessage – single source of truth for the shape. */
   const buildBrainMessage = (opts: {
@@ -124,25 +190,62 @@ export default function ChatbotScreen({ navigation }: any) {
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userText = inputText.trim();
     setInputText('');
     setIsTyping(true);
 
     try {
+      let activeId = sessionId;
+      if (!activeId) {
+        const { data: userData } = await supabase.auth.getUser();
+        const tenantId = userData.user?.app_metadata?.tenant_id || 'default_tenant';
+        
+        const { data: newSession } = await supabase
+          .from('chat_sessions')
+          .insert({
+            tenant_id: tenantId,
+            user_id: userData.user?.id,
+            title: userText.length > 30 ? userText.slice(0, 27) + '...' : userText
+          })
+          .select()
+          .single();
+          
+        if (!newSession) throw new Error("Failed to create chat session");
+        activeId = newSession.id;
+        setSessionId(activeId);
+      }
+
+      // 1. Insert user message to DB
+      const { data: userMsgData } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: activeId,
+          sender: 'user',
+          text: userText
+        })
+        .select()
+        .single();
+
+      if (userMsgData) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: userMsgData.id,
+            sender: 'user',
+            text: userText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+
+      // 2. Fetch answer from API
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const response = await fetch(`${API_BASE_URL}/brain/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: userMessage.text, project_id: 'default' }),
+        body: JSON.stringify({ question: userText, project_id: 'default' }),
         signal: controller.signal,
       });
 
@@ -151,20 +254,44 @@ export default function ChatbotScreen({ navigation }: any) {
       if (response.ok) {
         const raw = await response.json();
         const { answerText, confidence, citations, responseTimeMs } = parseBrainPayload(raw);
-        setMessages(prev => [
-          ...prev,
-          buildBrainMessage({ text: answerText, citations, confidence, responseTimeMs }),
-        ]);
+
+        // 3. Insert brain answer to DB
+        const { data: brainMsgData } = await supabase
+          .from('chat_messages')
+          .insert({
+            session_id: activeId,
+            sender: 'brain',
+            text: answerText,
+            citations: citations,
+            confidence: confidence,
+            response_time_ms: responseTimeMs
+          })
+          .select()
+          .single();
+
+        if (brainMsgData) {
+          setMessages(prev => [
+            ...prev,
+            {
+              id: brainMsgData.id,
+              sender: 'brain',
+              text: answerText,
+              citations: citations,
+              confidence: confidence,
+              responseTimeMs: responseTimeMs,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+        }
       } else {
         throw new Error(`API returned status ${response.status}`);
       }
-      // Typing ends only after the success message is in state
       setIsTyping(false);
     } catch (err) {
       console.log('Brain API offline or error, falling back to local simulation.', err);
       // Keep the typing indicator alive until the fallback message is actually appended
       setTimeout(() => {
-        const query = userMessage.text.toLowerCase();
+        const query = userText.toLowerCase();
         let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
         if (query.includes('generator') || query.includes('gen-01')) {
           responseText =
@@ -177,7 +304,6 @@ export default function ChatbotScreen({ navigation }: any) {
             'Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).';
         }
         setMessages(prev => [...prev, buildBrainMessage({ text: responseText, confidence: 'Medium' })]);
-        // Typing ends only after the fallback message is in state
         setIsTyping(false);
       }, 1000);
     }

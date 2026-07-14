@@ -17,7 +17,7 @@ import BottomNavbar from './components/BottomNavbar';
 const Stack = createNativeStackNavigator();
 
 function MainTabs({ navigation }: any) {
-  const [activeTab, setActiveTab] = useState<'QrScan' | 'Chatbot' | 'SyncStatus' | 'Settings'>('QrScan');
+  const [activeTab, setActiveTab] = useState<'QrScan' | 'Chatbot' | 'Dashboards' | 'SyncStatus' | 'Settings'>('QrScan');
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -62,6 +62,7 @@ function MainTabs({ navigation }: any) {
       <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         {activeTab === 'QrScan' && <QrScanScreen navigation={navigation} />}
         {activeTab === 'Chatbot' && <ChatbotScreen navigation={navigation} />}
+        {activeTab === 'Dashboards' && <DashboardsScreen />}
         {activeTab === 'SyncStatus' && <SyncStatusScreen navigation={navigation} />}
         {activeTab === 'Settings' && <SettingsScreen navigation={navigation} />}
       </Animated.View>
