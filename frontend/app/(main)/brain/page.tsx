@@ -267,14 +267,9 @@ export default function BrainAgent() {
     setIsLoading(true);
     try {
       if (!sessionId) {
-        const { data: userData } = await supabase.auth.getUser();
-        const tenantId = userData.user?.app_metadata?.tenant_id || 'default_tenant';
-        
         const { data: newSession, error } = await supabase
           .from('chat_sessions')
           .insert({
-            tenant_id: tenantId,
-            user_id: userData.user?.id,
             title: deriveTitleFromText(text)
           })
           .select()

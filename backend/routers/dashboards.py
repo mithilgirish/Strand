@@ -6,6 +6,7 @@ All routes are fully secured and scoped to the user's tenant.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from uuid import UUID
 import httpx
 import re
 
@@ -61,23 +62,39 @@ class SaveDashboardRequest(BaseModel):
 def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
     """
     Ensures:
-    1. No write mutators (CREATE, MERGE, SET, DELETE, REMOVE, DETACH, DROP).
+    1. No write mutators or procedures.
     2. Tenant isolation is enforced inside the Cypher query.
     """
-    mutators = ["CREATE", "MERGE", "SET", "DELETE", "REMOVE", "DETACH", "DROP"]
+    mutators = [
+        "CREATE", "MERGE", "SET", "DELETE", "REMOVE", "DETACH", "DROP",
+        "CALL", "YIELD", "LOAD", "CSV", "INDEX", "CONSTRAINT", "UNION"
+    ]
     upper_query = cypher.upper()
     for m in mutators:
         if re.search(rf"\b{m}\b", upper_query):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Mutating query keyword '{m}' is not permitted."
+                detail=f"Keyword '{m}' is not permitted."
             )
             
+    if "//" in cypher or "/*" in cypher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Comments are not allowed in queries."
+        )
+        
+    if re.search(r"\bOR\b", upper_query):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OR clauses are restricted to prevent isolation bypass."
+        )
+            
     # Inject/Ensure tenant_id matching
-    if "tenant_id" not in cypher:
-        # A very basic fallback check: append WHERE clauses or enforce params
-        # The frontend/LLM query generator should explicitly use $tenant_id
-        pass
+    if "$tenant_id" not in cypher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cypher query must include $tenant_id for tenant isolation."
+        )
         
     return cypher
 
@@ -189,7 +206,7 @@ async def list_dashboards(
 # ---------------------------------------------------------------------------
 @router.get("/{dashboard_id}")
 async def get_dashboard(
-    dashboard_id: str,
+    dashboard_id: UUID,
     user: CurrentUser = Depends(get_current_user)
 ):
     """
@@ -221,7 +238,7 @@ async def get_dashboard(
 # ---------------------------------------------------------------------------
 @router.delete("/{dashboard_id}")
 async def delete_dashboard(
-    dashboard_id: str,
+    dashboard_id: UUID,
     user: CurrentUser = Depends(get_current_user)
 ):
     """

@@ -36,7 +36,7 @@ export default function SettingsScreen({ navigation }: any) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
       
-      const response = await fetch(API_BASE_URL.replace('/api/v1', '') + '/', {
+      const response = await fetch(API_BASE_URL.replace('/api/v1', '') + '/health', {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -172,7 +172,7 @@ export default function SettingsScreen({ navigation }: any) {
 
     addLog(`Pinging host node: ${API_BASE_URL}`);
     try {
-      const response = await fetch(API_BASE_URL.replace('/api/v1', '') + '/');
+      const response = await fetch(API_BASE_URL.replace('/api/v1', '') + '/health');
       if (response.ok) {
         addLog('Connection: ONLINE');
       } else {

@@ -69,6 +69,7 @@ function parseBrainPayload(data: unknown): {
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -125,14 +126,9 @@ export default function ChatbotScreen({ navigation }: any) {
         setSessionId(sessions[0].id);
         void fetchMessages(sessions[0].id);
       } else {
-        const { data: userData } = await supabase.auth.getUser();
-        const tenantId = userData.user?.app_metadata?.tenant_id || 'default_tenant';
-        
         const { data: newSession, error: createError } = await supabase
           .from('chat_sessions')
           .insert({
-            tenant_id: tenantId,
-            user_id: userData.user?.id,
             title: 'Mobile Conversation'
           })
           .select()
@@ -144,6 +140,8 @@ export default function ChatbotScreen({ navigation }: any) {
       }
     } catch (err) {
       console.error('Failed to initialize mobile chat session:', err);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -193,18 +191,13 @@ export default function ChatbotScreen({ navigation }: any) {
     const userText = inputText.trim();
     setInputText('');
     setIsTyping(true);
+    let activeId = sessionId;
 
     try {
-      let activeId = sessionId;
       if (!activeId) {
-        const { data: userData } = await supabase.auth.getUser();
-        const tenantId = userData.user?.app_metadata?.tenant_id || 'default_tenant';
-        
         const { data: newSession } = await supabase
           .from('chat_sessions')
           .insert({
-            tenant_id: tenantId,
-            user_id: userData.user?.id,
             title: userText.length > 30 ? userText.slice(0, 27) + '...' : userText
           })
           .select()
@@ -290,7 +283,7 @@ export default function ChatbotScreen({ navigation }: any) {
     } catch (err) {
       console.log('Brain API offline or error, falling back to local simulation.', err);
       // Keep the typing indicator alive until the fallback message is actually appended
-      setTimeout(() => {
+      setTimeout(async () => {
         const query = userText.toLowerCase();
         let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
         if (query.includes('generator') || query.includes('gen-01')) {
@@ -303,7 +296,30 @@ export default function ChatbotScreen({ navigation }: any) {
           responseText =
             'Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).';
         }
-        setMessages(prev => [...prev, buildBrainMessage({ text: responseText, confidence: 'Medium' })]);
+        
+        const fallbackMsg = buildBrainMessage({ text: responseText, confidence: 'Medium' });
+
+        if (activeId) {
+          try {
+            const { data: fallbackData } = await supabase
+              .from('chat_messages')
+              .insert({
+                session_id: activeId,
+                sender: 'brain',
+                text: responseText,
+                confidence: 'Medium',
+                response_time_ms: 1000
+              })
+              .select()
+              .single();
+            
+            if (fallbackData) fallbackMsg.id = fallbackData.id;
+          } catch (e) {
+            console.error('Failed to save fallback msg:', e);
+          }
+        }
+        
+        setMessages(prev => [...prev, fallbackMsg]);
         setIsTyping(false);
       }, 1000);
     }
@@ -431,8 +447,13 @@ export default function ChatbotScreen({ navigation }: any) {
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSendMessage}
+            editable={!isInitializing}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+          <TouchableOpacity 
+            style={[styles.sendButton, isInitializing && { opacity: 0.5 }]} 
+            onPress={handleSendMessage}
+            disabled={isInitializing}
+          >
             <Text style={styles.sendIcon}>➔</Text>
           </TouchableOpacity>
         </View>
