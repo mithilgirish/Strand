@@ -11,6 +11,7 @@ import NcrLogScreen from './screens/NcrLogScreen';
 import SyncStatusScreen from './screens/SyncStatusScreen';
 import ChatbotScreen from './screens/ChatbotScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import DashboardsScreen from './screens/DashboardsScreen';
 import BottomNavbar from './components/BottomNavbar';
 
 const Stack = createNativeStackNavigator();
@@ -85,6 +86,8 @@ export default function App() {
         <Stack.Screen name="Checklist" component={ChecklistScreen} />
         <Stack.Screen name="NcrLog" component={NcrLogScreen} />
         <Stack.Screen name="SyncStatus" component={SyncStatusScreen} />
+        <Stack.Screen name="Chatbot" component={ChatbotScreen} options={{ title: 'Brain Agent' }} />
+        <Stack.Screen name="Dashboards" component={DashboardsScreen} options={{ title: 'Dashboards' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
