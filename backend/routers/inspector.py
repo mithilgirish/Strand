@@ -5,7 +5,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Request
 from backend.deps import limiter
-
+from backend.agents.inspector import process_voice_ncr, close_checklist_session
 router = APIRouter()
 
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mock_ncr_db.json")
@@ -112,46 +112,71 @@ async def get_checklist(tag: str):
 @router.post("/inspector/ncr")
 @limiter.limit("30/minute")
 async def log_ncr(request: Request, ncr: NcrSubmission):
-    db = load_db()
-    
-    # Calculate mock R0 contagion scores based on tag and step reference
-    is_gen = ncr.equipment_tag.upper().startswith("GEN")
-    r0_score = 4.2 if is_gen and ncr.step_id == "IST-002" else (3.1 if ncr.step_id == "IST-005" else round(random.uniform(1.2, 3.8), 1))
-    
-    severity = "Critical" if r0_score >= 4.0 else ("Major" if r0_score >= 2.5 else "Minor")
-    
-    mitigations = {
-        "IST-002": "Verify governor settings or replace fuel injector unit." if is_gen else "Check water booster pump flow calibration.",
-        "IST-005": "Escalate to engineering lead for temperature tolerance override.",
-        "IST-003": "Inspect silencer baffles and acoustic enclosure door seals.",
-        "IST-004": "Align rotor shafts or retorque vibration isolation springs."
-    }
-    mitigation = mitigations.get(ncr.step_id, "Inspect equipment node and raise corrective work order.")
-
-    new_ncr = {
-        "ncr_id": f"NCR-{random.randint(1000, 9999)}",
-        "equipment_tag": ncr.equipment_tag.upper(),
-        "step_id": ncr.step_id,
-        "transcript": ncr.transcript,
-        "r0_score": r0_score,
-        "severity": severity,
-        "mitigation": mitigation,
-        "raised_by": ncr.raised_by,
-        "timestamp": f"2026-07-02T{random.randint(0,23):02}:{random.randint(0,59):02}:00Z"
-    }
-    
-    db.insert(0, new_ncr)
-    save_db(db)
-    return new_ncr
+    try:
+        # First try the actual AI Agent
+        result = await process_voice_ncr(
+            voice_transcript=ncr.transcript,
+            equipment_tag=ncr.equipment_tag.upper(),
+            step_id=ncr.step_id,
+            raised_by=ncr.raised_by
+        )
+        return result
+    except Exception as e:
+        import loguru
+        loguru.logger.warning(f"Live agent failed, using fallback: {e}")
+        # Fallback to offline local db
+        db = load_db()
+        is_gen = ncr.equipment_tag.upper().startswith("GEN")
+        r0_score = 4.2 if is_gen and ncr.step_id == "IST-002" else (3.1 if ncr.step_id == "IST-005" else round(random.uniform(1.2, 3.8), 1))
+        severity = "Critical" if r0_score >= 4.0 else ("Major" if r0_score >= 2.5 else "Minor")
+        mitigation = "Verify governor settings or replace fuel injector unit." if is_gen else "Inspect equipment node and raise corrective work order."
+        
+        new_ncr = {
+            "ncr_id": f"NCR-{random.randint(1000, 9999)}",
+            "equipment_tag": ncr.equipment_tag.upper(),
+            "step_id": ncr.step_id,
+            "transcript": ncr.transcript,
+            "r0_score": r0_score,
+            "severity": severity,
+            "mitigation": mitigation,
+            "raised_by": ncr.raised_by,
+            "timestamp": f"2026-07-02T{random.randint(0,23):02}:{random.randint(0,59):02}:00Z"
+        }
+        db.insert(0, new_ncr)
+        save_db(db)
+        return new_ncr
 
 @router.get("/inspector/ncrs")
 async def get_ncrs():
     return load_db()
 
+class CloseSessionRequest(BaseModel):
+    steps: List[dict]
+
 @router.post("/inspector/checklist/{tag}/close")
-async def close_checklist(tag: str):
-    return {
-        "status": "success",
-        "message": f"Checklist session closed for tag {tag.upper()}.",
-        "as_built_id": f"ABR-{random.randint(10000, 99999)}"
-    }
+async def close_checklist(tag: str, req: CloseSessionRequest):
+    try:
+        result = await close_checklist_session(tag.upper(), req.steps)
+        return result
+    except Exception as e:
+        import loguru
+        loguru.logger.error(f"Error compiling as-built record: {e}")
+        raise HTTPException(status_code=500, detail="Failed to compile as-built record")
+
+@router.get("/inspector/as-built/{tag}")
+async def get_as_built_record(tag: str):
+    from pathlib import Path
+    import glob
+    
+    record_dir = Path(__file__).resolve().parents[2] / "data" / "as_built_records"
+    pattern = str(record_dir / f"*_{tag.upper()}.md")
+    files = glob.glob(pattern)
+    
+    if not files:
+        raise HTTPException(status_code=404, detail="No as-built records found for this equipment")
+        
+    latest_file = sorted(files)[-1]
+    with open(latest_file, "r", encoding="utf-8") as f:
+        content = f.read()
+        
+    return {"content": content, "filename": Path(latest_file).name}

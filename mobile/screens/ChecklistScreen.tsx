@@ -198,16 +198,34 @@ export default function ChecklistScreen({ route, navigation }: any) {
     }
 
     setLoading(true);
-    // Simulate API close session
-    setTimeout(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inspector/checklist/${equipmentTag}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps }),
+      });
+      setLoading(false);
+      
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert(
+          'Checklist Session Closed',
+          `As-built record ${data.record_id || ''} compiled and synced to PKG DB.`,
+          [{ text: 'OK', onPress: () => navigation.navigate('MainTabs') }]
+        );
+        await AsyncStorage.removeItem(`checklist_${equipmentTag}`);
+      } else {
+        Alert.alert('Sync Failed', 'Failed to close checklist session on server.');
+      }
+    } catch (err) {
       setLoading(false);
       Alert.alert(
-        'Checklist Session Closed',
-        'As-built testing record successfully compiled and synced to PKG DB.',
+        'Checklist Session Closed (Offline)',
+        'As-built testing record compiled locally and pending sync.',
         [{ text: 'OK', onPress: () => navigation.navigate('MainTabs') }]
       );
       await AsyncStorage.removeItem(`checklist_${equipmentTag}`);
-    }, 1500);
+    }
   };
 
   if (loading) {

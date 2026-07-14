@@ -164,6 +164,43 @@ def generate_checklist(tag: str) -> list[dict]:
     return result
 
 
+async def close_checklist_session(equipment_tag: str, step_results: list) -> dict:
+    """Compile checklist results into an as-built markdown record."""
+    import uuid
+    from datetime import datetime
+    from pathlib import Path
+    
+    ncr_count = sum(1 for s in step_results if s.get("status") in ("fail", "failed"))
+    pass_count = sum(1 for s in step_results if s.get("status") in ("pass", "passed"))
+    
+    record_id = f"ABR-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+    
+    record_dir = Path(__file__).resolve().parents[2] / "data" / "as_built_records"
+    record_dir.mkdir(parents=True, exist_ok=True)
+    file_path = record_dir / f"{record_id}_{equipment_tag}.md"
+    
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(f"# As-Built Commissioning Record — {equipment_tag}\n")
+        f.write(f"**Record ID:** {record_id}\n")
+        f.write(f"**Date:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n")
+        f.write(f"**Summary:** {pass_count} Passed, {ncr_count} Failed (NCRs)\n\n")
+        f.write("## Test Steps Details\n")
+        f.write("| Step ID | Description | Status | Notes |\n")
+        f.write("| --- | --- | --- | --- |\n")
+        for s in step_results:
+            notes = str(s.get("notes", "")).replace("\n", " ")
+            f.write(f"| {s.get('step_id')} | {s.get('description')} | {s.get('status')} | {notes} |\n")
+            
+    return {
+        "record_id": record_id,
+        "pdf_path": str(file_path),
+        "ncr_count": ncr_count,
+        "pass_count": pass_count,
+        "fail_count": ncr_count,
+        "status": "compiled"
+    }
+
+
 async def run_inspector(transcript: str, equipment_tag: str, step_id: str, raised_by: str = "field_engineer") -> dict:
     """Convenience wrapper for the tool registry."""
     return await process_voice_ncr(transcript, equipment_tag, step_id, raised_by)
