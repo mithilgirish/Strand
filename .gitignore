@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 chroma_db/
 backend/ncr_db.json
+backend/mock_ncr_db.json
 
 # Node.js
 node_modules/

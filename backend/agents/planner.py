@@ -27,13 +27,22 @@ from backend.agents.judge import run_judge
 from backend.approvals.manager import approval_manager
 
 
-# ── Fast-path routing (Not yet implemented) ────────────────────────
+# ── Fast-path event routing ────────────────────────────────────────
 EVENT_ROUTING = {
     "submittal_upload": "guardian",
     "schedule_update": "scheduler",
     "shipment_update": "oracle",
     "voice_ncr": "inspector",
     "query": "brain",
+}
+
+AGENT_CAPABILITIES = {
+    "guardian": ["submittal_compliance", "rfi_drafting", "spec_dna_trace", "pkg_r0"],
+    "scheduler": ["critical_path", "delay_forecast", "task_r0", "mitigation_suggestions"],
+    "oracle": ["shipment_geojson", "supply_chain_tree", "alternative_suppliers"],
+    "inspector": ["voice_ncr", "commissioning_checklist", "as_built_closeout"],
+    "brain": ["hybrid_rag", "citations", "graph_context"],
+    "judge": ["groundedness_review", "approval_recommendation"],
 }
 
 

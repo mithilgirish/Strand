@@ -141,6 +141,21 @@ async def invite_user(
 
     invited_user = resp.json()
 
+    invitation_url = _supabase_rest_url("invitations")
+    async with httpx.AsyncClient() as client:
+        invite_record_resp = await client.post(
+            invitation_url,
+            headers={**headers, "Prefer": "return=minimal"},
+            json={
+                "email": payload.email,
+                "tenant_id": payload.tenant_id,
+                "role": payload.role,
+                "invited_by": user.id,
+            },
+        )
+    if invite_record_resp.status_code not in (200, 201, 204, 409):
+        raise HTTPException(status_code=502, detail=f"Invitation record failed: {invite_record_resp.text}")
+
     # Write invitation record to audit_logs
     audit_url = _supabase_rest_url("audit_logs")
     async with httpx.AsyncClient() as client:

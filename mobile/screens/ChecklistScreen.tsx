@@ -199,32 +199,39 @@ export default function ChecklistScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const response = await fetch(`${API_BASE_URL}/inspector/checklist/${equipmentTag}/close`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ steps }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          steps,
+          closed_by: 'field_engineer',
+        }),
+        signal: controller.signal,
       });
-      setLoading(false);
-      
-      if (response.ok) {
-        const data = await response.json();
-        Alert.alert(
-          'Checklist Session Closed',
-          `As-built record ${data.record_id || ''} compiled and synced to PKG DB.`,
-          [{ text: 'OK', onPress: () => navigation.navigate('MainTabs') }]
-        );
-        await AsyncStorage.removeItem(`checklist_${equipmentTag}`);
-      } else {
-        Alert.alert('Sync Failed', 'Failed to close checklist session on server.');
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(errorBody || `Backend returned ${response.status}`);
       }
-    } catch (err) {
-      setLoading(false);
+
+      const record = await response.json();
+      await AsyncStorage.removeItem(`checklist_${equipmentTag}`);
       Alert.alert(
-        'Checklist Session Closed (Offline)',
-        'As-built testing record compiled locally and pending sync.',
+        'Checklist Session Closed',
+        `As-built testing record ${record.as_built_id || record.record_id} successfully compiled.`,
         [{ text: 'OK', onPress: () => navigation.navigate('MainTabs') }]
       );
-      await AsyncStorage.removeItem(`checklist_${equipmentTag}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to close checklist session.';
+      Alert.alert('Sync Failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
