@@ -85,11 +85,21 @@ async function proxyToBackend(
 
   try {
     const backendResp = await fetch(fullUrl, fetchOptions);
-    const data = await backendResp.json();
-    return NextResponse.json(data, { status: backendResp.status });
-  } catch {
+    const contentType = backendResp.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await backendResp.json();
+      return NextResponse.json(data, { status: backendResp.status });
+    } else {
+      const text = await backendResp.text();
+      return new NextResponse(text, {
+        status: backendResp.status,
+        headers: { 'content-type': contentType }
+      });
+    }
+  } catch (error) {
+    console.error('Error proxying to backend:', error);
     return NextResponse.json(
-      { detail: 'Backend service unavailable. Is the FastAPI server running?' },
+      { detail: 'Backend service unavailable or error proxying request. Is the FastAPI server running?' },
       { status: 503 }
     );
   }

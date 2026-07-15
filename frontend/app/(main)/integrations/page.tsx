@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Plug, CheckCircle2, XCircle, Settings, RefreshCw, Key, 
-  Lock, Save, Loader2, AlertCircle, Database, ShieldAlert 
+  Lock, Save, Loader2, AlertCircle, Database, ShieldAlert, Download 
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
@@ -58,10 +58,14 @@ function IntegrationsHubContent() {
     },
   ]);
 
-  const [isConfiguringAutodesk, setIsConfiguringAutodesk] = useState(false);
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
+  const [configuringIntegration, setConfiguringIntegration] = useState<string | null>(null);
+  const [configForm, setConfigForm] = useState({
+    client_id: "", client_secret: "", base_url: "", username: "", password: "", api_key: ""
+  });
+  const [configs, setConfigs] = useState<any>({});
   const [loading, setLoading] = useState(false);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [isFetchingData, setIsFetchingData] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -105,7 +109,7 @@ function IntegrationsHubContent() {
     if (!selectedTenant) return;
     if (showRefreshIndicator) setRefreshing(true);
     try {
-      const res = await fetch(`/api/integrations/status?tenant_id=${selectedTenant}`);
+      const res = await fetch(`/api/integrations/status?tenant_id=${selectedTenant}&_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setIntegrations(data);
@@ -117,27 +121,58 @@ function IntegrationsHubContent() {
     }
   };
 
-  const fetchAutodeskConfig = async () => {
+  const fetchConfigs = async () => {
     if (!selectedTenant) return;
     try {
       const res = await fetch(`/api/integrations/config?tenant_id=${selectedTenant}`);
       if (res.ok) {
         const data = await res.json();
-        if (data?.autodesk?.client_id) {
-          setClientId(data.autodesk.client_id);
-        }
+        setConfigs(data);
       }
     } catch (e) {
-      console.error("Error fetching Autodesk config:", e);
+      console.error("Error fetching configs:", e);
     }
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const status = searchParams.get('status');
+      const integration = searchParams.get('integration');
+      
+      if (window.opener && status && integration) {
+        window.opener.postMessage({ type: 'OAUTH_COMPLETE', status, integration }, '*');
+        window.close();
+      }
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'OAUTH_COMPLETE') {
+          setRefreshing(true);
+          // Force a fresh fetch bypassing any browser cache
+          fetch(`/api/integrations/status?tenant_id=${selectedTenant}&_t=${Date.now()}`)
+            .then(res => res.json())
+            .then(data => setIntegrations(data))
+            .finally(() => setRefreshing(false));
+            
+          if (event.data.status === 'success') {
+            setSaveMessage(`Successfully authenticated ${event.data.integration}!`);
+            setTimeout(() => setSaveMessage(""), 3000);
+          } else {
+            setErrorMessage(`Authentication failed.`);
+          }
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, [selectedTenant]);
+
+  useEffect(() => {
     if (selectedTenant) {
       fetchStatus();
-      fetchAutodeskConfig();
+      fetchConfigs();
     }
-
     // Check if we returned from OAuth flow
     const statusParam = searchParams.get("status");
     const integrationParam = searchParams.get("integration");
@@ -154,24 +189,26 @@ function IntegrationsHubContent() {
     }
   }, [searchParams, selectedTenant]);
 
-  const handleSaveConfig = async (e: React.FormEvent) => {
+  const handleSaveConfig = async (e: React.FormEvent, integrationId: string) => {
     e.preventDefault();
     setLoading(true);
     setSaveMessage("");
     setErrorMessage("");
 
     try {
-      const res = await fetch(`/api/integrations/config?tenant_id=${selectedTenant}`, {
+      const res = await fetch(`/api/integrations/${integrationId}/config?tenant_id=${selectedTenant}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret })
+        body: JSON.stringify(configForm)
       });
 
       if (res.ok) {
         setSaveMessage("Credentials configured successfully! You can now Connect.");
-        setIsConfiguringAutodesk(false);
-        setClientSecret(""); // clear secret field
+        if (integrationId !== "autodesk" && integrationId !== "procore") {
+            setConfiguringIntegration(null);
+        }
         fetchStatus();
+        fetchConfigs();
       } else {
         const errorData = await res.json();
         setErrorMessage(errorData.detail || "Failed to update configuration.");
@@ -183,18 +220,17 @@ function IntegrationsHubContent() {
     }
   };
 
-  const handleConnect2Legged = async (e: React.FormEvent) => {
+  const handleConnect2Legged = async (e: React.FormEvent, integrationId: string) => {
     e.preventDefault();
     setLoading(true);
     setSaveMessage("");
     setErrorMessage("");
 
     try {
-      // First save credentials
-      const configRes = await fetch(`/api/integrations/config?tenant_id=${selectedTenant}`, {
+      const configRes = await fetch(`/api/integrations/${integrationId}/config?tenant_id=${selectedTenant}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret })
+        body: JSON.stringify(configForm)
       });
 
       if (!configRes.ok) {
@@ -203,15 +239,13 @@ function IntegrationsHubContent() {
         return;
       }
 
-      // Then trigger 2-legged connection
-      const connectRes = await fetch(`/api/integrations/autodesk/connect-2legged?tenant_id=${selectedTenant}`, {
+      const connectRes = await fetch(`/api/integrations/${integrationId}/connect-2legged?tenant_id=${selectedTenant}`, {
         method: "POST"
       });
 
       if (connectRes.ok) {
-        setSaveMessage("Successfully connected Autodesk via 2-Legged OAuth!");
-        setIsConfiguringAutodesk(false);
-        setClientSecret("");
+        setSaveMessage(`Successfully connected ${integrationId} via 2-Legged OAuth!`);
+        setConfiguringIntegration(null);
         fetchStatus();
       } else {
         const errorData = await connectRes.json();
@@ -224,18 +258,17 @@ function IntegrationsHubContent() {
     }
   };
 
-  const handleConnect3Legged = async (e: React.FormEvent) => {
+  const handleConnect3Legged = async (e: React.FormEvent, integrationId: string) => {
     e.preventDefault();
     setLoading(true);
     setSaveMessage("");
     setErrorMessage("");
 
     try {
-      // First save credentials
-      const configRes = await fetch(`/api/integrations/config?tenant_id=${selectedTenant}`, {
+      const configRes = await fetch(`/api/integrations/${integrationId}/config?tenant_id=${selectedTenant}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret })
+        body: JSON.stringify(configForm)
       });
 
       if (!configRes.ok) {
@@ -244,13 +277,23 @@ function IntegrationsHubContent() {
         return;
       }
 
-      // Redirect to 3-legged Auth URL via secure proxy
-      const authRes = await fetch(`/api/integrations/autodesk/authorize?tenant_id=${selectedTenant}`, { method: "POST" });
+      const authRes = await fetch(`/api/integrations/${integrationId}/authorize?tenant_id=${selectedTenant}`, { method: "POST" });
       if (authRes.ok) {
         const data = await authRes.json();
-        window.location.href = data.url;
+        if (data.url) {
+            // Open in popup instead of redirecting main page
+            const popup = window.open(data.url, 'OAuthLogin', 'width=600,height=700,left=200,top=100');
+            if (!popup) {
+               // Fallback if popups are blocked
+               window.location.href = data.url;
+            }
+        } else {
+            setErrorMessage("Authorization URL missing from response.");
+            setLoading(false);
+        }
       } else {
-        setErrorMessage("Failed to initiate 3-legged OAuth.");
+        const errData = await authRes.json();
+        setErrorMessage(errData.detail || "Failed to initiate OAuth.");
         setLoading(false);
       }
     } catch (err) {
@@ -259,42 +302,89 @@ function IntegrationsHubContent() {
     }
   };
 
+  const handleFetchData = async (integrationId: string) => {
+    setIsFetchingData(integrationId);
+    try {
+      const res = await fetch(`/api/integrations/${integrationId}/sync?tenant_id=${selectedTenant}`, { method: "POST" });
+      if (res.ok) {
+        setSaveMessage(`Successfully synced latest data from ${integrationId === 'autodesk' ? 'Autodesk' : integrationId}!`);
+        setTimeout(() => setSaveMessage(""), 4000);
+      } else {
+        setErrorMessage(`Failed to fetch data from ${integrationId}. Ensure you are connected.`);
+      }
+    } catch (err) {
+      console.error("Failed to sync:", err);
+      setErrorMessage("Network error while trying to sync data.");
+    } finally {
+      setIsFetchingData(null);
+    }
+  };
+
   const toggleConnection = async (integration: Integration) => {
     const id = integration.id;
     const isConnected = integration.status === "connected";
 
     if (isConnected) {
-      // Disconnect
+      setDisconnectingId(id);
       try {
         const res = await fetch(`/api/integrations/${id}/disconnect?tenant_id=${selectedTenant}`, { method: "POST" });
         if (res.ok) {
           setIntegrations(prev =>
             prev.map(i => i.id === id ? { ...i, status: "disconnected", lastSync: "Never" } : i)
           );
+          setSaveMessage(`Successfully disconnected ${integration.name}.`);
+          setTimeout(() => setSaveMessage(""), 3000);
+        } else {
+          setErrorMessage(`Failed to disconnect ${integration.name}.`);
         }
       } catch (err) {
         console.error("Failed to disconnect:", err);
+        setErrorMessage("An error occurred during disconnect.");
+      } finally {
+        setDisconnectingId(null);
       }
     } else {
-      // Connect
-      if (id === "autodesk") {
-        if (!integration.configured) {
-          setIsConfiguringAutodesk(true);
-          return;
-        }
-        // Redirect to Backend OAuth Authorize Route via proxy
-        fetch(`/api/integrations/autodesk/authorize?tenant_id=${selectedTenant}`, { method: "POST" })
-          .then(res => res.json())
-          .then(data => { if(data.url) window.location.href = data.url; })
-          .catch(err => console.error(err));
+      // If we have fallback .env vars for Procore and Autodesk, skip forcing the config modal
+      if (!integration.configured && id !== "procore" && id !== "autodesk") {
+        setConfiguringIntegration(id);
+        setConfigForm({
+          client_id: configs[id]?.client_id || "",
+          client_secret: "",
+          base_url: configs[id]?.base_url || "",
+          username: configs[id]?.username || "",
+          password: "",
+          api_key: ""
+        });
+        return;
+      }
+      
+      if (id === "autodesk" || id === "procore") {
+        fetch(`/api/integrations/${id}/authorize?tenant_id=${selectedTenant}`, { method: "POST" })
+          .then(async res => {
+            const data = await res.json();
+            if (res.ok && data.url) {
+              const popup = window.open(data.url, 'OAuthLogin', 'width=600,height=700,left=200,top=100');
+              if (!popup) {
+                 window.location.href = data.url;
+              }
+            } else {
+              setErrorMessage(data.detail || "Failed to initialize authorization flow.");
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            setErrorMessage("Network error initializing connection.");
+          });
       } else {
-        // Initializing connection for Procore, Primavera, Maximo
         try {
           const res = await fetch(`/api/integrations/${id}/connect?tenant_id=${selectedTenant}`, { method: "POST" });
           if (res.ok) {
             setIntegrations(prev =>
               prev.map(i => i.id === id ? { ...i, status: "connected", lastSync: "Just now" } : i)
             );
+          } else {
+              const data = await res.json();
+              setErrorMessage(data.detail || "Connection failed.");
           }
         } catch (err) {
           console.error("Failed to connect:", err);
@@ -356,11 +446,11 @@ function IntegrationsHubContent() {
       )}
 
       {/* Configuration View Form */}
-      {isConfiguringAutodesk && (
+      {configuringIntegration && (
         <div className="glass-panel rounded-lg p-6 mb-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
           <div className="absolute top-0 right-0 p-4">
             <button 
-              onClick={() => setIsConfiguringAutodesk(false)}
+              onClick={() => setConfiguringIntegration(null)}
               className="text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors"
             >
               Cancel
@@ -368,92 +458,191 @@ function IntegrationsHubContent() {
           </div>
           <div className="flex items-center gap-3 mb-4 border-b border-outline-variant pb-3">
             <Settings className="h-5 w-5 text-primary" />
-            <h3 className="label-caps text-on-surface-variant">Configure Autodesk Platform Services (APS)</h3>
+            <h3 className="label-caps text-on-surface-variant">Configure {integrations.find(i => i.id === configuringIntegration)?.name}</h3>
           </div>
-          <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-            Enter your Autodesk developer credentials. You can retrieve these from the{" "}
-            <a 
-              href="https://developer.autodesk.com/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:underline hover:text-blue-400 transition-colors"
-            >
-              Autodesk Developer Portal
-            </a>.
-          </p>
-          <form onSubmit={handleSaveConfig} className="space-y-4 max-w-xl">
-            <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">APS Client ID</label>
-              <input
-                type="text"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="Enter APS Client ID"
-                required
-                disabled={userRole !== "tenant_admin" && userRole !== "super_admin"}
-                className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">APS Client Secret</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="Enter APS Client Secret"
-                  disabled={userRole !== "tenant_admin" && userRole !== "super_admin"}
-                  className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <Lock className="absolute right-3 top-2.5 h-4 w-4 text-on-surface-variant/50" />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin")}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Save className="h-3.5 w-3.5" />
-                )}
-                Save Config
-              </button>
+          
+          {configuringIntegration === "autodesk" && (
+            <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+              Enter your Autodesk developer credentials. You can retrieve these from the{" "}
+              <a href="https://developer.autodesk.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline hover:text-blue-400 transition-colors">
+                Autodesk Developer Portal
+              </a>.
+            </p>
+          )}
+          {configuringIntegration === "procore" && (
+            <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+              Enter your Procore developer credentials. Ensure your redirect URI matches our webhook. More info in the{" "}
+              <a href="https://developers.procore.com/documentation/introduction" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline hover:text-blue-400 transition-colors">
+                Procore Documentation
+              </a>.
+            </p>
+          )}
+          {configuringIntegration === "primavera" && (
+            <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+              Enter your Oracle Primavera P6 EPPM REST API connection details. You can find endpoints in the{" "}
+              <a href="https://docs.oracle.com/en/industries/construction-engineering/primavera-p6-eppm/index.html" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline hover:text-blue-400 transition-colors">
+                Oracle Help Center
+              </a>.
+            </p>
+          )}
+          {configuringIntegration === "maximo" && (
+            <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+              Enter your IBM Maximo REST API/OSLC connection details and your generated API Key.
+            </p>
+          )}
+          
+          <form onSubmit={(e) => handleSaveConfig(e, configuringIntegration)} className="space-y-4 max-w-xl">
+            {(configuringIntegration === "autodesk" || configuringIntegration === "procore") && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Client ID</label>
+                  <input
+                    type="text"
+                    value={configForm.client_id}
+                    onChange={(e) => setConfigForm({...configForm, client_id: e.target.value})}
+                    placeholder="Enter Client ID"
+                    required
+                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
+                    className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Client Secret</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={configForm.client_secret}
+                      onChange={(e) => setConfigForm({...configForm, client_secret: e.target.value})}
+                      placeholder="Enter Client Secret"
+                      disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
+                      className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <Lock className="absolute right-3 top-2.5 h-4 w-4 text-on-surface-variant/50" />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save Config
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleConnect2Legged}
-                disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin")}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plug className="h-3.5 w-3.5" />
-                )}
-                Connect 2-Legged OAuth
-              </button>
+                  {configuringIntegration === "autodesk" && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleConnect2Legged(e, configuringIntegration)}
+                      disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
+                      Connect 2-Legged OAuth
+                    </button>
+                  )}
 
-              <button
-                type="button"
-                onClick={handleConnect3Legged}
-                disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin")}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface-variant hover:text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Key className="h-3.5 w-3.5" />
-                )}
-                Connect 3-Legged OAuth
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleConnect3Legged(e, configuringIntegration)}
+                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface-variant hover:text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+                    {configuringIntegration === "procore" ? "Authenticate with Procore" : "Connect 3-Legged OAuth"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {configuringIntegration === "primavera" && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Base URL</label>
+                  <input
+                    type="url"
+                    value={configForm.base_url}
+                    onChange={(e) => setConfigForm({...configForm, base_url: e.target.value})}
+                    placeholder="https://primavera.example.com"
+                    required
+                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
+                    className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save Config
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleConnect3Legged(e, configuringIntegration)}
+                    disabled={loading || !configForm.base_url || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+                    Authenticate with Oracle
+                  </button>
+                </div>
+              </>
+            )}
+
+            {configuringIntegration === "maximo" && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Base URL</label>
+                  <input
+                    type="url"
+                    value={configForm.base_url}
+                    onChange={(e) => setConfigForm({...configForm, base_url: e.target.value})}
+                    placeholder="https://maximo.example.com"
+                    required
+                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
+                    className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">API Key</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={configForm.api_key}
+                      onChange={(e) => setConfigForm({...configForm, api_key: e.target.value})}
+                      placeholder="Enter Maximo API Key"
+                      disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
+                      className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <Key className="absolute right-3 top-2.5 h-4 w-4 text-on-surface-variant/50" />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary/5 hover:bg-primary/10 border border-outline/25 text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save Config
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleConnection(integrations.find(i => i.id === "maximo")!)}
+                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
+                    Connect Now
+                  </button>
+                </div>
+              </>
+            )}
           </form>
         </div>
       )}
-
       {/* Integrations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {integrations.map((integration) => {
@@ -503,7 +692,7 @@ function IntegrationsHubContent() {
                       <span className="px-2 py-0.5 bg-primary/5 border border-outline/25 rounded text-[9px] font-semibold text-on-surface-variant label-caps">
                         {integration.category}
                       </span>
-                      {isAutodesk && !integration.configured && (
+                      {!integration.configured && (
                         <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] font-semibold text-amber-500 uppercase tracking-wider flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" /> Config Required
                         </span>
@@ -515,12 +704,12 @@ function IntegrationsHubContent() {
 
               {/* Action buttons footer */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-outline-variant mt-auto">
-                {isAutodesk && (
+                {true && (
                   <button
-                    onClick={() => setIsConfiguringAutodesk(!isConfiguringAutodesk)}
-                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin"}
+                    onClick={() => { setConfiguringIntegration(configuringIntegration === integration.id ? null : integration.id); setConfigForm({ client_id: configs[integration.id]?.client_id || '', client_secret: '', base_url: configs[integration.id]?.base_url || '', username: configs[integration.id]?.username || '', password: '', api_key: '' }); }}
+                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border border-outline/20 text-on-surface-variant hover:bg-primary/10 hover:text-on-surface rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={userRole !== "tenant_admin" && userRole !== "super_admin" ? "Requires admin privileges" : "Credential Configuration"}
+                    title={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin" ? "Requires admin privileges" : "Credential Configuration"}
                   >
                     <Settings className="h-3.5 w-3.5" />
                     Configure
@@ -529,15 +718,26 @@ function IntegrationsHubContent() {
 
                 <button
                   onClick={() => toggleConnection(integration)}
-                  disabled={userRole !== "tenant_admin" && userRole !== "super_admin"}
-                  title={userRole !== "tenant_admin" && userRole !== "super_admin" ? "Requires admin privileges" : ""}
-                  className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  disabled={disconnectingId === integration.id || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                  title={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin" ? "Requires admin privileges" : ""}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                     isConnected
                       ? "bg-red-500/10 border border-red-500/25 text-red-500 hover:bg-red-500/20"
                       : "bg-primary text-on-primary border border-primary hover:bg-primary/95"
                   }`}
                 >
-                  {isConnected ? "Disconnect" : isAutodesk && !integration.configured ? "Connect Account" : "Connect"}
+                  {disconnectingId === integration.id ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Disconnecting
+                    </>
+                  ) : isConnected ? (
+                    "Disconnect"
+                  ) : isAutodesk && !integration.configured ? (
+                    "Connect Account"
+                  ) : (
+                    "Connect"
+                  )}
                 </button>
               </div>
             </div>
@@ -676,22 +876,72 @@ function IntegrationsHubContent() {
           </div>
 
           {/* AI Benefit Explanation Callout */}
-          <div className="bg-primary/5 border border-outline/20 p-4 rounded-lg flex items-start gap-3 mt-4">
-            <div className="bg-primary/10 p-1.5 rounded-md text-primary mt-0.5">
-              <Plug className="h-4 w-4" />
+          <div className="bg-primary/5 border border-outline/20 p-5 rounded-lg flex items-start gap-4 mt-6 shadow-sm">
+            <div className="bg-primary/10 p-2 rounded-md text-primary mt-1 shadow-inner">
+              <Plug className="h-5 w-5" />
             </div>
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface mb-1.5 font-sans">
-                How Autodesk Integration Improves Construction Delivery
-              </h4>
-              <p className="text-xs text-on-surface-variant leading-relaxed font-sans">
-                By syncing design assets directly from your Autodesk developer hub, STRAND eliminates manual blueprint audits. 
-                Our **Vision AI Core** automatically extracts physical parameters from drawings, cross-references them with contractual specifications, and alerts engineers of safety violations before hardware is fabricated—minimizing field rework costs.
-              </p>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-on-surface font-sans flex items-center gap-2">
+                  How Autodesk Integration Improves Construction Delivery
+                  <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20">AI POWERED</span>
+                </h4>
+                <button 
+                  onClick={() => handleFetchData("autodesk")}
+                  disabled={isFetchingData === "autodesk"}
+                  className="px-3 py-1.5 bg-primary text-on-primary rounded-md text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
+                >
+                  {isFetchingData === "autodesk" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                  {isFetchingData === "autodesk" ? "Fetching Models..." : "Fetch Latest Models"}
+                </button>
+              </div>
+              <div className="text-sm text-on-surface-variant leading-relaxed font-sans space-y-3">
+                <p>
+                  By syncing design assets directly from your Autodesk developer hub, STRAND eliminates manual blueprint audits.
+                </p>
+                <p>
+                  Our <strong className="text-primary font-bold">Vision AI Core</strong> automatically extracts physical parameters from drawings, cross-references them with contractual specifications, and alerts engineers of safety violations before hardware is fabricated—minimizing field rework costs.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {integrations.find(i => i.id === "maximo")?.status === "connected" && (
+        <div className="glass-panel p-6 mt-6 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex flex-col md:flex-row gap-5">
+            <div className="bg-primary/10 p-2 rounded-md text-primary mt-1 shadow-inner h-fit">
+              <Plug className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-on-surface font-sans flex items-center gap-2">
+                  How IBM Maximo Powers Asset Intelligence
+                  <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20">AI POWERED</span>
+                </h4>
+                <button 
+                  onClick={() => handleFetchData("maximo")}
+                  disabled={isFetchingData === "maximo"}
+                  className="px-3 py-1.5 bg-primary text-on-primary rounded-md text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-sm cursor-pointer"
+                >
+                  {isFetchingData === "maximo" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                  {isFetchingData === "maximo" ? "Syncing Work Orders..." : "Sync Work Orders"}
+                </button>
+              </div>
+              <div className="text-sm text-on-surface-variant leading-relaxed font-sans space-y-3">
+                <p>
+                  By syncing live work orders and asset histories from your IBM Maximo environment, STRAND creates a comprehensive digital thread of maintenance operations.
+                </p>
+                <p>
+                  Our <strong className="text-primary font-bold">Predictive Maintenance Engine</strong> analyzes OSLC metadata and failure codes to instantly identify critical equipment risks, automatically dispatching preventative alerts before catastrophic failures occur.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeReportModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="glass-panel max-w-md w-full p-6 rounded-lg space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
