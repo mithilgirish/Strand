@@ -56,7 +56,7 @@ class Neo4jClient:
         return self._using_fallback
 
     @contextmanager
-    def get_session(self):
+    def get_session(self, default_access_mode: Optional[str] = None):
         """
         Get a Neo4j session (or a fallback wrapper).
         Usage:
@@ -67,6 +67,8 @@ class Neo4jClient:
             session_kwargs = {}
             if settings.NEO4J_DATABASE:
                 session_kwargs["database"] = settings.NEO4J_DATABASE
+            if default_access_mode:
+                session_kwargs["default_access_mode"] = default_access_mode
             session = self._driver.session(**session_kwargs)
             try:
                 yield session
@@ -164,6 +166,6 @@ class _NetworkXResult:
 neo4j_client = Neo4jClient()
 
 
-def get_neo4j_session():
+def get_neo4j_session(default_access_mode: Optional[str] = None):
     """Convenience alias used throughout the codebase."""
-    return neo4j_client.get_session()
+    return neo4j_client.get_session(default_access_mode=default_access_mode)
