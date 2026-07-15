@@ -122,12 +122,7 @@ async def autodesk_webhook(payload: dict, background_tasks: BackgroundTasks):
 
 # ── 3-Legged OAuth 2.0 Flow (Public) ──────────────────────────────────
 
-import base64
-
-def _encrypt_token(token: str) -> str:
-    key = os.getenv("API_KEY", "strand-fallback-secret-key-12345")
-    encrypted = "".join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(token))
-    return base64.b64encode(encrypted.encode('utf-8')).decode('utf-8')
+from backend.crypto_utils import _encrypt_token
 
 @router.post("/autodesk/authorize")
 async def autodesk_authorize(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
@@ -231,7 +226,125 @@ async def procore_callback(code: str, state: Optional[str] = None):
     else:
         return RedirectResponse(f"{frontend_url}/integrations?status=error&integration=procore&message=OAuth_failed")
 
+# ── Primavera Auth ──────────────────────────────────
 
+@router.post("/primavera/authorize")
+async def primavera_authorize(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+    """Generates the authorization URL for Primavera."""
+    from backend.primavera_client import primavera_client
+    target_tenant = _get_target_tenant(user, tenant_id)
+    
+    # We must have base_url configured first
+    records = _get_tenant_integrations(target_tenant)
+    record = next((r for r in records if r["integration_id"] == "primavera"), {})
+    config = record.get("config", {})
+    base_url = config.get("base_url")
+    
+    if not base_url:
+        raise HTTPException(status_code=400, detail="Primavera Base URL not configured")
+
+    try:
+        url = primavera_client.get_authorization_url(base_url, state=target_tenant)
+        return {"url": url}
+    except Exception as e:
+        logger.error(f"Failed to generate Primavera auth URL: {e}")
+        raise HTTPException(status_code=400, detail="PRIMAVERA_CLIENT_ID_not_configured")
+
+@router.get("/primavera/mock-oracle-login")
+async def primavera_mock_login(redirect_uri: str, state: Optional[str] = None):
+    """Provides a dummy UI simulating Oracle Identity Cloud Service login."""
+    from fastapi.responses import HTMLResponse
+    
+    # URL encode the state for the redirect script
+    state_param = f"&state={state}" if state else ""
+    target_url = f"{redirect_uri}?code=tokenspark_primavera{state_param}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Oracle Identity Cloud Service</title>
+        <style>
+            body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+            .login-box {{ background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }}
+            .logo-container {{ text-align: center; margin-bottom: 30px; }}
+            .logo-container h1 {{ color: #c74634; font-size: 24px; margin: 0; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; }}
+            .form-group {{ margin-bottom: 20px; }}
+            .form-group label {{ display: block; margin-bottom: 8px; color: #333; font-size: 14px; }}
+            .form-group input {{ width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; }}
+            .form-group input:focus {{ border-color: #00758f; outline: none; }}
+            .submit-btn {{ width: 100%; padding: 12px; background-color: #c74634; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }}
+            .submit-btn:hover {{ background-color: #a5392a; }}
+            .warning {{ font-size: 12px; color: #666; text-align: center; margin-top: 20px; padding: 10px; background: #fff3cd; border-radius: 4px; border: 1px solid #ffeeba; }}
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <div class="logo-container">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c74634" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                <h1>Oracle Identity Cloud</h1>
+            </div>
+            <form onsubmit="event.preventDefault(); window.location.href='{target_url}';">
+                <div class="form-group">
+                    <label for="username">Username / Email</label>
+                    <input type="text" id="username" value="admin@strand-demo.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" value="••••••••" required>
+                </div>
+                <button type="submit" class="submit-btn">Sign In</button>
+            </form>
+            <div class="warning">
+                <strong>Development Sandbox</strong><br>
+                This is a simulated OAuth login page. Any credentials will be accepted.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@router.get("/primavera/callback")
+async def primavera_callback(code: str, state: Optional[str] = None):
+    """Receives the auth code from Primavera and exchanges it for a token."""
+    from backend.primavera_client import primavera_client
+    from fastapi.responses import RedirectResponse
+    
+    success = False
+    try:
+        # We need the base_url to exchange the code
+        if not state:
+            raise ValueError("State (tenant_id) missing from callback")
+            
+        records = _get_tenant_integrations(state)
+        record = next((r for r in records if r["integration_id"] == "primavera"), {})
+        base_url = record.get("config", {}).get("base_url")
+        
+        if not base_url:
+            raise ValueError("Primavera Base URL missing for tenant")
+            
+        token_data = primavera_client.exchange_code(base_url, code)
+        
+        if token_data:
+            encrypted_creds = {
+                "access_token": _encrypt_token(token_data.get("access_token", "")),
+                "refresh_token": _encrypt_token(token_data.get("refresh_token", "")),
+                "expires_in": token_data.get("expires_in")
+            }
+            _upsert_tenant_integration(state, "primavera", {"status": "connected", "credentials": encrypted_creds})
+            
+        logger.info("Successfully completed Primavera OAuth flow.")
+        success = True
+    except Exception as e:
+        logger.error(f"Failed Primavera OAuth exchange: {e}")
+
+    # Redirect back to the frontend UI
+    return RedirectResponse(f"http://localhost:3000/integrations?status={'success' if success else 'error'}")
+
+# ── Integration Management ──────────────────────────────────
 
 @router.get("/status")
 async def get_integrations_status(tenant_id: Optional[str] = None, user: CurrentUser = Depends(get_current_user)):
@@ -343,19 +456,20 @@ async def update_integrations_config(integration_id: str, config_req: ConfigUpda
     if config_req.client_id is not None:
         config["client_id"] = config_req.client_id
     if config_req.client_secret is not None:
-        config["client_secret"] = config_req.client_secret
+        config["client_secret"] = _encrypt_token(config_req.client_secret)
     if config_req.base_url is not None:
         config["base_url"] = config_req.base_url
     if config_req.username is not None:
         config["username"] = config_req.username
     if config_req.password is not None:
-        config["password"] = config_req.password
+        config["password"] = _encrypt_token(config_req.password)
     if config_req.api_key is not None:
-        config["api_key"] = config_req.api_key
+        config["api_key"] = _encrypt_token(config_req.api_key)
         
     _upsert_tenant_integration(target_tenant, integration_id, {"config": config})
     
     # Cache for the backend clients (e.g., autodesk_client.py, procore_client.py)
+    # WARNING: Cached config contains encrypted secrets now. Clients must decrypt them.
     redis_client.set_cache(f"{integration_id}_config", config)
     
     return {"status": "success", "message": f"{integration_id.capitalize()} credentials updated successfully"}

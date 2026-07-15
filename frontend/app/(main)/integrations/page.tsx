@@ -569,32 +569,6 @@ function IntegrationsHubContent() {
                     className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Username</label>
-                  <input
-                    type="text"
-                    value={configForm.username}
-                    onChange={(e) => setConfigForm({...configForm, username: e.target.value})}
-                    placeholder="Enter Username"
-                    required
-                    disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
-                    className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Password</label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={configForm.password}
-                      onChange={(e) => setConfigForm({...configForm, password: e.target.value})}
-                      placeholder="Enter Password"
-                      disabled={userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin"}
-                      className="w-full bg-surface-container-lowest/50 border border-outline-variant rounded-md px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <Lock className="absolute right-3 top-2.5 h-4 w-4 text-on-surface-variant/50" />
-                  </div>
-                </div>
                 <div className="flex flex-wrap gap-3 pt-2">
                   <button
                     type="submit"
@@ -606,12 +580,12 @@ function IntegrationsHubContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleConnection(integrations.find(i => i.id === "primavera")!)}
-                    disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
+                    onClick={(e) => handleConnect3Legged(e, configuringIntegration)}
+                    disabled={loading || !configForm.base_url || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
                     className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plug className="h-3.5 w-3.5" />}
-                    Connect Now
+                    {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+                    Authenticate with Oracle
                   </button>
                 </div>
               </>
