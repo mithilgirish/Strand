@@ -8,7 +8,7 @@ from backend.deps import limiter
 from backend.agents.inspector import process_voice_ncr, close_checklist_session
 router = APIRouter()
 
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mock_ncr_db.json")
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ncr_db.json")
 
 class NcrSubmission(BaseModel):
     transcript: str

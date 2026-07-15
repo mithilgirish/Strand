@@ -10,7 +10,7 @@ router = APIRouter(prefix="/project", tags=["project"])
 async def get_project_metadata():
     """Retrieve global project metadata."""
     try:
-        # Mock project data for the hackathon
+        # Baseline project data
         project_data = {
             "project_id": "PRJ-942-HYPERSCALE",
             "name": "Hyperscale Data Centre Build",
