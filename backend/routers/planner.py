@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import loguru
 
 from backend.deps import limiter
-from backend.agents.planner import run_planner
+from backend.agents.planner import AGENT_CAPABILITIES, AGENT_RUNNERS, EVENT_ROUTING, run_planner
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 
@@ -24,4 +24,9 @@ async def ask_planner(request: Request, data: PlannerAskRequest):
 @router.get("/report")
 @limiter.limit("30/minute")
 async def planner_report(request: Request):
-    return {"message": "Planner report stub - coming soon"}
+    return {
+        "status": "ready",
+        "event_routing": EVENT_ROUTING,
+        "available_agents": sorted(AGENT_RUNNERS.keys()),
+        "capabilities": AGENT_CAPABILITIES,
+    }
