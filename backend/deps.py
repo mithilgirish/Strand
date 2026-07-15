@@ -15,7 +15,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from typing import List
+from typing import Any, List
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"])
 
@@ -36,90 +36,83 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    import httpx
     from loguru import logger
     
-    global _jwks_cache
     try:
-        # Check header
-        unverified_header = jwt.get_unverified_header(token)
-        alg = unverified_header.get("alg")
-        kid = unverified_header.get("kid")
-        
-        if alg == "HS256":
-            # Symmetric key validation (e.g. local developer mode or standard config)
-            payload = jwt.decode(
-                token, 
-                key=settings.SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated"
-            )
-        else:
-            # Asymmetric key validation (ES256/RS256) via JWKS
-            if _jwks_cache is None:
-                jwks_url = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-                headers = {"apikey": settings.SUPABASE_SERVICE_ROLE_KEY}
-                with httpx.Client() as client:
-                    resp = client.get(jwks_url, headers=headers)
-                if resp.status_code == 200:
-                    _jwks_cache = resp.json()
-                else:
-                    logger.error(f"Failed to fetch JWKS: status={resp.status_code}, response={resp.text}")
-                    raise credentials_exception
-            
-            # Find matching key in JWKS
-            jwk = None
-            for key in _jwks_cache.get("keys", []):
-                if key.get("kid") == kid:
-                    jwk = key
-                    break
-            
-            if not jwk:
-                logger.error(f"kid '{kid}' not found in JWKS")
-                raise credentials_exception
-                
-            payload = jwt.decode(
-                token,
-                key=jwk,
-                algorithms=[alg],
-                audience="authenticated"
-            )
-        
-        user_id: str = payload.get("sub")
-        email: str = payload.get("email")
-        
-        if not user_id:
-            logger.error("JWT decoded but 'sub' (user_id) field is missing")
-            raise credentials_exception
-            
-        # Fetch live role and tenant_id from profiles table (Service Role)
-        url = f"{settings.SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}&select=tenant_id,role"
-        headers = {
-            "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}"
-        }
-        
-        with httpx.Client() as client:
-            resp = client.get(url, headers=headers)
-            
-        if resp.status_code != 200 or not resp.json():
-            logger.warning(f"Profile lookup failed for {user_id}: status={resp.status_code}, response={resp.text}")
-            # Fallback if profile not found
-            return CurrentUser(id=user_id, email=email, tenant_id="default_tenant", role="viewer")
-            
-        profile = resp.json()[0]
-        return CurrentUser(
-            id=user_id, 
-            email=email, 
-            tenant_id=profile.get("tenant_id", "default_tenant"), 
-            role=profile.get("role", "viewer")
-        )
+        payload = await _decode_supabase_jwt(token)
+        return _current_user_from_payload(payload)
     except JWTError as e:
         logger.error(f"JWT Decode Error: {str(e)}")
         raise credentials_exception
     except Exception as e:
         logger.error(f"Unexpected authentication error: {str(e)}")
         raise credentials_exception
+
+
+async def _decode_supabase_jwt(token: str) -> dict[str, Any]:
+    """Verify a Supabase JWT without a per-request database/profile lookup."""
+    import httpx
+
+    global _jwks_cache
+    unverified_header = jwt.get_unverified_header(token)
+    alg = unverified_header.get("alg")
+    kid = unverified_header.get("kid")
+
+    if alg == "HS256":
+        if not settings.SUPABASE_JWT_SECRET:
+            raise JWTError("SUPABASE_JWT_SECRET is not configured")
+        return jwt.decode(
+            token,
+            key=settings.SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+
+    if not settings.SUPABASE_URL:
+        raise JWTError("SUPABASE_URL is not configured")
+    if not kid:
+        raise JWTError("JWT header is missing kid")
+
+    if _jwks_cache is None:
+        jwks_url = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(jwks_url)
+        if resp.status_code != 200:
+            raise JWTError(f"Failed to fetch Supabase JWKS: {resp.status_code}")
+        _jwks_cache = resp.json()
+
+    jwk = next((key for key in _jwks_cache.get("keys", []) if key.get("kid") == kid), None)
+    if not jwk:
+        raise JWTError(f"kid '{kid}' not found in Supabase JWKS")
+
+    return jwt.decode(
+        token,
+        key=jwk,
+        algorithms=[alg],
+        audience="authenticated",
+    )
+
+
+def _current_user_from_payload(payload: dict[str, Any]) -> CurrentUser:
+    """Extract tenant-scoped RBAC claims from the verified Supabase JWT."""
+    app_metadata = payload.get("app_metadata") or {}
+    if not isinstance(app_metadata, dict):
+        app_metadata = {}
+
+    user_id = payload.get("sub")
+    email = payload.get("email") or ""
+    tenant_id = app_metadata.get("tenant_id") or payload.get("tenant_id")
+    role = app_metadata.get("role") or payload.get("role")
+
+    if not user_id or not tenant_id or not role:
+        raise JWTError("JWT is missing required sub, app_metadata.tenant_id, or app_metadata.role claims")
+
+    return CurrentUser(
+        id=user_id,
+        email=email,
+        tenant_id=tenant_id,
+        role=role,
+    )
 
 class RoleChecker:
     def __init__(self, allowed_roles: List[str]):
@@ -132,4 +125,3 @@ class RoleChecker:
                 detail="Operation not permitted for your security clearance."
             )
         return user
-

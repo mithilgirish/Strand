@@ -56,30 +56,106 @@ class SaveDashboardRequest(BaseModel):
     queries: Dict[str, str]
 
 # ---------------------------------------------------------------------------
-# Cypher Query Sanitization (AST Sanitizer)
+# Cypher Query Sanitization
 # ---------------------------------------------------------------------------
+READ_STARTERS = ("MATCH", "OPTIONAL MATCH", "WITH", "UNWIND")
+MUTATING_KEYWORDS = (
+    "CREATE",
+    "MERGE",
+    "SET",
+    "DELETE",
+    "REMOVE",
+    "DETACH",
+    "DROP",
+    "CALL",
+    "LOAD CSV",
+    "FOREACH",
+    "ALTER",
+    "GRANT",
+    "DENY",
+    "REVOKE",
+    "USE",
+)
+NODE_PATTERN = re.compile(
+    r"\((?P<var>[A-Za-z_][A-Za-z0-9_]*)?"
+    r"(?P<labels>(?::`?[\w\s]+`?)+)"
+    r"(?:\s*\{(?P<props>[^{}]*)\})?"
+    r"\)"
+)
+
+
+def _strip_cypher_comments(cypher: str) -> str:
+    cypher = re.sub(r"//.*?$", "", cypher, flags=re.MULTILINE)
+    return re.sub(r"/\*.*?\*/", "", cypher, flags=re.DOTALL)
+
+
+def _has_tenant_scope(cypher: str) -> bool:
+    return bool(
+        re.search(r"\btenant_id\s*:\s*\$tenant_id\b", cypher)
+        or re.search(r"\.\s*tenant_id\s*=\s*\$tenant_id\b", cypher)
+    )
+
+
+def _inject_tenant_into_node(match: re.Match) -> str:
+    props = match.group("props")
+    if props is None:
+        return f"({match.group('var') or ''}{match.group('labels')} {{tenant_id: $tenant_id}})"
+    if re.search(r"\btenant_id\b", props):
+        return match.group(0)
+    return f"({match.group('var') or ''}{match.group('labels')} {{{props.strip()}, tenant_id: $tenant_id}})"
+
+
 def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
     """
     Ensures:
     1. No write mutators (CREATE, MERGE, SET, DELETE, REMOVE, DETACH, DROP).
     2. Tenant isolation is enforced inside the Cypher query.
     """
-    mutators = ["CREATE", "MERGE", "SET", "DELETE", "REMOVE", "DETACH", "DROP"]
-    upper_query = cypher.upper()
-    for m in mutators:
-        if re.search(rf"\b{m}\b", upper_query):
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tenant claim is required for dashboard queries.",
+        )
+
+    stripped = _strip_cypher_comments(cypher).strip()
+    if not stripped:
+        raise HTTPException(status_code=400, detail="Cypher query cannot be empty.")
+
+    if ";" in stripped.rstrip(";"):
+        raise HTTPException(status_code=400, detail="Multiple Cypher statements are not permitted.")
+    stripped = stripped.rstrip(";").strip()
+
+    upper_query = stripped.upper()
+    if not upper_query.startswith(READ_STARTERS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dashboard queries must be read-only MATCH/WITH/UNWIND Cypher.",
+        )
+
+    for keyword in MUTATING_KEYWORDS:
+        if re.search(rf"\b{re.escape(keyword)}\b", upper_query):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Mutating query keyword '{m}' is not permitted."
+                detail=f"Mutating query keyword '{keyword}' is not permitted.",
             )
-            
-    # Inject/Ensure tenant_id matching
-    if "tenant_id" not in cypher:
-        # A very basic fallback check: append WHERE clauses or enforce params
-        # The frontend/LLM query generator should explicitly use $tenant_id
-        pass
-        
-    return cypher
+
+    if "tenant_id" in stripped and "$tenant_id" not in stripped:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dashboard queries must use the $tenant_id parameter for tenant scoping.",
+        )
+
+    if _has_tenant_scope(stripped):
+        return stripped
+
+    secured = NODE_PATTERN.sub(_inject_tenant_into_node, stripped)
+    if secured == stripped or not _has_tenant_scope(secured):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to enforce tenant isolation on this Cypher query.",
+        )
+
+    return secured
 
 # ---------------------------------------------------------------------------
 # POST /dashboards/generate
@@ -114,10 +190,15 @@ async def execute_dashboard_query(
     """
     secured_cypher = sanitize_and_inject_tenant(payload.query, user.tenant_id)
     
-    session = get_neo4j_session()
+    try:
+        from neo4j import READ_ACCESS
+    except Exception:
+        READ_ACCESS = "READ"
+
     try:
         # Pass $tenant_id parameter to ensure query scoping
-        result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
+        with get_neo4j_session(default_access_mode=READ_ACCESS) as session:
+            result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
         return {"data": result}
     except Exception as e:
         raise HTTPException(
