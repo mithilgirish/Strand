@@ -23,7 +23,7 @@ class AutodeskClient:
             return config["client_id"], config["client_secret"]
         return os.getenv("APS_CLIENT_ID", ""), os.getenv("APS_CLIENT_SECRET", "")
 
-    def get_authorization_url(self):
+    def get_authorization_url(self, state: str = None):
         """Generate the 3-legged OAuth login URL."""
         client_id, _ = self.get_client_credentials()
         if not client_id:
@@ -33,13 +33,16 @@ class AutodeskClient:
         if settings.DEMO_MODE and client_id in ["admin@strand", "tokenspark"]:
             logger.info("Generating internal 3-legged redirect URL.")
             dev_code = "tokenspark"
-            return f"http://localhost:8000/api/v1/integrations/autodesk/callback?code={dev_code}"
+            state_param = f"&state={state}" if state else ""
+            return f"http://localhost:8000/api/v1/integrations/autodesk/callback?code={dev_code}{state_param}"
 
         scopes = "data:read bucket:read"
         encoded_callback = urllib.parse.quote(APS_CALLBACK_URL, safe='')
         encoded_scopes = urllib.parse.quote(scopes, safe='')
         
         url = f"{APS_OAUTH_URL}/authorize?response_type=code&client_id={client_id}&redirect_uri={encoded_callback}&scope={encoded_scopes}"
+        if state:
+            url += f"&state={state}"
         return url
 
     def exchange_code(self, code: str) -> dict:
