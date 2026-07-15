@@ -34,52 +34,28 @@ export default async function SignupPage({
             </p>
           </div>
 
-          <form className="space-y-5">
-            <div>
-              <label className="block text-[10px] font-bold text-[#a3a3a3] uppercase tracking-widest mb-1.5" htmlFor="email">
-                Security Clearance (Email)
-              </label>
-              <input
-                className="w-full px-4 py-2.5 bg-[#171717] border border-[#404040] rounded text-[#f5f5f5] font-mono text-[13px] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all placeholder-[#525252]"
-                id="email"
-                name="email"
-                type="email"
-                placeholder="new.operative@strand.ai"
-                required
-              />
+          <div className="space-y-6 text-center">
+            <div className="p-4 bg-[#171717] border border-[#262626] rounded text-left font-mono text-[12px] leading-relaxed text-[#a3a3a3] space-y-4">
+              <p className="text-[#4edea3] font-bold text-center border-b border-[#262626] pb-2 text-[13px]">
+                ONBOARDING PROTOCOL REQUIRED
+              </p>
+              <p>
+                Self-registration is deactivated for security and strict tenant isolation.
+              </p>
+              <p className="text-[#e5e5e5]">
+                1. A Super-Administrator must first provision a tenant workspace and assign a Tenant Admin.
+              </p>
+              <p className="text-[#e5e5e5]">
+                2. The Tenant Admin can then send invitation links and configure credentials with specific roles.
+              </p>
             </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-[#a3a3a3] uppercase tracking-widest mb-1.5" htmlFor="password">
-                Authentication Key (Password)
-              </label>
-              <PasswordInput 
-                className="w-full px-4 py-2.5 bg-[#171717] border border-[#404040] rounded text-[#f5f5f5] font-mono text-[13px] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all placeholder-[#525252]"
-                name="password"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {params?.message && (
-              <div className="p-3 bg-[#93000a]/20 border border-[#93000a]/50 rounded text-[#ffb4ab] text-xs text-center font-mono">
-                {params.message}
-              </div>
-            )}
-
-            <button
-              formAction={signup}
-              className="w-full mt-6 py-3 bg-[#4edea3] hover:bg-[#6cf8bb] text-[#003824] font-bold rounded transition-all shadow-[0_0_15px_rgba(78,222,163,0.1)] hover:shadow-[0_0_20px_rgba(78,222,163,0.3)] uppercase tracking-[0.15em] text-[11px] relative overflow-hidden group"
-            >
-              <div className="absolute inset-0 w-full h-full bg-[#003824]/5 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
-              <span className="relative">Request Clearance</span>
-            </button>
             
             <div className="mt-8 text-center border-t border-[#262626] pt-5">
               <Link href="/login" className="text-[10px] text-[#a3a3a3] hover:text-[#4edea3] transition-colors uppercase tracking-widest font-mono">
                 Return to Login
               </Link>
             </div>
-          </form>
+          </div>
         </div>
       </div>
   )

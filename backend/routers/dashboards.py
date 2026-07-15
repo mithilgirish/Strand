@@ -6,6 +6,7 @@ All routes are fully secured and scoped to the user's tenant.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from uuid import UUID
 import httpx
 import re
 
@@ -68,12 +69,17 @@ MUTATING_KEYWORDS = (
     "DETACH",
     "DROP",
     "CALL",
+    "YIELD",
+    "LOAD",
     "LOAD CSV",
     "FOREACH",
     "ALTER",
+    "INDEX",
+    "CONSTRAINT",
     "GRANT",
     "DENY",
     "REVOKE",
+    "UNION",
     "USE",
 )
 NODE_PATTERN = re.compile(
@@ -108,13 +114,19 @@ def _inject_tenant_into_node(match: re.Match) -> str:
 def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
     """
     Ensures:
-    1. No write mutators (CREATE, MERGE, SET, DELETE, REMOVE, DETACH, DROP).
+    1. No write mutators or procedures.
     2. Tenant isolation is enforced inside the Cypher query.
     """
     if not tenant_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tenant claim is required for dashboard queries.",
+        )
+
+    if "//" in cypher or "/*" in cypher:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Comments are not allowed in queries.",
         )
 
     stripped = _strip_cypher_comments(cypher).strip()
@@ -138,6 +150,12 @@ def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Mutating query keyword '{keyword}' is not permitted.",
             )
+
+    if re.search(r"\bOR\b", upper_query):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OR clauses are restricted to prevent isolation bypass.",
+        )
 
     if "tenant_id" in stripped and "$tenant_id" not in stripped:
         raise HTTPException(
@@ -270,7 +288,7 @@ async def list_dashboards(
 # ---------------------------------------------------------------------------
 @router.get("/{dashboard_id}")
 async def get_dashboard(
-    dashboard_id: str,
+    dashboard_id: UUID,
     user: CurrentUser = Depends(get_current_user)
 ):
     """
@@ -302,7 +320,7 @@ async def get_dashboard(
 # ---------------------------------------------------------------------------
 @router.delete("/{dashboard_id}")
 async def delete_dashboard(
-    dashboard_id: str,
+    dashboard_id: UUID,
     user: CurrentUser = Depends(get_current_user)
 ):
     """

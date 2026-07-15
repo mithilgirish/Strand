@@ -6,6 +6,7 @@ import InputBar from '@/components/brain/InputBar';
 import BrainAvatar from '@/components/brain/BrainAvatar';
 import SuggestedPrompts from '@/components/brain/SuggestedPrompts';
 import { ChatMessage } from '@/components/brain/MessageBubble';
+import { createClient } from '@/utils/supabase/client';
 import {
   ShieldCheck, HardHat, Zap, FileSearch,
   Clock, Trash2, Plus, MessageSquare,
@@ -141,22 +142,65 @@ export default function BrainAgent() {
   const [isLoading, setIsLoading] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const nextMsgIdRef = useRef(1);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   // Derived: current session's messages
   const activeSession = sessions.find(s => s.id === activeSessionId) ?? null;
   const messages = activeSession?.messages ?? [];
 
-  // ── Create new session ────────────────────────────────────────────────────
-  const createSession = useCallback((firstMessage?: string): string => {
-    const id = makeSessionId();
-    const title = firstMessage ? deriveTitleFromText(firstMessage) : 'New conversation';
-    const newSession: Session = { id, title, messages: [], createdAt: new Date() };
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSessionId(id);
-    return id;
+  const fetchSessions = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data) {
+      setSessions(data.map(s => ({
+        id: s.id,
+        title: s.title,
+        messages: [],
+        createdAt: new Date(s.created_at)
+      })));
+    }
   }, []);
+
+  const fetchMessagesForSession = useCallback(async (sessionId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (data) {
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? {
+              ...s,
+              messages: data.map(m => ({
+                id: m.id,
+                sender: m.sender as 'user' | 'brain',
+                text: m.text,
+                citations: Array.isArray(m.citations) ? m.citations.map((c: any) => ({ text: c.text })) : [],
+                confidence: m.confidence as ChatMessage['confidence'] || 'Medium',
+                timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }))
+            }
+          : s
+      ));
+    }
+  }, []);
+
+  // Fetch sessions on mount
+  React.useEffect(() => {
+    void fetchSessions();
+  }, [fetchSessions]);
+
+  // Fetch messages when switching session
+  React.useEffect(() => {
+    if (activeSessionId) {
+      void fetchMessagesForSession(activeSessionId);
+    }
+  }, [activeSessionId, fetchMessagesForSession]);
 
   // ── Switch session ────────────────────────────────────────────────────────
   const switchSession = useCallback((id: string) => {
@@ -169,8 +213,10 @@ export default function BrainAgent() {
   }, []);
 
   // ── Delete a session by id ───────────────────────────────────────────────
-  const handleDeleteSession = useCallback((id: string, e: React.MouseEvent) => {
+  const handleDeleteSession = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const supabase = createClient();
+    await supabase.from('chat_sessions').delete().eq('id', id);
     setSessions(prev => prev.filter(s => s.id !== id));
     if (activeSessionId === id) setActiveSessionId(null);
     if (editingSessionId === id) setEditingSessionId(null);
@@ -186,10 +232,12 @@ export default function BrainAgent() {
   }, []);
 
   // ── Commit rename ────────────────────────────────────────────────────────
-  const handleCommitRename = useCallback(() => {
+  const handleCommitRename = useCallback(async () => {
     if (!editingSessionId) return;
     const trimmed = editTitle.trim();
     if (trimmed) {
+      const supabase = createClient();
+      await supabase.from('chat_sessions').update({ title: trimmed }).eq('id', editingSessionId);
       setSessions(prev => prev.map(s =>
         s.id === editingSessionId ? { ...s, title: trimmed } : s
       ));
@@ -213,26 +261,90 @@ export default function BrainAgent() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const handleSendMessage = useCallback(async (text: string) => {
-    // Start new session if none active
+    const supabase = createClient();
     let sessionId = activeSessionId;
-    if (!sessionId) {
-      sessionId = createSession(text);
-    }
-
-    const userMsg: ChatMessage = {
-      id: nextMsgIdRef.current++,
-      sender: 'user',
-      text,
-      timestamp: nowTime(),
-    };
-    appendMessage(sessionId, userMsg);
+    
     setIsLoading(true);
+    try {
+      if (!sessionId) {
+        const { data: newSession, error } = await supabase
+          .from('chat_sessions')
+          .insert({
+            title: deriveTitleFromText(text)
+          })
+          .select()
+          .single();
+          
+        if (error || !newSession) throw new Error("Could not create chat session");
+        
+        sessionId = newSession.id;
+        setActiveSessionId(sessionId);
+        setSessions(prev => [
+          {
+            id: newSession.id,
+            title: newSession.title,
+            messages: [],
+            createdAt: new Date(newSession.created_at)
+          },
+          ...prev
+        ]);
+      }
 
-    const brainMsg = await queryBrainApi(text);
-    brainMsg.id = nextMsgIdRef.current++;
-    appendMessage(sessionId, brainMsg);
-    setIsLoading(false);
-  }, [activeSessionId, createSession, appendMessage]);
+      // 1. Insert user message to DB
+      const { data: userMsgData } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId!,
+          sender: 'user',
+          text
+        })
+        .select()
+        .single();
+      
+      if (userMsgData) {
+        const userMsg: ChatMessage = {
+          id: userMsgData.id,
+          sender: 'user',
+          text,
+          timestamp: nowTime()
+        };
+        appendMessage(sessionId!, userMsg);
+      }
+
+      // 2. Fetch answer from API
+      const brainMsg = await queryBrainApi(text);
+
+      // 3. Insert brain answer to DB
+      const { data: brainMsgData } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId!,
+          sender: 'brain',
+          text: brainMsg.text,
+          citations: brainMsg.citations,
+          confidence: brainMsg.confidence,
+          response_time_ms: 0
+        })
+        .select()
+        .single();
+      
+      if (brainMsgData) {
+        const completedBrainMsg: ChatMessage = {
+          id: brainMsgData.id,
+          sender: 'brain',
+          text: brainMsg.text,
+          citations: brainMsg.citations,
+          confidence: brainMsg.confidence,
+          timestamp: nowTime()
+        };
+        appendMessage(sessionId!, completedBrainMsg);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeSessionId, appendMessage]);
 
   const isEmpty = messages.length === 0 && !isLoading;
 

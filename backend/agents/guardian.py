@@ -16,6 +16,7 @@ from typing import TypedDict, Optional
 from loguru import logger
 
 from backend.ingestion.parsers.pdf_parser import extract_parameters_from_pdf
+from backend.ingestion.parsers.vision_parser import analyze_drawing_with_vision
 from backend.ingestion.spec_dna.fingerprint import generate_submittal_spec_dna
 from backend.ingestion.spec_dna.chain import get_spec_dna_chain
 from backend.graph.client import neo4j_client
@@ -33,6 +34,7 @@ class GuardianState(TypedDict):
     submittal_id: str
     document_path: str
     extracted_parameters: dict
+    vision_violations: list
     violations: list
     spec_dna_chain: dict
     rfi_draft: str
@@ -40,10 +42,12 @@ class GuardianState(TypedDict):
 
 
 def extract_parameters(state: GuardianState) -> GuardianState:
-    """Step 1: Parse PDF and extract all technical parameters."""
+    """Step 1: Parse PDF and extract all technical parameters & visual anomalies."""
     params = extract_parameters_from_pdf(state["document_path"])
-    logger.info(f"Guardian: extracted {len(params)} parameters from {state['document_path']}")
-    return {**state, "extracted_parameters": params}
+    vision_violations = analyze_drawing_with_vision(state["document_path"], state["submittal_id"])
+    
+    logger.info(f"Guardian: extracted {len(params)} parameters and {len(vision_violations)} visual anomalies from {state['document_path']}")
+    return {**state, "extracted_parameters": params, "vision_violations": vision_violations}
 
 
 def check_against_spec(state: GuardianState) -> GuardianState:
@@ -95,7 +99,24 @@ def check_against_spec(state: GuardianState) -> GuardianState:
                     f"actual={actual} {operator} required={required}"
                 )
 
-    logger.info(f"Guardian: found {len(violations)} violations")
+    # Append vision anomalies directly as violations
+    for vv in state.get("vision_violations", []):
+        violation = {
+            "id": f"{state['submittal_id']}:{vv['parameter']}",
+            "submittal_id": state["submittal_id"],
+            "parameter": vv["parameter"],
+            "required": vv["required"],
+            "actual": vv["actual"],
+            "unit": "",
+            "spec_dna_id": f"VISUAL-{vv['parameter'].replace(' ', '_').upper()}",
+            "section": "Visual QA",
+            "page": 1,
+            "deviation_type": vv.get("deviation_type", "visual_anomaly"),
+        }
+        violations.append(violation)
+        logger.info(f"Guardian: VISUAL VIOLATION — {vv['parameter']}: actual={vv['actual']}")
+
+    logger.info(f"Guardian: found {len(violations)} total violations")
     return {**state, "violations": violations}
 
 
@@ -244,6 +265,7 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
         "submittal_id": submittal_id,
         "document_path": document_path,
         "extracted_parameters": {},
+        "vision_violations": [],
         "violations": [],
         "spec_dna_chain": {},
         "rfi_draft": "",
@@ -260,6 +282,7 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
         result = {
             "submittal_id": state["submittal_id"],
             "violations": state["violations"],
+            "vision_violations": state["vision_violations"],
             "r0_max": state["r0_max"],
             "rfi_draft": state["rfi_draft"],
             "spec_dna_chain": state["spec_dna_chain"],
@@ -288,6 +311,7 @@ class GuardianGraph:
         return {
             **state,
             "extracted_parameters": result.get("extracted_parameters", state.get("extracted_parameters", {})),
+            "vision_violations": result.get("vision_violations", []),
             "violations": result.get("violations", []),
             "spec_dna_chain": result.get("spec_dna_chain", {}),
             "rfi_draft": result.get("rfi_draft", ""),

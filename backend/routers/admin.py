@@ -304,14 +304,33 @@ async def change_user_role(
         )
 
     headers = _supabase_admin_headers()
-    # Call the stored function via RPC
-    rpc_url = _supabase_rest_url("rpc/promote_user_role")
-
+    
+    # 1. Verify target user exists and belongs to the admin's tenant (if caller is just 'admin')
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            rpc_url,
+        user_url = _supabase_rest_url(f"profiles?id=eq.{user_id}&select=tenant_id")
+        user_resp = await client.get(user_url, headers=headers)
+        
+        if user_resp.status_code != 200 or not user_resp.json():
+            raise HTTPException(status_code=404, detail="Target user not found.")
+            
+        target_tenant = user_resp.json()[0]["tenant_id"]
+        
+        if user.role == "admin" and target_tenant != user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admins cannot modify users outside their own tenant."
+            )
+
+    # 2. Update the user's role directly via REST (bypassing RLS with service_role)
+    patch_url = _supabase_rest_url(f"profiles?id=eq.{user_id}")
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            patch_url,
             headers=headers,
-            json={"target_user_id": user_id, "new_role": payload.new_role}
+            json={
+                "role": payload.new_role,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
         )
 
     if resp.status_code not in (200, 204):

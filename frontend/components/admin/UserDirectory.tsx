@@ -29,6 +29,7 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Form state — controlled inputs so we capture values on submit
   const [inviteEmail, setInviteEmail] = useState('');
@@ -38,8 +39,6 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
   useEffect(() => {
     const fetchUsers = async () => {
       const supabase = createClient();
-      // RLS enforces scoping server-side:
-      //   super-admin → all profiles; admin → own tenant only
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email, full_name, role, tenant_id, is_active')
@@ -63,9 +62,35 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
       setTenants(data || []);
     };
 
+    const fetchCurrentUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+    };
+
     void fetchUsers();
+    void fetchCurrentUser();
     if (isSuper) void fetchTenants();
   }, [isSuper]);
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const resp = await fetch(`/api/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, new_role: newRole }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json();
+        throw new Error(body.detail || resp.statusText);
+      }
+      // Update local state
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch (err: unknown) {
+      alert(errorMessage(err));
+    }
+  };
 
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,13 +180,30 @@ export default function UserDirectory({ tenantId, isSuper }: { tenantId: string,
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`px-2 py-1 rounded-md border text-[10px] uppercase ${
-                      u.role === 'super-admin' ? 'bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/20' :
-                      u.role === 'admin'       ? 'bg-[#e5e5e5]/10 text-[#e5e5e5] border-[#e5e5e5]/20' :
-                      'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                    }`}>
-                      {u.role}
-                    </span>
+                    {u.id === currentUserId ? (
+                      <span className="px-2.5 py-1 rounded border text-[10px] font-bold uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        {u.role} (You)
+                      </span>
+                    ) : (u.role === 'super-admin' && !isSuper) ? (
+                      <span className="px-2.5 py-1 rounded border text-[10px] font-bold uppercase bg-[#4edea3]/10 text-[#4edea3] border-[#4edea3]/20">
+                        {u.role}
+                      </span>
+                    ) : (
+                      <select
+                        value={u.role}
+                        onChange={(e) => void handleRoleChange(u.id, e.target.value)}
+                        className="bg-[#171717] border border-[#404040] rounded-md text-[#f5f5f5] font-mono text-[11px] px-2 py-1 focus:outline-none focus:border-[#4edea3] cursor-pointer"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="engineer">Engineer</option>
+                        <option value="qa-inspector">QA Inspector</option>
+                        <option value="subcontractor">Subcontractor</option>
+                        <option value="manager">Manager</option>
+                        <option value="client-owner">Client Owner</option>
+                        {isSuper && <option value="admin">Admin</option>}
+                        {isSuper && <option value="super-admin">Super Admin</option>}
+                      </select>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-[#a3a3a3]">{u.tenant_id}</td>
                   <td className="px-4 py-4">

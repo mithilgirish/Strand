@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081"
 
     # ── Demo Mode ───────────────────────────────────────────────
-    DEMO_MODE: bool = True                         # §13 — auto-approve cached writes
+    DEMO_MODE: bool = False                        # §13 — auto-approve cached writes
     LOG_LEVEL: str = "INFO"
 
     # ── Frontend (passthrough) ──────────────────────────────────

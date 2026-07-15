@@ -16,7 +16,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Layout
+  Layout,
+  Plug
 } from "lucide-react";
 
 interface SidebarProfile {
@@ -70,6 +71,7 @@ export default function Sidebar() {
     { name: "Inspector Agent", href: "/inspector", icon: ClipboardCheck },
     { name: "Brain Agent", href: "/brain", icon: MessageSquare },
     { name: "Custom Dashboard", href: "/custom-dashboards", icon: Layout },
+    { name: "Integrations", href: "/integrations", icon: Plug },
   ];
 
   if (userRole === "admin" || userRole === "super-admin") {
