@@ -907,6 +907,41 @@ function IntegrationsHubContent() {
           </div>
         </div>
       )}
+
+      {integrations.find(i => i.id === "maximo")?.status === "connected" && (
+        <div className="glass-panel p-6 mt-6 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex flex-col md:flex-row gap-5">
+            <div className="bg-primary/10 p-2 rounded-md text-primary mt-1 shadow-inner h-fit">
+              <Plug className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-on-surface font-sans flex items-center gap-2">
+                  How IBM Maximo Powers Asset Intelligence
+                  <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20">AI POWERED</span>
+                </h4>
+                <button 
+                  onClick={() => handleFetchData("maximo")}
+                  disabled={isFetchingData === "maximo"}
+                  className="px-3 py-1.5 bg-primary text-on-primary rounded-md text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-sm cursor-pointer"
+                >
+                  {isFetchingData === "maximo" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                  {isFetchingData === "maximo" ? "Syncing Work Orders..." : "Sync Work Orders"}
+                </button>
+              </div>
+              <div className="text-sm text-on-surface-variant leading-relaxed font-sans space-y-3">
+                <p>
+                  By syncing live work orders and asset histories from your IBM Maximo environment, STRAND creates a comprehensive digital thread of maintenance operations.
+                </p>
+                <p>
+                  Our <strong className="text-primary font-bold">Predictive Maintenance Engine</strong> analyzes OSLC metadata and failure codes to instantly identify critical equipment risks, automatically dispatching preventative alerts before catastrophic failures occur.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeReportModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="glass-panel max-w-md w-full p-6 rounded-lg space-y-6 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">

@@ -5,13 +5,14 @@ from loguru import logger
 from fastapi import HTTPException
 from backend.redis_client import redis_client
 from backend.config import settings
+from backend.crypto_utils import _decrypt_token
 
 class MaximoClient:
     def get_client_credentials(self):
         """Get Maximo credentials from Redis cache or environment variables."""
         config = redis_client.get_cache("maximo_config")
         if config and config.get("base_url") and config.get("api_key"):
-            return config["base_url"], config["api_key"]
+            return config["base_url"], _decrypt_token(config["api_key"])
         return os.getenv("MAXIMO_BASE_URL", ""), os.getenv("MAXIMO_API_KEY", "")
 
     def test_connection(self):
