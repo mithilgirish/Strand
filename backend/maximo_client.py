@@ -8,16 +8,17 @@ from backend.config import settings
 from backend.crypto_utils import _decrypt_token
 
 class MaximoClient:
-    def get_client_credentials(self):
+    def get_client_credentials(self, tenant_id: str = None):
         """Get Maximo credentials from Redis cache or environment variables."""
-        config = redis_client.get_cache("maximo_config")
+        cache_key = f"{tenant_id}:maximo_config" if tenant_id else "maximo_config"
+        config = redis_client.get_cache(cache_key)
         if config and config.get("base_url") and config.get("api_key"):
             return config["base_url"], _decrypt_token(config["api_key"])
         return os.getenv("MAXIMO_BASE_URL", ""), os.getenv("MAXIMO_API_KEY", "")
 
-    def test_connection(self):
+    def test_connection(self, tenant_id: str = None):
         """Tests the connection to IBM Maximo REST API."""
-        base_url, api_key = self.get_client_credentials()
+        base_url, api_key = self.get_client_credentials(tenant_id)
         
         if not base_url or not api_key:
             raise HTTPException(status_code=400, detail="Maximo credentials not fully configured")

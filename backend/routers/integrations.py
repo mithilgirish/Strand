@@ -68,18 +68,58 @@ class ConfigUpdateRequest(BaseModel):
 # ── Webhook Endpoint (Public) ────────────────────────────────────────
 
 @router.post("/autodesk/webhook")
-async def autodesk_webhook(payload: dict, background_tasks: BackgroundTasks):
+async def autodesk_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Autodesk Platform Services (APS) Data Management Webhook endpoint.
     Listens for 'dm.version.added' events when CAD drawings or Revit models are uploaded.
+    Verifies payload authenticity using HMAC-SHA256 signature check.
     """
     logger.info("Received webhook from Autodesk APS Data Management API")
     
+    body_bytes = await request.body()
+    try:
+        import json
+        payload = json.loads(body_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+        
     hook_event = payload.get("hook", {}).get("event")
-    
     if hook_event not in ["dm.version.added", "dm.version.modified"]:
         logger.info(f"Ignoring non-version event: {hook_event}")
         return {"status": "ignored", "reason": "unhandled event type"}
+
+    # Webhook signature validation
+    signature = request.headers.get("x-adsk-signature") or request.headers.get("x-adsk-signature-v1")
+    if settings.DEMO_MODE and not signature:
+        logger.warning("Bypassing webhook signature validation in DEMO_MODE.")
+    else:
+        if not signature:
+            logger.warning("Rejecting Autodesk webhook: signature header missing.")
+            raise HTTPException(status_code=401, detail="Missing signature header")
+            
+        secret = os.getenv("APS_WEBHOOK_SECRET", "") or settings.APS_WEBHOOK_SECRET
+        if secret in ["", "your_webhook_secret_here", "strand-fallback-webhook-secret-98765"]:
+            # Fall back to tenant-specific client secret
+            tenant_id = payload.get("hookAttribute", {}).get("tenant_id") or "default_tenant"
+            from backend.autodesk_client import autodesk_client
+            _, client_secret = autodesk_client.get_client_credentials(tenant_id)
+            secret = client_secret
+            
+        if not secret:
+            logger.error("Autodesk webhook validation secret not configured")
+            raise HTTPException(status_code=500, detail="Webhook validation secret not configured")
+            
+        import hmac
+        import hashlib
+        expected = hmac.new(
+            secret.encode('utf-8'),
+            body_bytes,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(expected, signature):
+            logger.warning(f"Autodesk webhook signature validation failed. Expected: {expected}, Got: {signature}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
 
     resource_urn = payload.get("resourceUrn") or payload.get("payload", {}).get("version", {}).get("id") or "unknown:urn"
     project_id = (
@@ -95,15 +135,16 @@ async def autodesk_webhook(payload: dict, background_tasks: BackgroundTasks):
     
     submittal_id = f"ACC-{int(time.time())}"
     
-    # Check if client credentials exist (either Redis or env)
-    client_id, _ = autodesk_client.get_client_credentials()
+    # Check if client credentials exist scoped by tenant if available
+    tenant_id = payload.get("hookAttribute", {}).get("tenant_id") or "default_tenant"
+    client_id, _ = autodesk_client.get_client_credentials(tenant_id)
     
     if client_id:
         # Real download path
         import tempfile
         download_path = os.path.join(tempfile.gettempdir(), f"{submittal_id}.pdf")
         try:
-            target_file_path = autodesk_client.download_file(project_id, resource_urn, download_path)
+            target_file_path = autodesk_client.download_file(project_id, resource_urn, download_path, tenant_id)
             if not target_file_path:
                 # Fallback to local baseline file if Autodesk download fails
                 target_file_path = "data/vendor_submittal_cooling_tower.pdf"
@@ -111,7 +152,7 @@ async def autodesk_webhook(payload: dict, background_tasks: BackgroundTasks):
             # Fallback to local baseline file if Autodesk client fails
             target_file_path = "data/vendor_submittal_cooling_tower.pdf"
             
-        logger.info(f"Triggering Guardian AI workflow for new drawing sheet {submittal_id}")
+        logger.info(f"Triggering Guardian AI workflow for new drawing sheet {submittal_id} for tenant {tenant_id}")
         background_tasks.add_task(run_guardian, submittal_id, target_file_path)
     
     return {
@@ -146,7 +187,7 @@ async def autodesk_callback(code: str, state: Optional[str] = None):
     
     success = False
     try:
-        token_data = autodesk_client.exchange_code(code)
+        token_data = autodesk_client.exchange_code(code, tenant_id=state)
         
         # If state provided, securely encrypt tokens and save to Supabase
         if state and token_data:
@@ -176,7 +217,7 @@ async def connect_autodesk_2legged(tenant_id: Optional[str] = None, user: Curren
     target_tenant = _get_target_tenant(user, tenant_id)
     try:
         # Validate that we can successfully fetch a token
-        token = autodesk_client.get_2legged_token()
+        token = autodesk_client.get_2legged_token(tenant_id=target_tenant)
         _upsert_tenant_integration(target_tenant, "autodesk", {"status": "connected"})
         return {"status": "success", "message": "Autodesk connected via 2-legged OAuth"}
     except Exception as e:
@@ -204,7 +245,7 @@ async def procore_callback(code: str, state: Optional[str] = None):
     
     success = False
     try:
-        token_data = procore_client.exchange_code(code)
+        token_data = procore_client.exchange_code(code, tenant_id=state)
         
         # If state provided, securely encrypt tokens and save to Supabase
         if state and token_data:
@@ -355,12 +396,12 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
 
     # Autodesk connection check
     auto_record = status_map.get("autodesk", {})
-    autodesk_connected = auto_record.get("status") == "connected" or bool(redis_client.get_cache("autodesk_token"))
+    autodesk_connected = auto_record.get("status") == "connected" or bool(redis_client.get_cache(f"{target_tenant}:autodesk_token"))
     autodesk_configured = bool(auto_record.get("config", {}).get("client_id")) or bool(os.getenv("APS_CLIENT_ID"))
 
     # Procore connection check
     pro_record = status_map.get("procore", {})
-    procore_token = redis_client.get_cache("procore_token")
+    procore_token = redis_client.get_cache(f"{target_tenant}:procore_token")
     logger.info(f"Checking procore status. DB status: {pro_record.get('status')}, Token exists in cache: {bool(procore_token)}")
     procore_connected = pro_record.get("status") == "connected" or bool(procore_token)
     procore_configured = bool(pro_record.get("config", {}).get("client_id")) or bool(os.getenv("PROCORE_CLIENT_ID"))
@@ -468,9 +509,9 @@ async def update_integrations_config(integration_id: str, config_req: ConfigUpda
         
     _upsert_tenant_integration(target_tenant, integration_id, {"config": config})
     
-    # Cache for the backend clients (e.g., autodesk_client.py, procore_client.py)
+    # Cache for the backend clients scoped by tenant
     # WARNING: Cached config contains encrypted secrets now. Clients must decrypt them.
-    redis_client.set_cache(f"{integration_id}_config", config)
+    redis_client.set_cache(f"{target_tenant}:{integration_id}_config", config)
     
     return {"status": "success", "message": f"{integration_id.capitalize()} credentials updated successfully"}
 
@@ -483,9 +524,9 @@ async def connect_integration(integration_id: str, tenant_id: Optional[str] = No
     
     # Test connection
     if integration_id == "primavera":
-        primavera_client.test_connection()
+        primavera_client.test_connection(target_tenant)
     elif integration_id == "maximo":
-        maximo_client.test_connection()
+        maximo_client.test_connection(target_tenant)
         
     _upsert_tenant_integration(target_tenant, integration_id, {"status": "connected"})
     return {"status": "success", "integration_id": integration_id, "state": "connected"}
@@ -495,8 +536,9 @@ async def disconnect_integration(integration_id: str, tenant_id: Optional[str] =
     """Disconnect an integration."""
     target_tenant = _get_target_tenant(user, tenant_id)
     
-    # Remove OAuth token from cache
-    redis_client.delete(f"cache:{integration_id}_token")
+    # Remove OAuth tokens from cache (scoped by tenant)
+    redis_client.delete(f"cache:{target_tenant}:{integration_id}_token")
+    redis_client.delete(f"cache:{target_tenant}:{integration_id}_refresh")
     
     if integration_id == "autodesk":
         records = _get_tenant_integrations(target_tenant)

@@ -50,9 +50,7 @@ export default function TopBar() {
     <header className="h-16 min-w-0 border-b border-outline-variant bg-surface-container-lowest px-3 sm:px-6 flex items-center justify-between gap-2 text-on-surface sticky top-0 z-10">
       <div className="flex min-w-0 items-center gap-2">
         <h1 className="max-w-[112px] truncate font-bold text-sm tracking-wide text-on-surface label-caps sm:max-w-none sm:text-lg">{getPageTitle()}</h1>
-        <div className="hidden shrink-0 rounded-full border border-[rgba(78,222,163,0.2)] bg-[rgba(78,222,163,0.1)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary min-[360px]:block">
-          Live Feed
-        </div>
+
       </div>
 
       {/* Agents Status Bar */}

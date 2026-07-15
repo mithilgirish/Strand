@@ -188,9 +188,7 @@ export default function RiskCockpit() {
               <Shield className="w-4 h-4 text-primary" />
               Recent Guardian Violations
             </h3>
-            <span className="text-[10px] bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-wider">
-              Live Feed
-            </span>
+      
           </div>
           
           <div className="space-y-6">
@@ -212,9 +210,7 @@ export default function RiskCockpit() {
               <CalendarClock className="w-4 h-4 text-primary" />
               Latest Scheduler Alerts
             </h3>
-            <span className="text-[10px] bg-[rgba(255,255,255,0.05)] px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-wider">
-              Live Feed
-            </span>
+    
           </div>
           
           <div className="bg-[rgba(255,255,255,0.02)] p-5 rounded-md border border-[rgba(255,255,255,0.05)] relative overflow-hidden">

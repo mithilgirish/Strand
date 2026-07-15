@@ -69,12 +69,13 @@ class PrimaveraClient:
                 logger.error(f"Response: {e.response.text}")
             raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
 
-    def test_connection(self):
+    def test_connection(self, tenant_id: str = None):
         """Tests the connection to Primavera P6 using a stored OAuth token."""
         # For a true 3-legged flow, test_connection would use the stored access token.
         # Since this is a health check endpoint, we'll assume it's connected if we have valid config.
         # In a full implementation, we'd retrieve the tenant's token from Supabase and ping an API.
-        config = redis_client.get_cache("primavera_config")
+        cache_key = f"{tenant_id}:primavera_config" if tenant_id else "primavera_config"
+        config = redis_client.get_cache(cache_key)
         if config and config.get("base_url"):
             return {"status": "success", "message": "Primavera Base URL is configured"}
             
