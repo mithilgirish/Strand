@@ -30,6 +30,13 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
     3. Spec-DNA graph context enrichment (v1.2)
     4. Related RFI lookup
     """
+    # Check cache first
+    cache_key = f"brain:{project_id}:{question.lower().strip()}"
+    cached = redis_client.get_cache(cache_key)
+    if cached:
+        logger.info(f"Brain: returning cached result for query: {question}")
+        return cached
+
     start = time.time()
 
     # Step 1: Hybrid retrieve
@@ -74,6 +81,7 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
 
     answer.response_time_ms = int((time.time() - start) * 1000)
     result = answer.model_dump()
+    redis_client.set_cache(cache_key, result, ttl=3600)
     logger.info(
         f"Brain: answered with confidence={answer.confidence}, "
         f"citations={len(answer.citations)}, spec_dna_ids={len(answer.spec_dna_ids)}"

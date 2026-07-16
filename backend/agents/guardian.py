@@ -249,6 +249,12 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
     Run the full Guardian pipeline.
     Uses idempotency lock to prevent duplicate analysis (§5.8).
     """
+    # Check cache first
+    cached = redis_client.get_cache(f"guardian:{submittal_id}")
+    if cached:
+        logger.info(f"Guardian: returning cached result for {submittal_id}")
+        return cached
+
     # Idempotency check
     lock_key = f"guardian:{submittal_id}"
     acquired = redis_client.acquire_lock(lock_key)

@@ -1,5 +1,5 @@
 """Phase 3 Inspector API routes wired to the real QA agent."""
-from __future__ import annotations
+
 
 from pathlib import Path
 from typing import Any
