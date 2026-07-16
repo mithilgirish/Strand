@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 type AgentStatus = "active" | "idle";
 
@@ -13,8 +13,10 @@ interface ProjectSummary {
 
 export default function TopBar() {
   const pathname = usePathname();
-  const [immunityScore, setImmunityScore] = useState<number | null>(null);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [showAgentDetails, setShowAgentDetails] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -24,13 +26,34 @@ export default function TopBar() {
         const response = await fetch(`${apiBase}/api/v1/project/summary`, { signal: controller.signal });
         if (!response.ok) return;
         const summary = await response.json() as ProjectSummary;
-        setImmunityScore(summary.immunity_score);
         setAgentStatuses(summary.agents);
       } catch {
         // The header keeps its neutral loading state if the API is unavailable.
       }
     }
+    async function loadUserSession() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id, role')
+            .eq('id', user.id)
+            .single();
+            
+          if (profile) {
+            setUserRole(profile.role);
+            setTenantName(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load user session for topbar", e);
+      }
+    }
+
     void loadSummary();
+    void loadUserSession();
     return () => controller.abort();
   }, []);
 
@@ -55,32 +78,71 @@ export default function TopBar() {
 
       {/* Agents Status Bar */}
       <div className="flex min-w-0 items-center gap-2 lg:gap-6">
-        <div className="hidden xl:flex items-center gap-4 bg-surface border border-outline-variant rounded-md px-4 py-1.5">
-          <span className="text-[11px] font-bold text-on-surface-variant tracking-wider uppercase">Agent Grid:</span>
-          <div className="flex items-center gap-3">
-            {agents.map((agent) => (
-              <div key={agent.name} className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
+        {/* Tenant & Role Profile Badge */}
+        {tenantName && (
+          <div className="hidden lg:flex items-center gap-3 bg-surface border border-outline-variant rounded-md px-4 py-1.5 ml-auto">
+            <div className="flex flex-col">
+              <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Tenant</span>
+              <span className="text-[11px] text-primary font-mono font-semibold">{tenantName}</span>
+            </div>
+            <div className="w-px h-5 bg-outline-variant opacity-50"></div>
+            <div className="flex flex-col">
+              <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Role</span>
+              <span className="text-[11px] text-secondary font-mono font-semibold uppercase">{userRole}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="relative">
+          <button 
+            type="button"
+            onClick={() => setShowAgentDetails(!showAgentDetails)}
+            className="hidden md:flex items-center gap-3 bg-surface border border-outline-variant rounded-md px-3 py-1.5 hover:bg-surface-container transition-colors cursor-pointer focus:outline-none" 
+            title="Click for Agent Details"
+          >
+            <span className="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">Grid:</span>
+            <div className="flex items-center gap-1.5">
+              {agents.map((agent) => (
+                <div 
+                  key={agent.name} 
+                  className="relative flex h-2.5 w-2.5" 
+                >
                   {agent.status === "active" && (
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
                   )}
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
                     agent.status === "active" ? "bg-secondary drop-shadow-[0_0_6px_rgba(78,222,163,0.50)]" : "bg-outline"
                   }`}></span>
-                </span>
-                <span className="text-xs font-semibold text-on-surface-variant mono-data uppercase">{agent.name}</span>
+                </div>
+              ))}
+            </div>
+          </button>
+
+          {/* Expanded Dropdown */}
+          {showAgentDetails && (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-outline-variant rounded-md shadow-[0_4px_24px_rgba(0,0,0,0.5)] z-50 py-2">
+              <div className="px-3 pb-2 border-b border-outline-variant/50 mb-2">
+                <span className="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">Agent System Status</span>
               </div>
-            ))}
-          </div>
+              <div className="flex flex-col gap-1 px-1">
+                {agents.map((agent) => (
+                  <div key={agent.name} className="flex items-center justify-between px-3 py-1.5 rounded-sm hover:bg-surface-container transition-colors cursor-default">
+                    <span className="text-xs font-semibold text-primary mono-data uppercase">{agent.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] uppercase font-bold tracking-wider ${agent.status === 'active' ? 'text-secondary' : 'text-on-surface-variant'}`}>
+                        {agent.status}
+                      </span>
+                      <span className={`relative flex h-2 w-2 rounded-full ${
+                        agent.status === "active" ? "bg-secondary drop-shadow-[0_0_6px_rgba(78,222,163,0.50)]" : "bg-outline"
+                      }`}></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Global Project Health summary indicator */}
-        <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-[rgba(229,229,229,0.30)] bg-[rgba(229,229,229,0.05)] px-2 py-1.5 shadow-[0_0_12px_rgba(229,229,229,0.10)] sm:gap-2 sm:px-4">
-          <ShieldCheck className="w-4 h-4 text-primary" />
-          <span className="hidden text-xs font-bold text-on-surface-variant label-caps min-[360px]:inline sm:hidden">Score:</span>
-          <span className="hidden text-xs font-bold text-on-surface-variant label-caps sm:inline">Immunity Score:</span>
-          <span className="text-sm font-extrabold text-primary mono-data">{immunityScore === null ? "--" : `${immunityScore.toFixed(1)}%`}</span>
-        </div>
       </div>
     </header>
   );

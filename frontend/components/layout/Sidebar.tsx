@@ -150,40 +150,57 @@ export default function Sidebar() {
       </div>
 
       {/* Footer Info: User Profile & Sign Out */}
-      <div className={`py-6 border-t border-outline-variant bg-surface-container-lowest transition-all duration-300 ${isExpanded ? 'px-6 flex flex-row items-center justify-between' : 'flex flex-col items-center gap-4'}`}>
-        <div className={`flex items-center group cursor-pointer relative ${isExpanded ? 'gap-3 flex-row' : 'flex-col justify-center'}`}>
-          <div className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] flex items-center justify-center shadow-inner group-hover:border-primary transition-colors flex-shrink-0 relative">
-            <span className="font-bold text-on-surface font-mono tracking-wider">{userInitial}</span>
+      <div className={`py-4 border-t border-outline-variant bg-surface-container-lowest transition-all duration-300 ${isExpanded ? 'px-4' : 'flex flex-col items-center gap-4'}`}>
+        <div className={`flex items-center group cursor-pointer transition-all duration-200 border ${isExpanded ? 'rounded-full hover:bg-surface-container hover:shadow-[0_4px_12px_rgba(0,0,0,0.5)] border-transparent hover:border-outline-variant p-1.5 gap-3 w-full justify-between' : 'rounded-full border-transparent flex-col justify-center'}`}>
+          
+          <div className={`flex items-center ${isExpanded ? 'gap-3' : ''}`}>
+            <div className="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center shadow-inner group-hover:border-primary group-hover:bg-[rgba(255,255,255,0.1)] transition-all flex-shrink-0 relative">
+              <span className="font-bold text-on-surface font-mono tracking-wider">{userInitial}</span>
+              
+              {/* Custom Tooltip for collapsed mode profile */}
+              {!isExpanded && (
+                <div className="absolute left-[calc(100%+12px)] px-3 py-1.5 bg-surface-container-high border border-outline-variant text-on-surface text-xs font-bold label-caps rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg flex items-center">
+                  {userName}
+                  <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-surface-container-high border-l border-b border-outline-variant rotate-45"></div>
+                </div>
+              )}
+            </div>
             
-            {/* Custom Tooltip for collapsed mode profile */}
-            {!isExpanded && (
-              <div className="absolute left-[calc(100%+12px)] px-3 py-1.5 bg-surface-container-high border border-outline-variant text-on-surface text-xs font-bold label-caps rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg flex items-center">
-                {userName}
-                <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-surface-container-high border-l border-b border-outline-variant rotate-45"></div>
+            {isExpanded && (
+              <div className="flex flex-col overflow-hidden">
+                <span className="font-bold tracking-widest text-on-surface uppercase text-[11px] truncate max-w-[100px]">{userName}</span>
+                <span className="text-[9px] text-on-surface-variant font-mono truncate max-w-[100px] uppercase">{userRole}</span>
               </div>
             )}
           </div>
-          
-          <div className={`flex flex-col overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 h-0'}`}>
-            <span className="font-bold tracking-widest text-on-surface uppercase text-xs truncate max-w-[120px]">{userName}</span>
-            <span className="text-[10px] text-on-surface-variant font-mono truncate max-w-[120px] uppercase">{userRole}</span>
-          </div>
+
+          {/* Action Button (Sign Out) within the pill when expanded */}
+          {isExpanded && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-red-400 hover:bg-[rgba(248,113,113,0.15)] transition-colors mr-1 opacity-0 group-hover:opacity-100"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
         
-        <button 
-          onClick={handleLogout}
-          className="relative group w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-red-400 hover:bg-[rgba(248,113,113,0.1)] transition-all flex-shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-          
-          {/* Custom Tooltip for Log Out */}
-          {!isExpanded && (
+        {/* If collapsed, logout button stays below */}
+        {!isExpanded && (
+          <button 
+            onClick={handleLogout}
+            className="relative group w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-red-400 hover:bg-[rgba(248,113,113,0.1)] transition-all flex-shrink-0 mt-2"
+          >
+            <LogOut className="w-4 h-4" />
+            
+            {/* Custom Tooltip for Log Out */}
             <div className="absolute left-[calc(100%+12px)] px-3 py-1.5 bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] text-red-400 text-xs font-bold label-caps rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg flex items-center">
               Sign Out
               <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-surface-container-lowest border-l border-b border-[rgba(248,113,113,0.2)] rotate-45"></div>
             </div>
-          )}
-        </button>
+          </button>
+        )}
       </div>
     </aside>
   );

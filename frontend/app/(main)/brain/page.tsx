@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import ChatWindow from '@/components/brain/ChatWindow';
 import InputBar from '@/components/brain/InputBar';
-import BrainAvatar from '@/components/brain/BrainAvatar';
+
 import SuggestedPrompts from '@/components/brain/SuggestedPrompts';
 import { ChatMessage } from '@/components/brain/MessageBubble';
 import { createClient } from '@/utils/supabase/client';
@@ -195,6 +195,28 @@ export default function BrainAgent() {
     void fetchSessions();
   }, [fetchSessions]);
 
+  // Escape parent layout constraints for full-bleed chat interface
+  React.useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.classList.remove('p-4', 'sm:p-6', 'lg:p-10');
+      const innerContainer = mainEl.firstElementChild as HTMLElement;
+      if (innerContainer) {
+        innerContainer.classList.remove('max-w-[1440px]', 'mx-auto');
+      }
+    }
+    return () => {
+      // Restore layout for other pages when leaving Brain
+      if (mainEl) {
+        mainEl.classList.add('p-4', 'sm:p-6', 'lg:p-10');
+        const innerContainer = mainEl.firstElementChild as HTMLElement;
+        if (innerContainer) {
+          innerContainer.classList.add('max-w-[1440px]', 'mx-auto');
+        }
+      }
+    };
+  }, []);
+
   // Fetch messages when switching session
   React.useEffect(() => {
     if (activeSessionId) {
@@ -266,16 +288,28 @@ export default function BrainAgent() {
     
     setIsLoading(true);
     try {
+      // Explicitly fetch user and tenant context to satisfy strict RLS
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) throw new Error("Authentication required.");
+
+      const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single();
+      const tenantId = profile?.tenant_id;
+
       if (!sessionId) {
         const { data: newSession, error } = await supabase
           .from('chat_sessions')
           .insert({
-            title: deriveTitleFromText(text)
+            title: deriveTitleFromText(text),
+            user_id: user.id,
+            ...(tenantId && { tenant_id: tenantId })
           })
           .select()
           .single();
           
-        if (error || !newSession) throw new Error("Could not create chat session");
+        if (error || !newSession) {
+          console.error("Supabase Error (chat_sessions insert):", error);
+          throw new Error(`Could not create chat session: ${error?.message || 'No data returned'}`);
+        }
         
         sessionId = newSession.id;
         setActiveSessionId(sessionId);
@@ -349,19 +383,19 @@ export default function BrainAgent() {
   const isEmpty = messages.length === 0 && !isLoading;
 
   return (
-    // Escape layout p-10 with negative margin; fill remaining height inside the main element
-    <div className="-m-10 flex overflow-hidden" style={{ height: 'calc(100vh - 64px)' }}>
+    // The DOM hook cleanly removes the layout padding, so we just use 100% height here
+    <div className="flex h-[calc(100vh-64px)] bg-black/40 w-full">
 
-      {/* ── Left Sidebar ─────────────────────────────────────────────────── */}
-      <aside className="w-64 flex-shrink-0 border-r border-[rgba(255,255,255,0.06)] bg-surface-container-low flex flex-col overflow-hidden">
-
+      {/* ── Left Sidebar (Glass Panel) ─────────────────────────────────── */}
+      <aside className="w-72 flex-shrink-0 bg-white/5 backdrop-blur-[12px] border-r border-white/10 shadow-[4px_0_24px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden z-10">
+        
         {/* Brain identity */}
-        <div className="p-5 border-b border-[rgba(255,255,255,0.06)]">
+        <div className="p-6 border-b border-white/10 bg-black/20">
           <div className="flex items-center gap-3 mb-3">
-            <BrainAvatar size="md" />
+
             <div>
-              <h2 className="font-black text-on-surface text-base tracking-wide">BRAIN</h2>
-              <p className="text-[10px] text-secondary font-bold uppercase tracking-widest">RAG Intelligence</p>
+              <h2 className="font-black text-on-surface text-lg tracking-wide uppercase font-primary">BRAIN</h2>
+              <p className="text-[10px] text-primary font-bold uppercase tracking-[0.08em] font-primary">RAG Intelligence</p>
             </div>
           </div>
           <p className="text-xs text-on-surface-variant leading-relaxed">
@@ -370,11 +404,11 @@ export default function BrainAgent() {
         </div>
 
         {/* New session button */}
-        <div className="p-3 border-b border-[rgba(255,255,255,0.06)]">
+        <div className="p-4 border-b border-white/10 bg-black/10">
           <button
             type="button"
             onClick={handleNewSession}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[rgba(78,222,163,0.1)] hover:bg-[rgba(78,222,163,0.18)] border border-[rgba(78,222,163,0.2)] hover:border-[rgba(78,222,163,0.35)] text-secondary text-xs font-bold uppercase tracking-wider transition-all duration-200"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-primary text-xs font-bold uppercase tracking-[0.08em] transition-all duration-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
           >
             <Plus className="w-3.5 h-3.5" />
             New Session
@@ -382,7 +416,7 @@ export default function BrainAgent() {
         </div>
 
         {/* Session list */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 bg-black/5">
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2 opacity-40">
               <MessageSquare className="w-8 h-8 text-on-surface-variant" />
@@ -390,23 +424,23 @@ export default function BrainAgent() {
             </div>
           ) : (
             <>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant px-2 mb-3">Recent</p>
-              <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-on-surface-variant px-2 mb-3">Recent</p>
+              <div className="space-y-1.5">
                 {sessions.map(session => {
                   const isActive = session.id === activeSessionId;
                   const isEditing = session.id === editingSessionId;
                   return (
                     <div
                       key={session.id}
-                      className={`group relative flex items-start gap-2 px-3 py-2.5 rounded-lg transition-all cursor-pointer ${
+                      className={`group relative flex items-start gap-2 px-3 py-3 rounded-md transition-all cursor-pointer ${
                         isActive
-                          ? 'bg-[rgba(78,222,163,0.1)] border border-[rgba(78,222,163,0.2)]'
-                          : 'hover:bg-surface-container border border-transparent'
+                          ? 'bg-white/10 border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                          : 'hover:bg-white/5 border border-transparent'
                       }`}
                       onClick={() => !isEditing && switchSession(session.id)}
                     >
-                      <Clock className={`w-3.5 h-3.5 flex-shrink-0 mt-1 transition-colors ${
-                        isActive ? 'text-secondary' : 'text-on-surface-variant group-hover:text-secondary'
+                      <Clock className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 transition-colors ${
+                        isActive ? 'text-primary' : 'text-on-surface-variant group-hover:text-primary'
                       }`} />
 
                       <div className="min-w-0 flex-1">
@@ -421,56 +455,56 @@ export default function BrainAgent() {
                                 if (e.key === 'Enter') handleCommitRename();
                                 if (e.key === 'Escape') handleCancelRename();
                               }}
-                              className="flex-1 min-w-0 bg-surface-container-high text-on-surface text-xs font-medium px-2 py-1 rounded border border-secondary/40 focus:outline-none focus:ring-1 focus:ring-secondary/60"
+                              className="flex-1 min-w-0 bg-[#0A0A0A] text-primary text-xs font-medium px-2 py-1 rounded-sm shadow-[inset_0_2px_6px_rgba(0,0,0,0.6)] border border-outline-variant focus:outline-none focus:border-primary focus:shadow-[0_0_8px_rgba(229,229,229,0.25)]"
                             />
                             <button
                               type="button"
                               onClick={handleCommitRename}
-                              className="w-5 h-5 flex items-center justify-center text-secondary hover:opacity-80 flex-shrink-0"
+                              className="w-6 h-6 flex items-center justify-center text-primary hover:opacity-80 flex-shrink-0"
                               aria-label="Save title"
                             >
-                              <Check className="w-3.5 h-3.5" />
+                              <Check className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={handleCancelRename}
-                              className="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-red-400 flex-shrink-0"
+                              className="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-white flex-shrink-0"
                               aria-label="Cancel edit"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <X className="w-4 h-4" />
                             </button>
                           </div>
                         ) : (
-                          <p className={`text-xs font-medium truncate pr-10 ${
-                            isActive ? 'text-secondary' : 'text-on-surface'
+                          <p className={`text-sm font-medium truncate pr-10 tracking-wide ${
+                            isActive ? 'text-primary' : 'text-on-surface-variant'
                           }`}>
                             {session.title}
                           </p>
                         )}
 
-                        <p className="text-[10px] text-on-surface-variant mt-0.5 font-mono">
+                        <p className="text-xs text-on-surface-variant mt-1 font-mono tracking-wide">
                           {formatRelativeTime(session.createdAt)} · {session.messages.length} msg{session.messages.length !== 1 ? 's' : ''}
                         </p>
                       </div>
 
                       {/* Action buttons — visible on hover, hidden while editing */}
                       {!isEditing && (
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
                             onClick={e => handleStartEdit(session, e)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-secondary hover:bg-[rgba(78,222,163,0.1)] transition-all"
+                            className="w-7 h-7 flex items-center justify-center rounded-sm text-on-surface-variant hover:text-primary hover:bg-white/10 transition-all"
                             aria-label="Rename session"
                           >
-                            <Pencil className="w-3 h-3" />
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={e => handleDeleteSession(session.id, e)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            className="w-7 h-7 flex items-center justify-center rounded-sm text-on-surface-variant hover:text-tertiary hover:bg-tertiary/10 transition-all"
                             aria-label="Delete session"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
@@ -483,18 +517,18 @@ export default function BrainAgent() {
         </div>
       </aside>
 
-      {/* ── Main Chat Area ────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* ── Main Chat Area (Glass Panel) ────────────────────────────────── */}
+      <div className="flex-1 bg-white/[0.02] backdrop-blur-[12px] flex flex-col overflow-hidden min-w-0">
 
         {/* Header bar */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-[rgba(255,255,255,0.06)] bg-surface-container-low flex-shrink-0">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 bg-black/20 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${activeSessionId ? 'bg-secondary animate-pulse' : 'bg-on-surface-variant'}`} />
-            <span className="text-sm font-bold text-on-surface">
+            <div className={`w-2.5 h-2.5 rounded-full ${activeSessionId ? 'bg-primary shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'bg-outline shadow-[0_0_6px_rgba(82,82,82,0.5)]'}`} />
+            <span className="text-sm font-bold text-primary tracking-wide uppercase">
               {activeSession ? activeSession.title : 'New Conversation'}
             </span>
             {messages.length > 0 && (
-              <span className="text-[10px] text-on-surface-variant font-mono">
+              <span className="text-xs text-on-surface-variant font-mono border border-white/10 px-2 py-0.5 rounded-sm bg-black/20">
                 {messages.length} message{messages.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -502,16 +536,15 @@ export default function BrainAgent() {
         </div>
 
         {/* Messages / empty state */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-8 bg-black/5">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center min-h-full text-center py-10 gap-8">
-              <div className="flex flex-col items-center gap-4">
-                <BrainAvatar size="lg" animated />
+            <div className="flex flex-col items-center justify-center min-h-full text-center py-10 gap-10">
+              <div className="flex flex-col items-center gap-5">
                 <div>
-                  <h3 className="text-2xl font-black text-on-surface tracking-wide mb-2">
+                  <h3 className="text-3xl font-black text-primary tracking-wide mb-3">
                     Ask Brain Anything
                   </h3>
-                  <p className="text-sm text-on-surface-variant max-w-md leading-relaxed">
+                  <p className="text-base text-on-surface-variant max-w-lg leading-relaxed">
                     Instant answers grounded in project specifications, engineering standards, and regulatory documents — with citations you can verify.
                   </p>
                 </div>
@@ -522,9 +555,9 @@ export default function BrainAgent() {
                 onSelect={handleSendMessage}
               />
 
-              <p className="text-[11px] text-on-surface-variant max-w-sm leading-relaxed">
+              <p className="text-xs text-on-surface-variant max-w-md leading-relaxed font-mono">
                 Brain uses Retrieval-Augmented Generation (RAG) to search across{' '}
-                <span className="text-secondary font-bold">847 project documents</span> before answering.
+                <span className="text-primary font-bold">847 project documents</span> before answering.
               </p>
             </div>
           ) : (
@@ -533,7 +566,7 @@ export default function BrainAgent() {
         </div>
 
         {/* Input bar */}
-        <div className="flex-shrink-0 px-6 py-4 border-t border-[rgba(255,255,255,0.06)] bg-surface-container-low">
+        <div className="flex-shrink-0 px-8 py-6 border-t border-white/10 bg-black/20">
           <InputBar onSend={handleSendMessage} disabled={isLoading} />
         </div>
       </div>
