@@ -45,3 +45,7 @@ Thumbs.db
 
 # Agent skills
 .agents/
+
+# Security - Ignore seed scripts with credentials
+scripts/create_super_admin.py
+scripts/seed_test_users.py
