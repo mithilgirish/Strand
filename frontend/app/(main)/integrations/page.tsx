@@ -18,6 +18,12 @@ interface Integration {
   configured?: boolean;
 }
 
+interface IntegrationConfig {
+  client_id?: string;
+  base_url?: string;
+  username?: string;
+}
+
 function IntegrationsHubContent() {
   const [integrations, setIntegrations] = useState<Integration[]>([
     {
@@ -62,7 +68,7 @@ function IntegrationsHubContent() {
   const [configForm, setConfigForm] = useState({
     client_id: "", client_secret: "", base_url: "", username: "", password: "", api_key: ""
   });
-  const [configs, setConfigs] = useState<any>({});
+  const [configs, setConfigs] = useState<Record<string, IntegrationConfig>>({});
   const [loading, setLoading] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [isFetchingData, setIsFetchingData] = useState<string | null>(null);
