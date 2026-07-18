@@ -71,6 +71,7 @@ def forecast_delays(state: SchedulerState) -> SchedulerState:
                 "task_id": task_id,
                 "task_name": data.get("task_name", ""),
                 "delay_probability": round(delay_prob, 2),
+                "confidence_score": round(min(0.98, 0.65 + delay_prob * 0.3), 2),
                 "expected_delay_days": _estimate_delay_days(data),
                 "on_critical_path": task_id in state["critical_path"],
                 "discipline": data.get("discipline", ""),

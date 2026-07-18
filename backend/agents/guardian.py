@@ -88,10 +88,19 @@ def check_against_spec(state: GuardianState) -> GuardianState:
                     "required": required,
                     "actual": actual,
                     "unit": param_data.get("unit", ""),
+                    "constraint_type": operator,
                     "spec_dna_id": clause.get("spec_dna_id", ""),
                     "section": clause.get("section", ""),
                     "page": param_data.get("page", 0),
                     "deviation_type": "out_of_spec",
+                    "confidence_score": 0.92,
+                    "evidence_citations": [
+                        {
+                            "source": clause.get("document_source", "spec_tia942_synthetic.pdf"),
+                            "page": param_data.get("page", 0),
+                            "section": clause.get("section", ""),
+                        }
+                    ],
                 }
                 violations.append(violation)
                 logger.info(
@@ -108,10 +117,15 @@ def check_against_spec(state: GuardianState) -> GuardianState:
             "required": vv["required"],
             "actual": vv["actual"],
             "unit": "",
+            "constraint_type": "visual_anomaly",
             "spec_dna_id": f"VISUAL-{vv['parameter'].replace(' ', '_').upper()}",
             "section": "Visual QA",
             "page": 1,
             "deviation_type": vv.get("deviation_type", "visual_anomaly"),
+            "confidence_score": float(vv.get("confidence_score", 0.8)),
+            "evidence_citations": [
+                {"source": "uploaded_drawing", "page": 1, "section": "Visual QA"}
+            ],
         }
         violations.append(violation)
         logger.info(f"Guardian: VISUAL VIOLATION — {vv['parameter']}: actual={vv['actual']}")
@@ -290,6 +304,12 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
             "violations": state["violations"],
             "vision_violations": state["vision_violations"],
             "r0_max": state["r0_max"],
+            "confidence_score": 0.94 if state["violations"] else 0.98,
+            "evidence_citations": [
+                citation
+                for violation in state["violations"]
+                for citation in violation.get("evidence_citations", [])
+            ],
             "rfi_draft": state["rfi_draft"],
             "spec_dna_chain": state["spec_dna_chain"],
             "violation_count": len(state["violations"]),

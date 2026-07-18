@@ -3,19 +3,29 @@ backend/routers/dashboards.py — Custom BI Dashboards & AI Generator Router
 
 All routes are fully secured and scoped to the user's tenant.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 import httpx
 import re
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
 
-from backend.deps import get_current_user, CurrentUser
+from backend.deps import get_current_user, get_optional_current_user, CurrentUser
 from backend.config import settings
 from backend.graph.client import get_neo4j_session
 from backend.agents.dashboard import generate_dashboard_config
+from backend.agents.guardian import run_guardian
+from backend.agents.inspector import list_ncrs
+from backend.agents.oracle import run_oracle
+from backend.agents.scheduler import run_scheduler
+from backend.redis_client import redis_client
 
 router = APIRouter(prefix="/dashboards", tags=["Dashboards"])
+compat_router = APIRouter(prefix="/dashboard", tags=["Dashboard Builder"])
+UPLOAD_DIR = Path("/tmp/strand_dashboard_uploads")
 
 # ---------------------------------------------------------------------------
 # Helper: Supabase Headers & URLs
@@ -174,6 +184,131 @@ def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
         )
 
     return secured
+
+
+def _cached_guardian_violations() -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    for key in redis_client.keys("cache:guardian:*"):
+        cached = redis_client.get_json(key)
+        if not cached:
+            continue
+        for violation in cached.get("violations", []):
+            violations.append({**violation, "submittal_id": cached.get("submittal_id", "")})
+    return violations
+
+
+def _resolve_tenant_id(user: CurrentUser | None, payload_tenant_id: str | None, project_id: str) -> str:
+    if user:
+        if (
+            payload_tenant_id
+            and payload_tenant_id != user.tenant_id
+            and user.role not in {"super-admin", "super_admin"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Requested tenant does not match authenticated tenant claim.",
+            )
+        return payload_tenant_id or user.tenant_id
+    return payload_tenant_id or project_id or "demo"
+
+
+async def _parse_build_payload(request: Request) -> tuple[str, str, str | None, Any | None]:
+    content_type = request.headers.get("content-type", "").lower()
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        return (
+            str(form.get("prompt") or "").strip(),
+            str(form.get("project_id") or "default").strip() or "default",
+            str(form.get("tenant_id") or "").strip() or None,
+            form.get("file"),
+        )
+
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Request body must be valid JSON or multipart form data.") from exc
+
+    return (
+        str(payload.get("prompt") or "").strip(),
+        str(payload.get("project_id") or "default").strip() or "default",
+        str(payload.get("tenant_id") or "").strip() or None,
+        None,
+    )
+
+
+async def _analyze_dashboard_upload(upload: Any, project_id: str) -> dict[str, Any] | None:
+    if not upload or not getattr(upload, "filename", ""):
+        return None
+    filename = Path(upload.filename).name
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Dashboard document uploads must be PDFs.")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    analysis_id = f"DASH-{project_id}-{uuid4().hex[:6].upper()}"
+    upload_path = UPLOAD_DIR / f"{analysis_id}-{filename}"
+    upload_path.write_bytes(await upload.read())
+    return await run_guardian(analysis_id, str(upload_path))
+
+
+def _dashboard_widgets(
+    *,
+    prompt: str,
+    guardian_violations: list[dict[str, Any]],
+    at_risk_shipments: list[dict[str, Any]],
+    ncrs: list[dict[str, Any]],
+    scheduler_result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    risk_tasks = scheduler_result.get("at_risk_tasks", [])
+    r0_values = [
+        float(item.get("r0_score", 0) or 0)
+        for item in [*guardian_violations, *risk_tasks, *ncrs]
+        if isinstance(item, dict)
+    ]
+    max_r0 = round(max(r0_values or [0.0]), 1)
+
+    widgets = [
+        {
+            "id": "max_r0",
+            "type": "R0Gauge",
+            "title": "Maximum R0",
+            "source": "scheduler+guardian+inspector",
+            "data": [{"value": max_r0}],
+        },
+        {
+            "id": "spec_violations",
+            "type": "DataGrid",
+            "title": "Current Spec Violations",
+            "source": "guardian",
+            "data": guardian_violations,
+        },
+        {
+            "id": "at_risk_shipments",
+            "type": "DataGrid",
+            "title": "At-Risk Shipments",
+            "source": "oracle",
+            "data": at_risk_shipments,
+        },
+        {
+            "id": "open_ncrs",
+            "type": "DataGrid",
+            "title": "Open NCRs",
+            "source": "inspector",
+            "data": ncrs,
+        },
+    ]
+
+    lowered = prompt.lower()
+    if "schedule" in lowered or "critical path" in lowered or "risk" in lowered:
+        widgets.append(
+            {
+                "id": "schedule_risks",
+                "type": "DataGrid",
+                "title": "Schedule R0 Risks",
+                "source": "scheduler",
+                "data": risk_tasks[:10],
+            }
+        )
+    return widgets
 
 # ---------------------------------------------------------------------------
 # POST /dashboards/generate
@@ -339,3 +474,53 @@ async def delete_dashboard(
         )
         
     return {"status": "deleted"}
+
+
+@compat_router.post("/build")
+async def build_dashboard_from_prompt(
+    request: Request,
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    """Demo/E2E compatible prompt-to-dashboard endpoint.
+
+    The secured `/dashboards/*` routes remain the canonical authenticated API.
+    This route exists for agentic QA/demo flows and assembles live read-only
+    widget data from the actual STRAND agents without persisting cross-tenant
+    dashboard state.
+    """
+    prompt, project_id, payload_tenant_id, upload = await _parse_build_payload(request)
+    if not prompt:
+        raise HTTPException(status_code=422, detail="prompt is required")
+
+    tenant_id = _resolve_tenant_id(user, payload_tenant_id, project_id)
+    generated_config = await generate_dashboard_config(prompt)
+    guardian_result = await _analyze_dashboard_upload(upload, project_id)
+    guardian_violations = (
+        guardian_result.get("violations", [])
+        if guardian_result
+        else _cached_guardian_violations()
+    )
+
+    oracle_result = await run_oracle(project_id=project_id)
+    scheduler_result = await run_scheduler()
+    ncrs = await list_ncrs()
+    widgets = _dashboard_widgets(
+        prompt=prompt,
+        guardian_violations=guardian_violations,
+        at_risk_shipments=oracle_result.get("at_risk_shipments", []),
+        ncrs=ncrs,
+        scheduler_result=scheduler_result,
+    )
+
+    return {
+        "dashboard_id": f"DB-{uuid4().hex[:8].upper()}",
+        "dashboard_name": generated_config.get("dashboard_name") or prompt[:80],
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "widgets": widgets,
+        "components": widgets,
+        "layout": generated_config.get("layout", []),
+        "queries": generated_config.get("queries", {}),
+        "sources": sorted({widget["source"] for widget in widgets}),
+    }

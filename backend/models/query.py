@@ -15,6 +15,7 @@ class QueryRequest(BrainQuery):
 
 
 class Citation(BaseModel):
+    source: str = ""
     document: str = ""
     page: int = 0
     section: str = ""

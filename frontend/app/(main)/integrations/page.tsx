@@ -18,6 +18,12 @@ interface Integration {
   configured?: boolean;
 }
 
+interface IntegrationConfig {
+  client_id?: string;
+  base_url?: string;
+  username?: string;
+}
+
 function IntegrationsHubContent() {
   const [integrations, setIntegrations] = useState<Integration[]>([
     {
@@ -62,7 +68,7 @@ function IntegrationsHubContent() {
   const [configForm, setConfigForm] = useState({
     client_id: "", client_secret: "", base_url: "", username: "", password: "", api_key: ""
   });
-  const [configs, setConfigs] = useState<any>({});
+  const [configs, setConfigs] = useState<Record<string, IntegrationConfig>>({});
   const [loading, setLoading] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [isFetchingData, setIsFetchingData] = useState<string | null>(null);
@@ -170,6 +176,7 @@ function IntegrationsHubContent() {
 
   useEffect(() => {
     if (selectedTenant) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchStatus();
       fetchConfigs();
     }
@@ -404,7 +411,7 @@ function IntegrationsHubContent() {
             Integrations Hub
           </h2>
           <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
-            Connect STRAND's AI core to your existing construction technology stack.
+            Connect STRAND&apos;s AI core to your existing construction technology stack.
           </p>
         </div>
         
