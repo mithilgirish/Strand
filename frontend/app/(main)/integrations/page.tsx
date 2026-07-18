@@ -170,6 +170,7 @@ function IntegrationsHubContent() {
 
   useEffect(() => {
     if (selectedTenant) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchStatus();
       fetchConfigs();
     }
@@ -404,7 +405,7 @@ function IntegrationsHubContent() {
             Integrations Hub
           </h2>
           <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
-            Connect STRAND's AI core to your existing construction technology stack.
+            Connect STRAND&apos;s AI core to your existing construction technology stack.
           </p>
         </div>
         

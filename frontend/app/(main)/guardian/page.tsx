@@ -22,84 +22,63 @@ function GuardianAgentContent() {
   const [analysis, setAnalysis] = useState<GuardianResult | null>(null);
   const [selectedViolation, setSelectedViolation] = useState<GuardianViolation | null>(null);
   const [error, setError] = useState('');
+  const [loadingReference, setLoadingReference] = useState(false);
 
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const drawingParam = searchParams.get("drawingId") || searchParams.get("submittalId") || searchParams.get("refId");
-    if (drawingParam === "cooling-tower-submittal" || drawingParam === "cooling-tower") {
-      const seededResult = {
-        submittal_id: "ACC_Submittal_CoolingTower_REV2.pdf",
-        violation_count: 1,
-        status: "violation",
-        r0_max: 2.4,
-        violations: [
-          {
-            id: "viol_ct_01",
-            submittal_id: "ACC_Submittal_CoolingTower_REV2.pdf",
-            parameter: "ambient_temperature_max",
-            required: 50.0,
-            actual: 45.0,
-            unit: "°C",
-            section: "5.3.1",
-            r0_score: 3.5,
-            severity: "Critical",
-            deviation_type: "HVAC Thermal Threshold Limit"
-          }
-        ],
-        rfi_draft: `REQUEST FOR INFORMATION (RFI)
-Project: STRAND-DC-01
-Subject: Cooling Tower Peak Temperature Threshold Mismatch
+    const ref = searchParams.get("drawingId") || searchParams.get("submittalId") || searchParams.get("refId");
+    if (!ref) return;
 
-DESCRIPTION:
-During STRAND AI review of Autodesk submittal "ACC_Submittal_CoolingTower_REV2.pdf", a specification mismatch was detected on TIA-942 HVAC requirements.
+    const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const refKey = normalise(ref);
 
-The submittal documentation specifies maximum operating ambient air temperature limit of 45.0°C. However, the project specification for thermal clearances (Section 5.3.1) mandates a minimum design threshold of 50.0°C.
+    const loadLiveReference = async () => {
+      setLoadingReference(true);
+      setError("");
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiBase}/api/v1/guardian/violations`);
+        if (!response.ok) throw new Error(`Guardian lookup failed: ${response.status}`);
+        const payload = await response.json();
+        const violations = Array.isArray(payload.violations) ? payload.violations as GuardianViolation[] : [];
+        const matches = violations.filter((violation) => {
+          const haystack = [
+            violation.id,
+            violation.submittal_id,
+            violation.parameter,
+            violation.section,
+          ].map((value) => normalise(String(value || ""))).join(" ");
+          return haystack.includes(refKey);
+        });
 
-IMPACT:
-Running equipment under peak summer load with a 45°C limit increases the probability of thermal trip, introducing severe operational risk to the data hall critical path.
-
-REQUESTED ACTION:
-Please confirm if the manufacturer can supply cooling modules certified up to 50.0°C, or provide alternative compliance submittal records.`,
-        spec_dna_chain: {
-          nodes: [
-            { id: "clause", label: "SpecClause", text: "TIA-942 Section 5.3.1", value: ">= 50°C" },
-            { id: "submittal", label: "VendorSubmittal", text: "ACC_Submittal_CoolingTower_REV2.pdf", value: "45°C" },
-            { id: "violation", label: "Violation", text: "ambient_temperature_max Mismatch" },
-            { id: "rfi", label: "RfiDraft", text: "RFI-2026-042 (Air Temp Limit)" }
-          ],
-          edges: [
-            { source: "clause", target: "violation" },
-            { source: "submittal", target: "violation" },
-            { source: "violation", target: "rfi" }
-          ]
+        if (!matches.length) {
+          setAnalysis(null);
+          setSelectedViolation(null);
+          setError(`No live Guardian analysis found for "${ref}". Upload the source PDF to run the real agent.`);
+          return;
         }
-      };
-      setAnalysis(seededResult as any);
-      setSelectedViolation(seededResult.violations[0] as any);
-    } else if (drawingParam === "switchgear-layout" || drawingParam === "switchgear") {
-      const seededResult = {
-        submittal_id: "ACC_Electrical_Switchgear_Layout.dwg",
-        violation_count: 0,
-        status: "compliant",
-        r0_max: 0,
-        violations: [],
-        rfi_draft: "",
-        spec_dna_chain: {
-          nodes: [
-            { id: "clause", label: "SpecClause", text: "TIA-942 Spacing Guideline", value: "Clearance >= 3.0ft" },
-            { id: "submittal", label: "VendorSubmittal", text: "ACC_Electrical_Switchgear_Layout.dwg", value: "3.2ft" },
-            { id: "verdict", label: "Verdict", text: "Compliant Spacing Verification" }
-          ],
-          edges: [
-            { source: "clause", target: "verdict" },
-            { source: "submittal", target: "verdict" }
-          ]
-        }
-      };
-      setAnalysis(seededResult as any);
-      setSelectedViolation(null);
-    }
+
+        const rfiResponse = await fetch(`${apiBase}/api/v1/guardian/rfi/${encodeURIComponent(matches[0].id)}`);
+        const rfiPayload = rfiResponse.ok ? await rfiResponse.json() : {};
+        setAnalysis({
+          submittal_id: matches[0].submittal_id || ref,
+          violation_count: matches.length,
+          status: "analyzed",
+          r0_max: Math.max(...matches.map((violation) => Number(violation.r0_score || 0))),
+          violations: matches,
+          rfi_draft: typeof rfiPayload.rfi_draft === "string" ? rfiPayload.rfi_draft : "",
+          spec_dna_chain: {},
+        });
+        setSelectedViolation(matches[0]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Guardian lookup failed.');
+      } finally {
+        setLoadingReference(false);
+      }
+    };
+
+    void loadLiveReference();
   }, [searchParams]);
 
   const handleUpload = async (file: File) => {
@@ -155,6 +134,7 @@ Please confirm if the manufacturer can supply cooling modules certified up to 50
           {!analysis ? (
             <div className="bg-surface-container rounded-xl p-6 border border-outline-variant shadow-lg">
               <UploadZone onUpload={handleUpload} />
+              {loadingReference && <p className="mt-3 text-sm text-on-surface-variant">Loading live Guardian reference...</p>}
               {error && <p className="mt-3 text-sm text-tertiary">{error}</p>}
             </div>
           ) : (

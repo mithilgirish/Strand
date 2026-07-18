@@ -21,6 +21,10 @@ interface Session {
   createdAt: Date;
 }
 
+interface StoredCitation {
+  text?: string;
+}
+
 // ─── Suggested prompts ────────────────────────────────────────────────────────
 const SUGGESTED_PROMPTS = [
   {
@@ -52,10 +56,6 @@ const SUGGESTED_PROMPTS = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function nowTime() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function makeSessionId() {
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function deriveTitleFromText(text: string): string {
@@ -105,34 +105,7 @@ async function queryBrainApi(question: string): Promise<ChatMessage> {
     };
   }
 
-  // ── Demo fallback (backend offline) ──
-  const lower = question.toLowerCase();
-  let demoText = '';
-  let demoCitations: { text: string }[] = [];
-  let demoConfidence: ChatMessage['confidence'] = 'High';
-
-  if (lower.includes('fire') || lower.includes('suppression') || lower.includes('ups')) {
-    demoText = `**Based on project specification DS-2026-FIRE-003:**\n\nThe UPS room requires a **clean agent suppression system** (FM-200 or equivalent) meeting NFPA 2001 standards.\n\nKey requirements:\n- System must achieve minimum design concentration of **8.5% by volume**\n- Discharge time must not exceed **10 seconds**\n- Room must maintain integrity for a hold time of **10 minutes** post-discharge\n- Pre-discharge alarm must sound for a minimum of **30 seconds** before activation\n\nThe system must be integrated with the Building Management System (BMS) for alarm propagation and automatic HVAC shutdown.`;
-    demoCitations = [{ text: 'DS-2026-FIRE-003 §4.2 p.12' }, { text: 'NFPA 2001 §5.4 p.38' }];
-  } else if (lower.includes('earthing') || lower.includes('generator') || lower.includes('electrical')) {
-    demoText = `**Earthing Specifications — Tier IV (IEC 60364-5-54):**\n\nAll generators must be earthed in accordance with **TN-S system** topology:\n- Main protective conductor cross-section: minimum **150mm²** copper\n- Earth electrode resistance: **≤ 1Ω** at each generator pad\n- Bonding conductor between generator frame and building earth bar: **70mm² copper minimum**\n\n**Testing**: Earth loop impedance must be tested before energisation and results recorded in the commissioning log.`;
-    demoCitations = [{ text: 'IEC 60364-5-54 §543 p.22' }, { text: 'BS 7671:2018 §411.4' }];
-  } else if (lower.includes('cooling') || lower.includes('water')) {
-    demoText = `**Cooling Tower Water Treatment (AS/NZS 3666.3):**\n\nThe project cooling towers require a comprehensive water treatment programme:\n- **Biocide dosing**: minimum weekly oxidising biocide + monthly non-oxidising\n- **Conductivity control**: blowdown set-point 1500–2500 μS/cm\n- **pH target**: 7.0 – 8.5\n- **Legionella monitoring**: fortnightly ATP testing, quarterly culture testing\n\nAll treatment records must be maintained in the O&M manual and inspected quarterly.`;
-    demoCitations = [{ text: 'AS/NZS 3666.3 §5.3 p.14' }, { text: 'HSE ACOP L8 §7.2' }];
-  } else {
-    demoText = `I've searched across **847 project documents** for your query.\n\nThis question covers areas across multiple specification sections. For a precise answer, please provide more specific context — for example, the trade, building zone, or regulation reference you are working with.\n\nIf the backend is connected, Brain will return a grounded answer with precise citations from your project documents.`;
-    demoConfidence = 'Medium';
-  }
-
-  return {
-    id: Date.now(),
-    sender: 'brain',
-    text: demoText,
-    citations: demoCitations,
-    confidence: demoConfidence,
-    timestamp: nowTime(),
-  };
+  throw new Error('Brain backend unavailable or returned an invalid response.');
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -180,7 +153,7 @@ export default function BrainAgent() {
                 id: m.id,
                 sender: m.sender as 'user' | 'brain',
                 text: m.text,
-                citations: Array.isArray(m.citations) ? m.citations.map((c: any) => ({ text: c.text })) : [],
+                citations: Array.isArray(m.citations) ? (m.citations as StoredCitation[]).map((c) => ({ text: c.text || '' })) : [],
                 confidence: m.confidence as ChatMessage['confidence'] || 'Medium',
                 timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               }))
@@ -192,6 +165,7 @@ export default function BrainAgent() {
 
   // Fetch sessions on mount
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchSessions();
   }, [fetchSessions]);
 
@@ -220,6 +194,7 @@ export default function BrainAgent() {
   // Fetch messages when switching session
   React.useEffect(() => {
     if (activeSessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void fetchMessagesForSession(activeSessionId);
     }
   }, [activeSessionId, fetchMessagesForSession]);
@@ -375,6 +350,16 @@ export default function BrainAgent() {
       }
     } catch (err) {
       console.error(err);
+      if (sessionId) {
+        appendMessage(sessionId, {
+          id: Date.now(),
+          sender: 'brain',
+          text: err instanceof Error ? err.message : 'Brain request failed.',
+          citations: [],
+          confidence: 'Low',
+          timestamp: nowTime()
+        });
+      }
     } finally {
       setIsLoading(false);
     }
