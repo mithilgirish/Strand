@@ -102,6 +102,40 @@ brain_agent = BrainAgent()
 def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]) -> BrainAnswer:
     """Return a deterministic grounded answer when no LLM key/service is available."""
     lowered = question.lower()
+    domain_terms = (
+        "tia-942",
+        "ups",
+        "fire",
+        "suppression",
+        "fm-200",
+        "novec",
+        "cooling",
+        "ambient",
+        "temperature",
+        "generator",
+        "fuel",
+        "rfi",
+        "ncr",
+        "submittal",
+        "shipment",
+        "schedule",
+        "critical path",
+        "commissioning",
+        "spec",
+        "requirement",
+    )
+    if not any(term in lowered for term in domain_terms):
+        return BrainAnswer(
+            answer=(
+                "I do not have information on that in the ingested STRAND project documents. "
+                "Ask about project specifications, RFIs, submittals, shipments, schedule risks, or commissioning records."
+            ),
+            citations=[],
+            related_rfis=[],
+            confidence="Low",
+            spec_dna_ids=[],
+        )
+
     fire_chunk = next(
         (
             chunk for chunk in chunks
@@ -118,6 +152,39 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
             "FM-200 or Novec 1230. [Doc: spec_tia942_synthetic.pdf, Page: 1, §7.4.2]"
         )
         source_chunk = fire_chunk or demo_spec_chunks("fire suppression UPS room")[0]
+    elif "violat" in lowered and ("ambient" in lowered or "cooling" in lowered or "temperature" in lowered):
+        answer_text = (
+            "A cooling tower ambient-temperature deviation should be treated as a spec compliance issue: "
+            "Guardian flags the submittal, computes R0 impact against downstream work, and drafts an RFI/NCR workflow if the variance is not accepted. "
+            "[Doc: spec_tia942_synthetic.pdf, Page: 1, §6.7.1]"
+        )
+        source_chunk = next(
+            (
+                chunk for chunk in chunks
+                if "ambient" in chunk.get("text", "").lower()
+                or "temperature" in chunk.get("text", "").lower()
+            ),
+            demo_spec_chunks("ambient temperature cooling tower")[0],
+        )
+    elif "ambient" in lowered or "cooling" in lowered or "temperature" in lowered:
+        answer_text = (
+            "The project requirement is maximum ambient operating temperature of 50°C for the relevant cooling/plant equipment. "
+            "[Doc: spec_tia942_synthetic.pdf, Page: 1, §6.7.1]"
+        )
+        source_chunk = next(
+            (
+                chunk for chunk in chunks
+                if "ambient" in chunk.get("text", "").lower()
+                or "temperature" in chunk.get("text", "").lower()
+            ),
+            demo_spec_chunks("ambient temperature cooling tower")[0],
+        )
+    elif "tia-942" in lowered:
+        answer_text = (
+            "TIA-942 is the project data-centre standard used by STRAND to ground requirements such as redundancy, environmental limits, fire suppression, and commissioning evidence. "
+            "[Doc: spec_tia942_synthetic.pdf, Page: 1, §Project Basis]"
+        )
+        source_chunk = chunks[0] if chunks else demo_spec_chunks("TIA-942 data center standard")[0]
     else:
         source_chunk = chunks[0] if chunks else demo_spec_chunks(question)[0]
         meta = source_chunk.get("metadata", {})
@@ -135,6 +202,7 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
         answer=answer_text,
         citations=[
             {
+                "source": citation_doc,
                 "document": citation_doc,
                 "page": citation_page,
                 "section": section,

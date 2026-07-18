@@ -249,6 +249,9 @@ def _synthesize_response(
     for r in subtask_results:
         if r.get("status") == "completed":
             result = r.get("result", {})
+            if r["agent"] == "brain" and isinstance(result, dict) and result.get("answer"):
+                response_parts.append(result["answer"])
+                continue
             response_parts.append(f"**{r['agent'].title()}**: Completed successfully.")
         else:
             response_parts.append(f"**{r['agent'].title()}**: Failed — {r.get('error', 'unknown')}")
@@ -256,12 +259,18 @@ def _synthesize_response(
     if approval_id:
         response_parts.append(f"**Action requires approval**: A pending approval request ({approval_id}) has been created.")
 
+    synthesized = "\n".join(response_parts) if response_parts else "No agents were invoked."
+    completed_count = sum(1 for r in subtask_results if r.get("status") == "completed")
+
     return {
         "query": query,
         "intent": intent.intent,
-        "response": "\n".join(response_parts) if response_parts else "No agents were invoked.",
+        "response": synthesized,
+        "answer": synthesized,
+        "synthesized_output": synthesized,
         "subtask_results": subtask_results,
         "judge_verdict": judge_verdict,
         "approval_id": approval_id,
+        "confidence_score": round(0.45 + min(0.5, completed_count * 0.2), 2),
         "status": "pending_approval" if approval_id else "completed",
     }
