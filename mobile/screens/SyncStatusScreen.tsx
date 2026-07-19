@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
 
 export default function SyncStatusScreen({ navigation }: any) {
@@ -37,6 +38,8 @@ export default function SyncStatusScreen({ navigation }: any) {
     setLoading(true);
     let successCount = 0;
     try {
+      const headers = await buildJsonAuthHeaders();
+
       // Loop and sync each local NCR to the backend
       for (const ncr of localNcrs) {
         const controller = new AbortController();
@@ -44,9 +47,7 @@ export default function SyncStatusScreen({ navigation }: any) {
         
         const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             transcript: ncr.transcript,
             equipment_tag: ncr.equipment_tag,

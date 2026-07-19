@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityInd
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
 
 export default function NcrLogScreen({ route, navigation }: any) {
@@ -84,12 +85,11 @@ export default function NcrLogScreen({ route, navigation }: any) {
       // Attempt connection to the backend server with a 3s timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const headers = await buildJsonAuthHeaders();
       
       const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           transcript: transcript,
           equipment_tag: equipmentTag,
