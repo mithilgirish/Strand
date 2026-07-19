@@ -31,12 +31,12 @@ export default function RiskCockpit() {
   const [violations, setViolations] = useState<GuardianViolation[]>([]);
   const [topAlert, setTopAlert] = useState<SchedulerAlert | null>(null);
   const [loading, setLoading] = useState(true);
-  const [agents, setAgents] = useState([
-    { name: 'Guardian', status: 'active' as const },
-    { name: 'Scheduler', status: 'active' as const },
-    { name: 'Oracle', status: 'active' as const },
-    { name: 'Inspector', status: 'active' as const },
-    { name: 'Brain', status: 'active' as const },
+  const [agents, setAgents] = useState<{ name: string; status: 'active' | 'idle' }[]>([
+    { name: 'Guardian', status: 'active' },
+    { name: 'Scheduler', status: 'active' },
+    { name: 'Oracle', status: 'active' },
+    { name: 'Inspector', status: 'active' },
+    { name: 'Brain', status: 'active' },
   ]);
 
   useEffect(() => {
