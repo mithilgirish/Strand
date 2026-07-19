@@ -140,6 +140,7 @@ LIMIT 3
 GET_OPEN_NCRS = """
 MATCH (n:NCR)
 WHERE n.status IN ['open', 'pending_approval']
+  AND n.tenant_id = $tenant_id
 OPTIONAL MATCH (n)-[:REFERENCES]->(c:ContractClause)
 OPTIONAL MATCH (s:VendorSubmittal)-[:VIOLATES]->(c)
 RETURN n.ncr_id as ncr_id,

@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from jose import JWTError
 
 from backend.agents.inspector import close_checklist_session, get_checklist
-from backend.deps import _current_user_from_payload
+from backend.deps import CurrentUser, _current_user_from_payload, get_current_user
 from backend.main import app
 from backend.routers.dashboards import sanitize_and_inject_tenant
 
@@ -55,6 +55,20 @@ class InspectorAgentTests(unittest.TestCase):
 
 
 class InspectorRouteWiringTests(unittest.TestCase):
+    def setUp(self):
+        async def test_user():
+            return CurrentUser(
+                id="qa-user",
+                email="qa@example.com",
+                tenant_id="tenant_a",
+                role="qa-inspector",
+            )
+
+        app.dependency_overrides[get_current_user] = test_user
+
+    def tearDown(self):
+        app.dependency_overrides.pop(get_current_user, None)
+
     def test_ncr_route_awaits_agent_function(self):
         async def run_request():
             with patch(
@@ -85,7 +99,13 @@ class InspectorRouteWiringTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["ncr_id"], "NCR-TEST")
-        agent_mock.assert_awaited_once()
+        agent_mock.assert_awaited_once_with(
+            transcript="Fuel consumption reads high",
+            equipment_tag="GEN-01",
+            step_id="IST-002",
+            raised_by="field_engineer",
+            tenant_id="tenant_a",
+        )
 
     def test_close_route_awaits_agent_function(self):
         async def run_request():
@@ -114,7 +134,12 @@ class InspectorRouteWiringTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["record_id"], "ABR-TEST")
-        agent_mock.assert_awaited_once()
+        agent_mock.assert_awaited_once_with(
+            equipment_tag="GEN-01",
+            step_results=[{"step_id": "IST-001", "status": "pass"}],
+            closed_by="qa_test",
+            tenant_id="tenant_a",
+        )
 
 
 class HealthAndCompatibilityRouteTests(unittest.TestCase):

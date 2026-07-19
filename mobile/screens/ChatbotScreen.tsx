@@ -232,12 +232,18 @@ export default function ChatbotScreen({ navigation }: any) {
       }
 
       // 2. Fetch answer from API
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const response = await fetch(`${API_BASE_URL}/brain/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ question: userText, project_id: 'default' }),
         signal: controller.signal,
       });
@@ -281,47 +287,10 @@ export default function ChatbotScreen({ navigation }: any) {
       }
       setIsTyping(false);
     } catch (err) {
-      console.log('Brain API offline or error, falling back to local simulation.', err);
-      // Keep the typing indicator alive until the fallback message is actually appended
-      setTimeout(async () => {
-        const query = userText.toLowerCase();
-        let responseText = "Analyzing spec documents... I'm currently monitoring compliance metrics on site.";
-        if (query.includes('generator') || query.includes('gen-01')) {
-          responseText =
-            'GEN-01 (Caterpillar 3516C) spec verification:\n• Voltage: 11kV\n• Output: 2000 kVA\n• Status: Active. Downstream R0 contagion calculated at 4.2 due to fuel consumption rates exceeding threshold (285 L/h vs 260 L/h expected).';
-        } else if (query.includes('cooling') || query.includes('ct-01')) {
-          responseText =
-            'Cooling Tower (CT-01) compliance check:\n• Expected: Design temperature capability of 50°C (TIA-942-B Clause §6.7.1).\n• Actual: Vendor submittal lists 45°C limit.\n• Alert: Ambient temperature mismatch hazard detected.';
-        } else if (query.includes('r0') || query.includes('risk')) {
-          responseText =
-            'Active project risks:\n• R0: 4.2 (High risk anomaly in generator governor specs).\n• R0: 2.8 (Schedule delay impact on generator installation).';
-        }
-        
-        const fallbackMsg = buildBrainMessage({ text: responseText, confidence: 'Medium' });
-
-        if (activeId) {
-          try {
-            const { data: fallbackData } = await supabase
-              .from('chat_messages')
-              .insert({
-                session_id: activeId,
-                sender: 'brain',
-                text: responseText,
-                confidence: 'Medium',
-                response_time_ms: 1000
-              })
-              .select()
-              .single();
-            
-            if (fallbackData) fallbackMsg.id = fallbackData.id;
-          } catch (e) {
-            console.error('Failed to save fallback msg:', e);
-          }
-        }
-        
-        setMessages(prev => [...prev, fallbackMsg]);
-        setIsTyping(false);
-      }, 1000);
+      console.log('Brain API offline or error:', err);
+      const errorMsg = buildBrainMessage({ text: "Error: Could not reach the Brain API. Please check your connection.", confidence: 'Low' });
+      setMessages(prev => [...prev, errorMsg]);
+      setIsTyping(false);
     }
   };
 

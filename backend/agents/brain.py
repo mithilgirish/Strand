@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Optional
 import time
 
-from loguru import logger
-
+import logging
+logger = logging.getLogger(__name__)
 from backend.demo_data import demo_spec_chunks
 from backend.vector.retriever import hybrid_retriever
 from backend.graph.client import neo4j_client
@@ -19,6 +19,7 @@ from backend.ingestion.spec_dna.chain import get_spec_dna_neighborhood
 from backend.llm.client import has_configured_llm, invoke_structured
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.models.query import BrainAnswer
+from backend.redis_client import redis_client
 import json
 
 

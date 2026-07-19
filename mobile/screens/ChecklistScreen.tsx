@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
 
 // Define step structure
@@ -42,8 +43,10 @@ export default function ChecklistScreen({ route, navigation }: any) {
           // Attempt connection to the backend server with a 3s timeout
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const headers = await buildJsonAuthHeaders();
           
           const response = await fetch(`${API_BASE_URL}/inspector/checklist/${equipmentTag}`, {
+            headers,
             signal: controller.signal
           });
           clearTimeout(timeoutId);
@@ -142,12 +145,11 @@ export default function ChecklistScreen({ route, navigation }: any) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const headers = await buildJsonAuthHeaders();
 
       const response = await fetch(`${API_BASE_URL}/inspector/checklist/${equipmentTag}/close`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           steps,
           closed_by: 'field_engineer',

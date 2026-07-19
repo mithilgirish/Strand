@@ -13,7 +13,7 @@ import json
 from typing import Optional
 from uuid import uuid4
 
-from loguru import logger
+from loguru import logger  # type: ignore
 
 from backend.llm.client import invoke_structured, invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
@@ -72,7 +72,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
     # Step 1: Classify intent
     intent = await _classify_intent(query)
 
-    logger.info(f"Planner: intent={intent.intent}, agents={intent.agents}, write={intent.requires_write}")
+    logger.info("Planner: intent={}, agents={}, write={}", intent.intent, intent.agents, intent.requires_write)
 
     # Step 2: Execute subtasks
     subtask_results = []
@@ -99,7 +99,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
             if agent_name == "guardian" and isinstance(result, dict):
                 r0_max = result.get("r0_max", 0)
                 if r0_max > 5.0 and "scheduler" not in intent.agents:
-                    logger.info(f"Planner: R0={r0_max} > 5.0, triggering Scheduler re-check")
+                    logger.info("Planner: R0={} > 5.0, triggering Scheduler re-check", r0_max)
                     try:
                         sched_result = await run_scheduler()
                         subtask_results.append({
@@ -109,7 +109,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                             "triggered_by": f"guardian_r0_{r0_max}",
                         })
                     except Exception as sched_e:
-                        logger.error(f"Planner: triggered scheduler re-check failed: {sched_e}")
+                        logger.error("Planner: triggered scheduler re-check failed: {}", sched_e)
                         subtask_results.append({
                             "agent": "scheduler",
                             "status": "failed",
@@ -118,7 +118,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                         })
 
         except Exception as e:
-            logger.error(f"Planner: {agent_name} execution failed: {e}")
+            logger.error("Planner: {} execution failed: {}", agent_name, e)
             subtask_results.append({
                 "agent": agent_name,
                 "status": "failed",
@@ -137,7 +137,7 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                 agent_source=agent_source,
             )
         except Exception as e:
-            logger.warning(f"Planner: Judge failed: {e}")
+            logger.warning("Planner: Judge failed: {}", e)
 
     # Step 4: Approval Gate (if write operation)
     approval_id = None
@@ -156,9 +156,9 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                 payload=payload,
                 agent="planner",
             )
-            logger.info(f"Planner: pending approval {approval_id} created for {action}")
+            logger.info("Planner: pending approval {} created for {}", approval_id, action)
         except Exception as e:
-            logger.error(f"Planner: failed to create approval: {e}")
+            logger.error("Planner: failed to create approval: {}", e)
             raise
 
     # Step 5: Build response
@@ -180,7 +180,7 @@ async def _classify_intent(query: str) -> IntentClassification:
             prompt_version=get_prompt_version("planner_intent"),
         )
     except Exception as e:
-        logger.warning(f"Planner: intent classification failed: {e}")
+        logger.warning("Planner: intent classification failed: {}", e)
         # Fallback: route to Brain for general queries
         return IntentClassification(
             intent="general_query",
@@ -213,7 +213,7 @@ async def _execute_agent(agent_name: str, runner, query: str) -> dict:
                 return {}
         except Exception as e:
             if attempt < max_retries:
-                logger.warning(f"Planner: Retrying {agent_name} after failure: {e}")
+                logger.warning("Planner: Retrying {} after failure: {}", agent_name, e)
                 await asyncio.sleep(1)
             else:
                 raise e
@@ -243,7 +243,7 @@ def _synthesize_response(
     executed_agents = [r["agent"] for r in subtask_results]
     missing_agents = [task.agent for task in intent.subtasks if task.agent not in executed_agents]
     if missing_agents:
-        logger.warning(f"Planner: Missing agent execution for {missing_agents} - proceeding with partial results")
+        logger.warning("Planner: Missing agent execution for {} - proceeding with partial results", missing_agents)
         response_parts.append(f"*(Note: Results for {', '.join(missing_agents)} are incomplete and will be retried later.)*")
 
     for r in subtask_results:

@@ -52,9 +52,6 @@ export default function QrScanScreen({ navigation }: any) {
     ]);
   };
 
-  const handleScanMock = (mockTag: string) => {
-    navigation.navigate('Checklist', { equipmentTag: mockTag });
-  };
 
   const handleManualSubmit = () => {
     if (!tag.trim()) {
@@ -127,17 +124,6 @@ export default function QrScanScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View style={styles.mockQuickScan}>
-          <Text style={styles.sectionTitle}>Quick Demo Scan</Text>
-          <View style={styles.demoButtonsRow}>
-            <TouchableOpacity style={styles.demoButton} onPress={() => handleScanMock('GEN-01')}>
-              <Text style={styles.demoButtonText}>GEN-01 (Generator)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.demoButton} onPress={() => handleScanMock('CT-01')}>
-              <Text style={styles.demoButtonText}>CT-01 (Cooling Tower)</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         <View style={styles.manualContainer}>
           <Text style={styles.inputLabel}>Or Enter Equipment Tag Manually</Text>
@@ -295,38 +281,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 4,
     borderColor: '#E5E5E5',
     borderBottomRightRadius: 12,
-  },
-  mockQuickScan: {
-    width: '100%',
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    color: '#A3A3A3',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  demoButton: {
-    flex: 1,
-    backgroundColor: '#1C1C1C',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#262626',
-  },
-  demoButtonText: {
-    color: '#E5E5E5',
-    fontSize: 12,
-    fontWeight: '700',
   },
   manualContainer: {
     width: '100%',

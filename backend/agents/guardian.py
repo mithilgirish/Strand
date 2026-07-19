@@ -33,12 +33,17 @@ from backend.demo_data import get_demo_clause, demo_chain
 class GuardianState(TypedDict):
     submittal_id: str
     document_path: str
+    tenant_id: str
     extracted_parameters: dict
     vision_violations: list
     violations: list
     spec_dna_chain: dict
     rfi_draft: str
     r0_max: float
+
+
+def _tenant_cache_part(tenant_id: str = "default") -> str:
+    return (tenant_id or "default").replace(":", "_")
 
 
 def extract_parameters(state: GuardianState) -> GuardianState:
@@ -172,6 +177,7 @@ def score_r0(state: GuardianState) -> GuardianState:
                 "extracted_parameters": json.dumps(state["extracted_parameters"], default=str),
                 "r0_score": 0.0,
                 "violation_count": len(state["violations"]),
+                "tenant_id": state.get("tenant_id", "default"),
             },
         )
     except Exception as e:
@@ -258,22 +264,24 @@ def _fallback_rfi(state: GuardianState) -> str:
 
 
 # ── Agent runner ─────────────────────────────────────────────────────
-async def run_guardian(submittal_id: str, document_path: str) -> dict:
+async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "default") -> dict:
     """
     Run the full Guardian pipeline.
     Uses idempotency lock to prevent duplicate analysis (§5.8).
     """
     # Check cache first
-    cached = redis_client.get_cache(f"guardian:{submittal_id}")
+    tenant_cache = _tenant_cache_part(tenant_id)
+    cache_key = f"guardian:{tenant_cache}:{submittal_id}"
+    cached = redis_client.get_cache(cache_key)
     if cached:
         logger.info(f"Guardian: returning cached result for {submittal_id}")
         return cached
 
     # Idempotency check
-    lock_key = f"guardian:{submittal_id}"
+    lock_key = cache_key
     acquired = redis_client.acquire_lock(lock_key)
     if not acquired:
-        cached = redis_client.get_json(f"cache:guardian:{submittal_id}")
+        cached = redis_client.get_json(f"cache:{cache_key}")
         if cached:
             logger.info(f"Guardian: returning cached result for {submittal_id}")
             return cached
@@ -284,6 +292,7 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
     state: GuardianState = {
         "submittal_id": submittal_id,
         "document_path": document_path,
+        "tenant_id": tenant_id,
         "extracted_parameters": {},
         "vision_violations": [],
         "violations": [],
@@ -301,6 +310,7 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
 
         result = {
             "submittal_id": state["submittal_id"],
+            "tenant_id": state["tenant_id"],
             "violations": state["violations"],
             "vision_violations": state["vision_violations"],
             "r0_max": state["r0_max"],
@@ -317,7 +327,7 @@ async def run_guardian(submittal_id: str, document_path: str) -> dict:
         }
 
         # Cache result
-        redis_client.set_cache(f"guardian:{submittal_id}", result)
+        redis_client.set_cache(cache_key, result)
 
         return result
 
@@ -333,7 +343,11 @@ class GuardianGraph:
     """Plan-compatible async graph facade for the Guardian pipeline."""
 
     async def ainvoke(self, state: GuardianState) -> dict:
-        result = await run_guardian(state["submittal_id"], state["document_path"])
+        result = await run_guardian(
+            state["submittal_id"],
+            state["document_path"],
+            tenant_id=state.get("tenant_id", "default"),
+        )
         return {
             **state,
             "extracted_parameters": result.get("extracted_parameters", state.get("extracted_parameters", {})),

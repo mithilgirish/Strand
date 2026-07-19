@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+# pyrefly: ignore [missing-import]
 import loguru
 
 from backend.llm.client import get_agent_metrics

@@ -186,9 +186,13 @@ def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
     return secured
 
 
-def _cached_guardian_violations() -> list[dict[str, Any]]:
+def _tenant_cache_part(tenant_id: str = "default") -> str:
+    return (tenant_id or "default").replace(":", "_")
+
+
+def _cached_guardian_violations(tenant_id: str) -> list[dict[str, Any]]:
     violations: list[dict[str, Any]] = []
-    for key in redis_client.keys("cache:guardian:*"):
+    for key in redis_client.keys(f"cache:guardian:{_tenant_cache_part(tenant_id)}:*"):
         cached = redis_client.get_json(key)
         if not cached:
             continue
@@ -236,7 +240,7 @@ async def _parse_build_payload(request: Request) -> tuple[str, str, str | None, 
     )
 
 
-async def _analyze_dashboard_upload(upload: Any, project_id: str) -> dict[str, Any] | None:
+async def _analyze_dashboard_upload(upload: Any, project_id: str, tenant_id: str) -> dict[str, Any] | None:
     if not upload or not getattr(upload, "filename", ""):
         return None
     filename = Path(upload.filename).name
@@ -247,7 +251,7 @@ async def _analyze_dashboard_upload(upload: Any, project_id: str) -> dict[str, A
     analysis_id = f"DASH-{project_id}-{uuid4().hex[:6].upper()}"
     upload_path = UPLOAD_DIR / f"{analysis_id}-{filename}"
     upload_path.write_bytes(await upload.read())
-    return await run_guardian(analysis_id, str(upload_path))
+    return await run_guardian(analysis_id, str(upload_path), tenant_id=tenant_id)
 
 
 def _dashboard_widgets(
@@ -544,16 +548,16 @@ async def build_dashboard_from_prompt(
 
     tenant_id = _resolve_tenant_id(user, payload_tenant_id, project_id)
     generated_config = await generate_dashboard_config(prompt)
-    guardian_result = await _analyze_dashboard_upload(upload, project_id)
+    guardian_result = await _analyze_dashboard_upload(upload, project_id, tenant_id)
     guardian_violations = (
         guardian_result.get("violations", [])
         if guardian_result
-        else _cached_guardian_violations()
+        else _cached_guardian_violations(tenant_id)
     )
 
     oracle_result = await run_oracle(project_id=project_id)
     scheduler_result = await run_scheduler()
-    ncrs = await list_ncrs()
+    ncrs = await list_ncrs(tenant_id=tenant_id)
     widgets = _dashboard_widgets(
         prompt=prompt,
         guardian_violations=guardian_violations,
