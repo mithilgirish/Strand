@@ -49,19 +49,19 @@ interface RightAgentSidebarProps {
 
 const QUICK_PROMPTS = [
   {
-    title: "⚡ Submittals & R0 Severity",
+    title: "Submittals & R0 Severity",
     prompt: "Show me a list of all submittals with delay greater than 5 days, along with a formula card of average submittal R0 severity score and a trend chart."
   },
   {
-    title: "🚚 Equipment Logistics & NCRs",
+    title: "Equipment Logistics & NCRs",
     prompt: "Generate a dashboard tracking data center cooling unit shipments, active non-conformance reports (NCRs), and delivery status timelines."
   },
   {
-    title: "🔋 Thermal & Power Telemetry",
+    title: "Thermal & Power Telemetry",
     prompt: "Build an executive thermal monitoring dashboard with R0 severity gauge, power utilization trend chart, and high-temp server rack data grid."
   },
   {
-    title: "💰 Budget & Milestone Risk",
+    title: "Budget & Milestone Risk",
     prompt: "Synthesize a cost variance dashboard displaying milestone progress gauges, total financial risk formula card, and budget line item breakdown."
   }
 ];
@@ -89,6 +89,40 @@ export default function RightAgentSidebar({
   const [activeTab, setActiveTab] = useState<"chat" | "history" | "dashboards">("chat");
   const [searchHistoryQuery, setSearchHistoryQuery] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(420);
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = document.body.clientWidth - e.clientX;
+      if (newWidth > 320 && newWidth < 800) {
+        setSidebarWidth(newWidth);
+      }
+    };
+    const handleMouseUp = () => setIsResizing(false);
+    
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = 'none'; // prevent text selection while dragging
+    } else {
+      document.body.style.userSelect = '';
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Auto scroll to bottom of chat on new messages
   useEffect(() => {
@@ -120,10 +154,20 @@ export default function RightAgentSidebar({
     <>
       {/* Main Sidebar Container - In-Flow Flex Sidebar */}
       <div
-        className={`h-full bg-[#111111]/95 backdrop-blur-xl border-l border-[#262626] flex flex-col transition-all duration-300 shrink-0 relative ${
-          isOpen ? "w-full sm:w-[380px] lg:w-[420px]" : "w-14"
-        }`}
+        style={{ width: isOpen ? (isMobile ? "100%" : `${sidebarWidth}px`) : undefined }}
+        className={`h-full bg-[#111111]/95 backdrop-blur-xl border-l border-[#262626] flex flex-col shrink-0 relative ${
+          !isOpen && "w-14"
+        } ${!isResizing && "transition-all duration-300"}`}
       >
+        {/* Resizer Handle */}
+        {isOpen && !isMobile && (
+          <div
+            onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
+            className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 transition-colors ${
+              isResizing ? "bg-[#4edea3]" : "hover:bg-[#4edea3]/50"
+            }`}
+          />
+        )}
         {!isOpen ? (
           <div className="flex-1 flex flex-col items-center py-4 space-y-4 overflow-hidden">
             <button
@@ -161,7 +205,7 @@ export default function RightAgentSidebar({
             </button>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col w-full h-full min-w-[380px] lg:min-w-[420px] overflow-hidden">
+          <div className="flex-1 flex flex-col w-full h-full overflow-hidden">
             {/* Header Bar */}
             <div className="p-3.5 border-b border-[#262626] bg-[#171717]/80 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -213,7 +257,7 @@ export default function RightAgentSidebar({
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Chat</span>
+            <span className="truncate">Chat</span>
           </button>
 
           <button
@@ -225,7 +269,7 @@ export default function RightAgentSidebar({
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            <span>Prompts ({promptHistory.length})</span>
+            <span className="truncate">Prompts ({promptHistory.length})</span>
           </button>
 
           <button
@@ -237,13 +281,13 @@ export default function RightAgentSidebar({
             }`}
           >
             <FolderKanban className="w-3.5 h-3.5" />
-            <span>Saved ({dashboards.length})</span>
+            <span className="truncate">Saved ({dashboards.length})</span>
           </button>
         </div>
 
         {/* TAB CONTENT 1: CHAT AGENT */}
         {activeTab === "chat" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs custom-scrollbar min-h-0">
             {messages.length === 0 && (
               <div className="p-4 rounded-lg border border-[#262626] bg-[#1c1c1c]/40 space-y-3 glass-panel">
                 <div className="flex items-center gap-2 text-[#4edea3] label-caps text-xs">
@@ -263,7 +307,8 @@ export default function RightAgentSidebar({
                     <button
                       key={i}
                       onClick={() => setPrompt(qp.prompt)}
-                      className="w-full text-left p-2 rounded-md border border-[#262626] bg-[#171717]/60 hover:bg-[#262626] hover:border-[#4edea3]/40 transition-all text-xs text-[#e5e5e5] font-mono flex items-center justify-between group"
+                      className="w-full text-left p-2.5 rounded-md border border-[#262626] bg-[#171717]/60 hover:bg-[#262626] hover:border-[#4edea3]/40 transition-all text-xs text-[#e5e5e5] font-mono flex items-center justify-between group"
+                      style={{ boxShadow: i < QUICK_PROMPTS.length - 1 ? undefined : undefined, borderBottom: '1px solid #1a1a1a' }}
                     >
                       <span className="truncate">{qp.title}</span>
                       <ChevronRight className="w-3 h-3 text-[#525252] group-hover:text-[#4edea3] transition-colors" />
@@ -371,7 +416,7 @@ export default function RightAgentSidebar({
 
         {/* TAB CONTENT 2: PROMPT HISTORY */}
         {activeTab === "history" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs custom-scrollbar min-h-0">
             <div className="flex items-center justify-between mb-2">
               <span className="label-caps text-[#a3a3a3]">
                 Submitted Prompts Log
@@ -440,7 +485,7 @@ export default function RightAgentSidebar({
 
         {/* TAB CONTENT 3: SAVED WORKSPACES / LAYOUTS */}
         {activeTab === "dashboards" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs custom-scrollbar min-h-0">
             <div className="flex items-center justify-between mb-2">
               <span className="label-caps text-[#a3a3a3]">
                 Saved Custom Layouts
@@ -518,19 +563,19 @@ export default function RightAgentSidebar({
         )}
 
         {/* INPUT PROMPT BOX (Bottom Fixed Area) */}
-        <div className="p-3.5 border-t border-[#262626] bg-[#0d0d0e] space-y-2.5">
+        <div className="p-3.5 border-t border-[#262626] bg-[#0d0d0e] space-y-2.5 shrink-0">
           <form onSubmit={handleSubmit} className="space-y-2">
-            <div className="relative rounded-lg border border-[#262626] bg-[#141518] focus-within:border-[#4edea3]/60 transition-all p-2">
+            <div className="relative rounded-lg border border-[#333333] bg-[#0a0a0a] focus-within:border-[#e5e5e5] focus-within:shadow-[0_0_8px_rgba(229,229,229,0.25)] transition-all p-2" style={{ boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.60)' }}>
               <textarea
                 required
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask AI agent to build a dashboard... (e.g. 'Show R0 gauge and submittals table')"
-                className="w-full h-20 bg-transparent border-none outline-none text-xs text-[#f5f5f5] placeholder-[#525252] font-mono resize-none"
+                className="w-full h-20 bg-transparent border-none outline-none text-xs text-[#e5e5e5] placeholder-[#525252] font-mono resize-none caret-[#e5e5e5]"
               />
 
-              <div className="flex items-center justify-between pt-1 border-t border-[#262626]/40 text-[10px] text-[#737373] font-mono">
+              <div className="flex items-center justify-between pt-1.5 mt-1 text-[10px] text-[#737373] font-mono" style={{ borderTop: '1px solid #1a1a1a', boxShadow: '0 -1px 0 rgba(0,0,0,0.40)' }}>
                 <span>Press <kbd className="px-1 bg-[#262626] rounded text-[#a3a3a3]">Enter ↵</kbd> to send</span>
                 {prompt && (
                   <button
@@ -547,7 +592,8 @@ export default function RightAgentSidebar({
             <button
               type="submit"
               disabled={loading || !prompt.trim()}
-              className="w-full py-2.5 bg-[#4edea3] hover:bg-[#6cf8bb] text-[#003824] font-bold label-caps rounded-md tracking-widest text-[11px] transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40"
+              className="w-full py-2.5 text-[#003824] font-bold label-caps rounded-md tracking-widest text-[11px] transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+              style={{ background: loading ? '#333' : 'linear-gradient(to bottom, #6cf8bb, #4edea3)', borderTop: '1px solid rgba(255,255,255,0.30)', boxShadow: loading ? 'none' : '0 4px 16px rgba(78,222,163,0.30)' }}
             >
               {loading ? (
                 <>

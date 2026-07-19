@@ -13,8 +13,8 @@ import {
 } from "@/components/custom-dashboards/types";
 import RightAgentSidebar from "@/components/custom-dashboards/RightAgentSidebar";
 import DashboardCanvas from "@/components/custom-dashboards/DashboardCanvas";
-import WidgetEditorModal from "@/components/custom-dashboards/WidgetEditorModal";
 import SaveDashboardModal from "@/components/custom-dashboards/SaveDashboardModal";
+import { Layout } from "react-grid-layout";
 
 // ---------------------------------------------------------------------------
 // Pre-built Fallback Presets for Offline or Instant Demonstrations
@@ -196,8 +196,6 @@ export default function CustomDashboardsPage() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
   // Modals state
-  const [editorModalOpen, setEditorModalOpen] = useState<boolean>(false);
-  const [editingWidget, setEditingWidget] = useState<Widget | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
 
   // Load saved prompt history from localStorage on initial mount
@@ -624,22 +622,19 @@ export default function CustomDashboardsPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Move widget position
-  const handleMoveWidget = (widgetId: string, direction: "up" | "down") => {
+  // Handle Layout Change from React Grid Layout
+  const handleLayoutChange = (newLayout: Layout) => {
     if (!currentDashboard) return;
-    const layout = [...currentDashboard.layout];
-    const index = layout.findIndex((w) => w.id === widgetId);
-    if (index === -1) return;
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= layout.length) return;
-
-    const temp = layout[index];
-    layout[index] = layout[targetIndex];
-    layout[targetIndex] = temp;
-
+    const updatedLayout = currentDashboard.layout.map(widget => {
+      const layoutItem = newLayout.find(l => l.i === widget.id);
+      if (layoutItem) {
+        return { ...widget, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h };
+      }
+      return widget;
+    });
     setCurrentDashboard({
       ...currentDashboard,
-      layout
+      layout: updatedLayout
     });
   };
 
@@ -673,29 +668,29 @@ export default function CustomDashboardsPage() {
     });
   };
 
-  // Save changes from WidgetEditorModal
+  // Save changes from Widget settings popup
   const handleSaveWidgetEdit = (updatedWidget: Partial<Widget>) => {
     if (!currentDashboard) return;
     let layout = [...currentDashboard.layout];
-    let queries = { ...currentDashboard.queries };
+    const queries = { ...currentDashboard.queries };
 
-    if (updatedWidget.id) {
-      layout = layout.map((w) => (w.id === updatedWidget.id ? { ...w, ...updatedWidget } as Widget : w));
-    } else {
-      const newId = "w_new_" + Date.now();
-      const newW: Widget = {
-        id: newId,
+    if (!updatedWidget.id) {
+      // Create new widget
+      const newWidget: Widget = {
+        id: "w_new_" + Date.now(),
         type: updatedWidget.type || "FormulaCard",
-        title: updatedWidget.title || "Custom Visualizer",
+        title: updatedWidget.title || "New Widget",
         description: updatedWidget.description || "",
         x: 0,
-        y: 0,
+        y: Infinity, // puts it at the bottom
         w: 1,
-        h: 1
+        h: 1,
       };
-      layout.push(newW);
-      queries[newId] = "MATCH (n) RETURN n LIMIT 10";
-      void fetchWidgetQuery(newId, queries[newId]);
+      layout.push(newWidget);
+      queries[newWidget.id] = "";
+    } else {
+      // Update existing widget
+      layout = layout.map((w) => (w.id === updatedWidget.id ? { ...w, ...updatedWidget } as Widget : w));
     }
 
     setCurrentDashboard({
@@ -743,21 +738,16 @@ export default function CustomDashboardsPage() {
           widgetData={widgetData}
           loadingData={loadingData}
           isGenerating={loading}
-          userRole={userRole}
           onRefreshData={runAllDashboardQueries}
           onOpenSaveModal={() => setSaveModalOpen(true)}
           onExportJson={() => handleExportLayoutJson()}
           onAddWidget={() => {
-            setEditingWidget(null);
-            setEditorModalOpen(true);
-          }}
-          onEditWidget={(widget) => {
-            setEditingWidget(widget);
-            setEditorModalOpen(true);
+            handleSaveWidgetEdit({ type: "FormulaCard", title: "New Widget", w: 1, h: 1 });
           }}
           onDeleteWidget={handleDeleteWidget}
           onDuplicateWidget={handleDuplicateWidget}
-          onMoveWidget={handleMoveWidget}
+          onLayoutChange={handleLayoutChange}
+          onUpdateWidget={handleSaveWidgetEdit}
           onLoadPreset={handleLoadPreset}
         />
       </div>
@@ -782,14 +772,6 @@ export default function CustomDashboardsPage() {
         isOpen={sidebarOpen}
         onToggleOpen={() => setSidebarOpen(!sidebarOpen)}
         onOpenSaveModal={() => setSaveModalOpen(true)}
-      />
-
-      {/* WIDGET EDITOR MODAL */}
-      <WidgetEditorModal
-        isOpen={editorModalOpen}
-        editingWidget={editingWidget}
-        onClose={() => setEditorModalOpen(false)}
-        onSave={handleSaveWidgetEdit}
       />
 
       {/* SAVE DASHBOARD LAYOUT MODAL */}
