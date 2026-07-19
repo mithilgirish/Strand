@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../config';
 import { supabase } from '../supabase';
@@ -69,6 +69,8 @@ function parseBrainPayload(data: unknown): {
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<{id: string, title: string}[]>([]);
+  const [showSessionModal, setShowSessionModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -110,36 +112,28 @@ export default function ChatbotScreen({ navigation }: any) {
 
   const initializeSession = async () => {
     try {
-      // Load the most recent session or create one
-      const { data: sessions, error } = await supabase
+      const { data: fetchedSessions, error } = await supabase
         .from('chat_sessions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .select('id, title, created_at')
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching sessions:', error);
-        return;
-      }
-
-      if (sessions && sessions.length > 0) {
-        setSessionId(sessions[0].id);
-        void fetchMessages(sessions[0].id);
+      if (fetchedSessions && fetchedSessions.length > 0) {
+        setSessions(fetchedSessions);
+        setSessionId(fetchedSessions[0].id);
+        void fetchMessages(fetchedSessions[0].id);
       } else {
-        const { data: newSession, error: createError } = await supabase
-          .from('chat_sessions')
-          .insert({
-            title: 'Mobile Conversation'
-          })
-          .select()
-          .single();
-
-        if (newSession) {
-          setSessionId(newSession.id);
-        }
+        const fakeId = 'local_' + Date.now();
+        setSessions([{ id: fakeId, title: 'New Conversation' }]);
+        setSessionId(fakeId);
+        supabase.from('chat_sessions').insert({ title: 'New Conversation' }).select().single().then(({ data }) => {
+          if (data) {
+            setSessions([{ id: data.id, title: 'New Conversation' }]);
+            setSessionId(data.id);
+          }
+        });
       }
     } catch (err) {
-      console.error('Failed to initialize mobile chat session:', err);
+      console.error('Init session err:', err);
     } finally {
       setIsInitializing(false);
     }
@@ -162,10 +156,48 @@ export default function ChatbotScreen({ navigation }: any) {
           confidence: m.confidence as ChatMessage['confidence'] || 'Medium',
           timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         })));
+      } else {
+        setMessages([{
+          id: '1',
+          sender: 'brain',
+          text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleNewChat = async () => {
+    const tempId = 'local_' + Date.now();
+    const newSession = { id: tempId, title: 'New Conversation' };
+    
+    setSessions(prev => [newSession, ...prev]);
+    setSessionId(tempId);
+    setMessages([{
+      id: '1',
+      sender: 'brain',
+      text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
+    setShowSessionModal(false);
+
+    try {
+      const { data } = await supabase.from('chat_sessions').insert({ title: 'New Conversation' }).select().single();
+      if (data) {
+        setSessions(prev => prev.map(s => s.id === tempId ? { id: data.id, title: 'New Conversation' } : s));
+        setSessionId(data.id);
+      }
+    } catch (err) {
+      console.error("Failed to sync new chat:", err);
+    }
+  };
+
+  const switchSession = (id: string) => {
+    setSessionId(id);
+    fetchMessages(id);
+    setShowSessionModal(false);
   };
 
   /** Factory to build a brain ChatMessage – single source of truth for the shape. */
@@ -195,6 +227,7 @@ export default function ChatbotScreen({ navigation }: any) {
 
     try {
       if (!activeId) {
+        // Fallback if somehow no session exists
         const { data: newSession } = await supabase
           .from('chat_sessions')
           .insert({
@@ -206,29 +239,36 @@ export default function ChatbotScreen({ navigation }: any) {
         if (!newSession) throw new Error("Failed to create chat session");
         activeId = newSession.id;
         setSessionId(activeId);
+        setSessions(prev => [newSession, ...prev]);
+      } else {
+        // Rename session if it's new
+        const currentSession = sessions.find(s => s.id === activeId);
+        if (currentSession && currentSession.title === 'New Conversation') {
+          const newTitle = userText.length > 30 ? userText.slice(0, 27) + '...' : userText;
+          await supabase.from('chat_sessions').update({ title: newTitle }).eq('id', activeId);
+          setSessions(prev => prev.map(s => s.id === activeId ? { ...s, title: newTitle } : s));
+        }
       }
 
-      // 1. Insert user message to DB
-      const { data: userMsgData } = await supabase
-        .from('chat_messages')
-        .insert({
+      // Optimistic update for user message
+      const tempMsgId = 'msg_' + Date.now();
+      setMessages(prev => [
+        ...prev,
+        {
+          id: tempMsgId,
+          sender: 'user',
+          text: userText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+
+      // 1. Sync user message to DB in background
+      if (activeId && !activeId.startsWith('local_')) {
+        supabase.from('chat_messages').insert({
           session_id: activeId,
           sender: 'user',
           text: userText
-        })
-        .select()
-        .single();
-
-      if (userMsgData) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: userMsgData.id,
-            sender: 'user',
-            text: userText,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
+        }).then();
       }
 
       // 2. Fetch answer from API
@@ -254,33 +294,30 @@ export default function ChatbotScreen({ navigation }: any) {
         const raw = await response.json();
         const { answerText, confidence, citations, responseTimeMs } = parseBrainPayload(raw);
 
-        // 3. Insert brain answer to DB
-        const { data: brainMsgData } = await supabase
-          .from('chat_messages')
-          .insert({
+        const tempBrainId = 'brain_' + Date.now();
+        setMessages(prev => [
+          ...prev,
+          {
+            id: tempBrainId,
+            sender: 'brain',
+            text: answerText,
+            citations: citations,
+            confidence: confidence,
+            responseTimeMs: responseTimeMs,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+
+        // 3. Sync brain answer to DB
+        if (activeId && !activeId.startsWith('local_')) {
+          supabase.from('chat_messages').insert({
             session_id: activeId,
             sender: 'brain',
             text: answerText,
             citations: citations,
             confidence: confidence,
             response_time_ms: responseTimeMs
-          })
-          .select()
-          .single();
-
-        if (brainMsgData) {
-          setMessages(prev => [
-            ...prev,
-            {
-              id: brainMsgData.id,
-              sender: 'brain',
-              text: answerText,
-              citations: citations,
-              confidence: confidence,
-              responseTimeMs: responseTimeMs,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-          ]);
+          }).then();
         }
       } else {
         throw new Error(`API returned status ${response.status}`);
@@ -298,8 +335,16 @@ export default function ChatbotScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Brain Agent</Text>
-        <Text style={styles.subtitle}>Causal Query Intelligence</Text>
+        <TouchableOpacity onPress={() => setShowSessionModal(true)} style={styles.headerLeft}>
+          <Text style={styles.headerButton}>☰ Chats</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.title}>Brain Agent</Text>
+          <Text style={styles.subtitle}>Causal Query Intelligence</Text>
+        </View>
+        <TouchableOpacity onPress={handleNewChat} style={styles.headerRight}>
+          <Text style={styles.headerButton}>+ New</Text>
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -428,6 +473,32 @@ export default function ChatbotScreen({ navigation }: any) {
         </View>
       </KeyboardAvoidingView>
 
+      {/* Sessions Modal */}
+      <Modal visible={showSessionModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chat History</Text>
+              <TouchableOpacity onPress={() => setShowSessionModal(false)}>
+                <Text style={styles.closeModalText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.sessionList}>
+              {sessions.map(s => (
+                <TouchableOpacity 
+                  key={s.id} 
+                  style={[styles.sessionItem, s.id === sessionId && styles.activeSessionItem]}
+                  onPress={() => switchSession(s.id)}
+                >
+                  <Text style={[styles.sessionTitle, s.id === sessionId && styles.activeSessionTitle]} numberOfLines={1}>
+                    {s.title || 'Conversation'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -438,11 +509,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#111111',
   },
   header: {
+    flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderColor: '#262626',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  headerCenter: {
+    flex: 2,
+    alignItems: 'center',
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  headerButton: {
+    color: '#06B6D4',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   title: {
     fontSize: 20,
@@ -481,23 +571,28 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: '85%',
-    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   userBubble: {
-    backgroundColor: '#E5E5E5',
-    borderBottomRightRadius: 4,
+    backgroundColor: '#262626',
+    borderWidth: 1,
+    borderColor: '#404040',
+    borderRadius: 8,
+    borderBottomRightRadius: 0,
   },
   brainBubble: {
     backgroundColor: '#1C1C1C',
     borderWidth: 1,
-    borderColor: '#262626',
-    borderBottomLeftRadius: 4,
+    borderColor: '#333333',
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderLeftColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    borderBottomLeftRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
   },
   typingBubble: {
     paddingVertical: 10,
@@ -508,10 +603,10 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   userText: {
-    color: '#171717',
+    color: '#E5E5E5',
   },
   brainText: {
     color: '#F5F5F5',
@@ -520,34 +615,35 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#A3A3A3',
     alignSelf: 'flex-end',
-    marginTop: 4,
+    marginTop: 6,
     fontWeight: '600',
+    textTransform: 'uppercase',
   },
   inputBar: {
     flexDirection: 'row',
-    padding: 12,
+    padding: 16,
     borderTopWidth: 1,
     borderColor: '#262626',
-    backgroundColor: '#171717',
+    backgroundColor: '#111111',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   input: {
     flex: 1,
-    backgroundColor: '#1C1C1C',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#262626',
-    borderRadius: 12,
+    borderColor: '#404040',
+    borderRadius: 6,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     color: '#F5F5F5',
     fontSize: 14,
   },
   sendButton: {
     backgroundColor: '#E5E5E5',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -566,20 +662,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   citationsHeaderText: {
-    color: '#06B6D4',
+    color: '#a3a3a3',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   citationsList: {
-    marginTop: 6,
-    gap: 6,
+    marginTop: 8,
+    gap: 8,
   },
   citationCard: {
     backgroundColor: '#0A0A0A',
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 6,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#262626',
+    borderBottomColor: '#404040',
   },
   citationText: {
     color: '#E5E5E5',
@@ -601,13 +700,14 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   confidenceBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9999,
   },
   confidenceText: {
     fontSize: 9,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   confHigh: {
     backgroundColor: 'rgba(78, 222, 163, 0.1)',
@@ -637,5 +737,59 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#171717',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    height: '60%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderColor: '#262626',
+  },
+  modalTitle: {
+    color: '#F5F5F5',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  closeModalText: {
+    color: '#06B6D4',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  sessionList: {
+    padding: 16,
+  },
+  sessionItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  activeSessionItem: {
+    borderColor: '#06B6D4',
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+  },
+  sessionTitle: {
+    color: '#E5E5E5',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activeSessionTitle: {
+    color: '#06B6D4',
   },
 });

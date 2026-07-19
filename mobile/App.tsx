@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Animated, View, Keyboard, ActivityIndicator } from 'react-native';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
+import { initApiConfig } from './config';
 
 // Import Screens
 import LoginScreen from './screens/LoginScreen';
@@ -81,6 +82,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    initApiConfig();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);

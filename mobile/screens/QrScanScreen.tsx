@@ -11,6 +11,7 @@ export default function QrScanScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isScannerActive, setIsScannerActive] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -34,7 +35,8 @@ export default function QrScanScreen({ navigation }: any) {
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     setScanned(true);
-    setIsScannerActive(false); // Turn off camera upon successful scan
+    setIsScannerActive(false); 
+    setTorchEnabled(false);
     const cleanedTag = data.trim().toUpperCase();
     Alert.alert('Equipment Detected', `Scanned QR Code: ${cleanedTag}`, [
       {
@@ -102,17 +104,27 @@ export default function QrScanScreen({ navigation }: any) {
                     barcodeScannerSettings={{
                       barcodeTypes: ['qr'],
                     }}
+                    enableTorch={torchEnabled}
                     style={StyleSheet.absoluteFill}
                   />
                 )}
                 
                 {(!scanned && permission?.granted) && (
-                  <TouchableOpacity 
-                    style={styles.deactivateOverlayButton}
-                    onPress={() => setIsScannerActive(false)}
-                  >
-                    <Text style={styles.deactivateOverlayText}>Turn Off Camera</Text>
-                  </TouchableOpacity>
+                  <View style={styles.overlayControls}>
+                    <TouchableOpacity 
+                      style={[styles.torchButton, torchEnabled && styles.torchActive]}
+                      onPress={() => setTorchEnabled(!torchEnabled)}
+                    >
+                      <Ionicons name={torchEnabled ? "flash" : "flash-outline"} size={20} color={torchEnabled ? "#111111" : "#E5E5E5"} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.deactivateOverlayButton}
+                      onPress={() => { setIsScannerActive(false); setTorchEnabled(false); }}
+                    >
+                      <Text style={styles.deactivateOverlayText}>Turn Off Camera</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </>
             )}
@@ -181,8 +193,8 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   scannerBox: {
-    width: 250,
-    height: 250,
+    width: 320,
+    height: 320,
     borderWidth: 1,
     borderColor: 'rgba(229, 229, 229, 0.2)',
     borderRadius: 16,
@@ -210,19 +222,38 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
-  deactivateOverlayButton: {
+  overlayControls: {
     position: 'absolute',
     bottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  torchButton: {
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderWidth: 1,
     borderColor: '#404040',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  torchActive: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  deactivateOverlayButton: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderWidth: 1,
+    borderColor: '#404040',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 22,
   },
   deactivateOverlayText: {
     color: '#ffb3ad',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,

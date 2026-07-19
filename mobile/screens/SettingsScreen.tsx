@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity, Alert, Pl
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, setApiBaseUrl } from '../config';
 
 export default function SettingsScreen({ navigation }: any) {
   const [offlineSync, setOfflineSync] = useState(true);
@@ -17,6 +17,9 @@ export default function SettingsScreen({ navigation }: any) {
   const [displayName, setDisplayName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
+
+  const [apiHost, setApiHost] = useState(API_BASE_URL);
+  const [isEditingHost, setIsEditingHost] = useState(false);
 
   const [nodeStatus, setNodeStatus] = useState('CHECKING...');
   const [isOnline, setIsOnline] = useState(false);
@@ -307,8 +310,43 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
         <View style={styles.settingsCard}>
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Active Host</Text>
-            <Text style={styles.monoValue}>{API_BASE_URL}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingLabel}>Active Host</Text>
+              {isEditingHost ? (
+                <TextInput
+                  value={apiHost}
+                  onChangeText={setApiHost}
+                  style={[styles.nameInput, { marginTop: 8, maxWidth: 220 }]}
+                  placeholder="http://192.168.x.x:8000/api/v1"
+                  placeholderTextColor="#737373"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              ) : (
+                <Text style={styles.monoValue}>{API_BASE_URL}</Text>
+              )}
+            </View>
+            {isEditingHost ? (
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity style={styles.saveNameBtn} onPress={async () => {
+                  await setApiBaseUrl(apiHost);
+                  setIsEditingHost(false);
+                  checkConnection();
+                }}>
+                  <Text style={styles.saveNameBtnText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelNameBtn} onPress={() => {
+                  setApiHost(API_BASE_URL);
+                  setIsEditingHost(false);
+                }}>
+                  <Text style={styles.cancelNameBtnText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditingHost(true)}>
+                <Text style={styles.editBtnText}>Edit</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>API Version</Text>
