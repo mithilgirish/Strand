@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
+# pyrefly: ignore [missing-import]
 import loguru
 
 from backend.approvals.manager import approval_manager
