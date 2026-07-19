@@ -1,0 +1,82 @@
+{
+    "checklist_id": "IST-MESSY-EQ-UPS-01",
+    "title": "  EQ-UPS-01   Commissioning Checklist (REVISED) ",
+    "equipment_tag": "EQ-UPS-01",
+    "steps": [
+        {
+            "step": 1,
+            "description": "Verify automatic transfer switch response ≤ 10 seconds",
+            "status": "n/a"
+        },
+        {
+            "step": 2,
+            "description": "CHECK GENERATOR FREQUENCY WITHIN 50HZ ± 0.5HZ",
+            "status": ""
+        },
+        {
+            "step": 3,
+            "description": "Confirm fuel system leak test pass at 1.5x operating pressure",
+            "status": "pending"
+        },
+        {
+            "step": 4,
+            "description": "Confirm BMS alarm integration test pass",
+            "status": "pass"
+        },
+        {
+            "step": 5,
+            "description": "Verify fire suppression interlock with main breaker",
+            "status": ""
+        },
+        {
+            "step": 6,
+            "description": "Verify cooling water flow rate ≥ 500 L/min",
+            "status": ""
+        },
+        {
+            "step": 7,
+            "description": "Verify VESDA smoke detection response ≤ 60 seconds",
+            "status": " pending "
+        },
+        {
+            "step": 0,
+            "description": "Confirm battery terminal voltage ≥ 24V DC",
+            "status": "skipped"
+        },
+        {
+            "step": 9,
+            "description": "Check coolant temperature ≤ 85°C at full load",
+            "status": "skipped"
+        },
+        {
+            "step": 10,
+            "description": "Verify phase rotation A-B-C sequence",
+            "status": "fail"
+        },
+        {
+            "step": 11,
+            "description": "",
+            "status": "N/A"
+        },
+        {
+            "step": null,
+            "description": "Verify cooling water flow rate ≥ 500 L/min",
+            "status": "PENDING"
+        },
+        {
+            "step": 13,
+            "description": "Check generator frequency within 50Hz ± 0.5Hz",
+            "status": "pending"
+        },
+        {
+            "step": 0,
+            "description": "",
+            "status": "Pending"
+        },
+        {
+            "step": 15,
+            "description": "",
+            "status": "N/A"
+        }
+    ]
+}

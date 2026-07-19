@@ -336,7 +336,7 @@ export default function CustomDashboards() {
                         </div>
                       ) : isWidgetError(data) ? (
                         <div className="flex-1 flex items-center justify-center text-xs font-mono text-red-400 p-4 text-center">
-                          GraphQL Error: {data.error}
+                          Cypher Error: {data.error}
                         </div>
                       ) : (
                         <div className="flex-1 flex flex-col justify-center">

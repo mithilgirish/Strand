@@ -29,6 +29,7 @@ Edges:
 ### DATA ACCESS RULES
 Every query MUST match on nodes containing tenant_id: $tenant_id.
 Never generate write keywords (CREATE, MERGE, SET, DELETE, DETACH).
+Never use the OR keyword in Cypher queries (it is restricted for security).
 
 Output format must be exactly:
 {{
@@ -60,7 +61,7 @@ def _fallback_dashboard_config(user_prompt: str) -> dict:
             "widget_r0": "MATCH (s:VendorSubmittal {tenant_id: $tenant_id}) RETURN max(s.r0_score) as value",
             "widget_shipments": (
                 "MATCH (sh:Shipment {tenant_id: $tenant_id}) "
-                "WHERE coalesce(sh.delay_days, 0) > 0 OR sh.risk_flag = true "
+                "WHERE coalesce(sh.delay_days, 0) > 0 "
                 "RETURN sh.shipment_id as shipment_id, sh.equipment_tag as equipment_tag, "
                 "sh.current_status as status, sh.delay_days as delay_days "
                 "ORDER BY delay_days DESC LIMIT 25"

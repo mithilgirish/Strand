@@ -22,7 +22,7 @@ from backend.graph.client import neo4j_client
 from backend.graph import queries
 
 
-def ingest_document(file_path: str, document_type: Optional[str] = None) -> dict:
+def ingest_document(file_path: str, document_type: Optional[str] = None, tenant_id: str = "demo-123") -> dict:
     """
     Main ingestion entry point. Detects file type and routes to appropriate parser.
 
@@ -41,11 +41,11 @@ def ingest_document(file_path: str, document_type: Optional[str] = None) -> dict
 
     try:
         if ext == ".pdf":
-            return _ingest_pdf(file_path, filename, doc_id, document_type)
+            return _ingest_pdf(file_path, filename, doc_id, document_type, tenant_id)
         elif ext == ".csv":
             return _ingest_csv(file_path, filename, doc_id)
         elif ext == ".json":
-            return _ingest_json(file_path, filename, doc_id, document_type)
+            return _ingest_json(file_path, filename, doc_id, document_type, tenant_id)
         else:
             logger.warning(f"Unsupported file type: {ext}")
             return {
@@ -69,7 +69,7 @@ def ingest_document(file_path: str, document_type: Optional[str] = None) -> dict
 
 
 def _ingest_pdf(
-    file_path: str, filename: str, doc_id: str, doc_type: Optional[str]
+    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
 ) -> dict:
     """Ingest a PDF document: extract text, parameters, store in Chroma + PKG."""
     # Extract text pages
@@ -112,6 +112,7 @@ def _ingest_pdf(
                     "operator": get_operator_for_parameter(param_name),
                     "document_source": filename,
                     "page_number": param_data.get("page", 1),
+                    "tenant_id": tenant_id,
                 },
             )
             node_count += 1
@@ -156,6 +157,7 @@ def _ingest_pdf(
                 "extracted_parameters": json.dumps(params),
                 "r0_score": 0.0,
                 "violation_count": 0,
+                "tenant_id": tenant_id,
             },
         )
         node_count += 1
@@ -196,11 +198,52 @@ def _ingest_csv(file_path: str, filename: str, doc_id: str) -> dict:
 
 
 def _ingest_json(
-    file_path: str, filename: str, doc_id: str, doc_type: Optional[str]
+    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
 ) -> dict:
     """Ingest a JSON file (supplier graph or checklist)."""
     if doc_type == "supplier" or "supplier" in filename.lower():
         data = parse_supplier_graph(file_path)
+        
+        # Ingest suppliers and shipments into Neo4j
+        for sup in data.get("suppliers", []):
+            neo4j_client.execute_write(
+                queries.MERGE_SUPPLIER,
+                {
+                    "supplier_id": sup.get("id", ""),
+                    "name": sup.get("name", ""),
+                    "tier": sup.get("tier", 1),
+                    "country": sup.get("country", ""),
+                    "risk_score": sup.get("risk_score", 0.0),
+                    "on_time_rate": sup.get("on_time_rate", 0.0),
+                    "lat": sup.get("lat", 0.0),
+                    "lng": sup.get("lng", 0.0),
+                    "tenant_id": tenant_id,
+                }
+            )
+            
+        for sh in data.get("shipments", []):
+            neo4j_client.execute_write(
+                queries.MERGE_SHIPMENT,
+                {
+                    "shipment_id": sh.get("id", ""),
+                    "equipment_tag": sh.get("equipment_tag", ""),
+                    "supplier_id": sh.get("origin_supplier", ""),
+                    "origin_port": sh.get("origin_port", ""),
+                    "destination_port": sh.get("destination_port", ""),
+                    "expected_delivery": sh.get("expected_delivery", ""),
+                    "current_status": sh.get("current_status", ""),
+                    "delay_days": sh.get("delay_days", 0),
+                    "risk_flag": sh.get("risk_flag", False),
+                    "lat": sh.get("lat", 0.0),
+                    "lng": sh.get("lng", 0.0),
+                    "tenant_id": tenant_id,
+                }
+            )
+            neo4j_client.execute_write(
+                queries.LINK_SHIPMENT_SUPPLIER,
+                {"shipment_id": sh.get("id", ""), "supplier_id": sh.get("origin_supplier", "")}
+            )
+
         node_count = len(data.get("suppliers", [])) + len(data.get("shipments", []))
         return {
             "document_id": doc_id,

@@ -239,13 +239,9 @@ def invoke_vision_structured(
         try:
             provider = settings.LLM_PROVIDER.lower()
             if provider == "groq":
-                from langchain_groq import ChatGroq
-                llm = ChatGroq(
-                    model="llama-3.2-11b-vision-preview",
-                    api_key=settings.GROQ_API_KEY,
-                    temperature=settings.LLM_TEMPERATURE,
-                    max_tokens=settings.LLM_MAX_TOKENS,
-                )
+                # Groq has decommissioned vision models. 
+                # Raise an error immediately to avoid retries and 22s timeouts.
+                raise ValueError("Groq currently does not support vision models.")
             else:
                 llm = get_llm()
 

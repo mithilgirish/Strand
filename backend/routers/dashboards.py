@@ -343,14 +343,10 @@ async def execute_dashboard_query(
     """
     secured_cypher = sanitize_and_inject_tenant(payload.query, user.tenant_id)
     
-    try:
-        from neo4j import READ_ACCESS
-    except Exception:
-        READ_ACCESS = "READ"
-
+    # Use the standard Neo4j read access string literal "READ"
     try:
         # Pass $tenant_id parameter to ensure query scoping
-        with get_neo4j_session(default_access_mode=READ_ACCESS) as session:
+        with get_neo4j_session(default_access_mode="READ") as session:
             result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
         return {"data": result}
     except Exception as e:

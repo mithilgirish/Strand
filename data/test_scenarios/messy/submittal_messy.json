@@ -1,0 +1,20 @@
+{
+    "submittal_id": "SUB-MESSY-001",
+    "vendor": "  vertiv energy PVT ltd ",
+    "equipment": "Liebert EXL S1 300 kVA UPS SYSTEM",
+    "equipment_tag": "eq-ups-02",
+    "document_type": "Vendor Submittal",
+    "parameters": {
+        "ups_redundancy": " N+1 ",
+        "ambient_temperature_max": "50°C",
+        "cooling_capacity": "480 kW",
+        "pdu_efficiency": "95.8%",
+        "fire_suppression": "Novec 1230",
+        "generator_fuel_consumption": "262 l/hr",
+        "cable_derating": "0.74",
+        "floor_loading": "11.8 kN/m2",
+        "chilled_water_supply_temp": "10.5 C"
+    },
+    "compliance_status": "violations_found",
+    "notes": "Multiple parameters slightly outside TIA-942 spec ranges"
+}
