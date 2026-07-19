@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { 
-  Plug, CheckCircle2, XCircle, Settings, RefreshCw, Key, 
+  Plug, CheckCircle2, Settings, RefreshCw, Key, 
   Lock, Save, Loader2, AlertCircle, Database, ShieldAlert, Download 
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";

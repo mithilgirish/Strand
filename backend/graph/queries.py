@@ -173,10 +173,12 @@ ON CREATE SET c.section = $section,
               c.operator = $operator,
               c.document_source = $document_source,
               c.page_number = $page_number,
+              c.tenant_id = $tenant_id,
               c.created_at = datetime()
 ON MATCH SET  c.parameter_value = $parameter_value,
               c.unit = $unit,
-              c.operator = $operator
+              c.operator = $operator,
+              c.tenant_id = $tenant_id
 RETURN c
 """
 
@@ -190,9 +192,11 @@ ON CREATE SET s.spec_dna_id = $spec_dna_id,
               s.status = $status,
               s.extracted_parameters = $extracted_parameters,
               s.r0_score = $r0_score,
+              s.tenant_id = $tenant_id,
               s.violation_count = $violation_count
 ON MATCH SET  s.status = $status,
               s.r0_score = $r0_score,
+              s.tenant_id = $tenant_id,
               s.violation_count = $violation_count
 RETURN s
 """
@@ -224,9 +228,11 @@ ON CREATE SET n.title = $title,
               n.spec_dna_ref = $spec_dna_ref,
               n.status = $status,
               n.voice_transcript = $voice_transcript,
+              n.tenant_id = $tenant_id,
               n.r0_score = $r0_score
 ON MATCH SET  n.status = $status,
               n.severity = $severity,
+              n.tenant_id = $tenant_id,
               n.r0_score = $r0_score
 RETURN n
 """
@@ -251,7 +257,9 @@ ON CREATE SET s.name = $name,
               s.risk_score = $risk_score,
               s.on_time_rate = $on_time_rate,
               s.lat = $lat,
+              s.tenant_id = $tenant_id,
               s.lng = $lng
+ON MATCH SET  s.tenant_id = $tenant_id
 RETURN s
 """
 
@@ -266,7 +274,9 @@ ON CREATE SET sh.equipment_tag = $equipment_tag,
               sh.delay_days = $delay_days,
               sh.risk_flag = $risk_flag,
               sh.lat = $lat,
+              sh.tenant_id = $tenant_id,
               sh.lng = $lng
+ON MATCH SET  sh.tenant_id = $tenant_id
 RETURN sh
 """
 

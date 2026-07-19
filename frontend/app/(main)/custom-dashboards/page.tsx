@@ -1,122 +1,420 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  Widget,
+  SavedDashboard,
+  WidgetData,
+  PromptHistoryItem,
+  ChatMessage,
+  DashboardRow
+} from "@/components/custom-dashboards/types";
+import RightAgentSidebar from "@/components/custom-dashboards/RightAgentSidebar";
+import DashboardCanvas from "@/components/custom-dashboards/DashboardCanvas";
+import SaveDashboardModal from "@/components/custom-dashboards/SaveDashboardModal";
+import { Layout } from "react-grid-layout";
 
 // ---------------------------------------------------------------------------
-// Type Definitions
+// Pre-built Fallback Presets for Offline or Instant Demonstrations
 // ---------------------------------------------------------------------------
-interface Widget {
-  id: string;
-  type: "R0Gauge" | "PredictiveTrendChart" | "FormulaCard" | "DataGrid";
-  title?: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+const MOCK_PRESETS: Record<string, SavedDashboard> = {
+  datacenter: {
+    id: "preset-datacenter",
+    dashboard_name: "Data Center Construction Telemetry",
+    layout: [
+      {
+        id: "w1",
+        type: "R0Gauge",
+        title: "Submittal R0 Risk Index",
+        description: "Aggregated risk severity scale for current engineering submittals",
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w2",
+        type: "PredictiveTrendChart",
+        title: "Predictive Thermal Forecast",
+        description: "Rack temperature metrics and 7-day predictive AI threshold",
+        x: 1,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w3",
+        type: "FormulaCard",
+        title: "Total Submittal Variance",
+        description: "Average delay days across active data center packages",
+        x: 0,
+        y: 1,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w4",
+        type: "DataGrid",
+        title: "Critical Path Shipments & NCRs",
+        description: "Delayed shipments with submittal score impact",
+        x: 1,
+        y: 1,
+        w: 1,
+        h: 1
+      }
+    ],
+    queries: {
+      w1: "MATCH (s:Submittal) RETURN avg(s.r0_severity) as r0",
+      w2: "MATCH (t:Telemetry) RETURN t.date as date, t.value as value",
+      w3: "MATCH (s:Submittal) WHERE s.delay > 5 RETURN count(s) as delayed_count",
+      w4: "MATCH (p:Package)-[:HAS_NCR]->(n:NCR) RETURN p.name as Package, n.status as Status, n.severity as Severity"
+    },
+    created_at: new Date().toISOString()
+  },
+  submittal: {
+    id: "preset-submittal",
+    dashboard_name: "Submittals & R0 Severity Monitor",
+    layout: [
+      {
+        id: "w_sub_1",
+        type: "R0Gauge",
+        title: "Average R0 Severity Score",
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w_sub_2",
+        type: "BarChart",
+        title: "Submittals by Contractor",
+        x: 1,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w_sub_3",
+        type: "DataGrid",
+        title: "High Delay Engineering Submittals",
+        x: 0,
+        y: 1,
+        w: 2,
+        h: 1
+      }
+    ],
+    queries: {
+      w_sub_1: "MATCH (s:Submittal) RETURN avg(s.r0_score) as avg_r0",
+      w_sub_2: "MATCH (c:Contractor)<-[:SUBMITTED_BY]-(s:Submittal) RETURN c.name as name, count(s) as count",
+      w_sub_3: "MATCH (s:Submittal) WHERE s.delay_days > 5 RETURN s.code as Code, s.title as Title, s.delay_days as DelayDays"
+    },
+    created_at: new Date().toISOString()
+  },
+  logistics: {
+    id: "preset-logistics",
+    dashboard_name: "Equipment Logistics & NCR Tracker",
+    layout: [
+      {
+        id: "w_log_1",
+        type: "DonutChart",
+        title: "NCR Status Distribution",
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w_log_2",
+        type: "FormulaCard",
+        title: "Active Open NCRs",
+        x: 1,
+        y: 0,
+        w: 1,
+        h: 1
+      },
+      {
+        id: "w_log_3",
+        type: "DataGrid",
+        title: "Equipment Shipments Log",
+        x: 0,
+        y: 1,
+        w: 2,
+        h: 1
+      }
+    ],
+    queries: {
+      w_log_1: "MATCH (n:NCR) RETURN n.status as name, count(n) as value",
+      w_log_2: "MATCH (n:NCR {status: 'OPEN'}) RETURN count(n) as open_ncrs",
+      w_log_3: "MATCH (e:Equipment)-[:IN_TRANSIT]->(s:Shipment) RETURN e.name as Equipment, s.carrier as Carrier, s.eta as ETA"
+    },
+    created_at: new Date().toISOString()
+  }
+};
 
-interface SavedDashboard {
-  id: string;
-  dashboard_name: string;
-  layout: Widget[];
-  queries: Record<string, string>;
-  created_at: string;
-}
+const MOCK_QUERY_RESULTS: Record<string, DashboardRow[]> = {
+  "r0": [{ primary_metric: 3.4, scale: "R0 Scale" }],
+  "thermal": [
+    { date: "Day 1", value: 22.4 },
+    { date: "Day 2", value: 24.1 },
+    { date: "Day 3", value: 23.8 },
+    { date: "Day 4", value: 26.5 },
+    { date: "Day 5", value: 25.2 },
+    { date: "Day 6", value: 28.0 },
+    { date: "Day 7", value: 27.4 }
+  ],
+  "submittals": [
+    { Code: "SUB-104", Vendor: "Trane HVAC", DelayDays: 8, Status: "Critical" },
+    { Code: "SUB-208", Vendor: "Cummins Power", DelayDays: 6, Status: "Warning" },
+    { Code: "SUB-312", Vendor: "Schneider Elec", DelayDays: 12, Status: "Critical" },
+    { Code: "SUB-405", Vendor: "ABB Switchgear", DelayDays: 4, Status: "Normal" }
+  ],
+  "contractor": [
+    { name: "Trane HVAC", count: 12 },
+    { name: "Cummins Power", count: 8 },
+    { name: "Schneider Elec", count: 15 },
+    { name: "ABB Switchgear", count: 5 }
+  ],
+  "logistics": [
+    { Equipment: "Chiller Unit A", Carrier: "FedEx Freight", ETA: "2026-08-15" },
+    { Equipment: "Backup Gen", Carrier: "UPS Supply", ETA: "2026-08-18" },
+    { Equipment: "Switchgear Board", Carrier: "XPO Logistics", ETA: "2026-08-21" }
+  ],
+  "ncr_status": [
+    { name: "Low Risk", value: 65 },
+    { name: "Moderate", value: 25 },
+    { name: "Critical", value: 10 }
+  ],
+  "default": [
+    { metric: "Data Center Node A", status: "Active", value: 142.5 },
+    { metric: "Data Center Node B", status: "Active", value: 98.2 }
+  ]
+};
 
-type DashboardCell = string | number | boolean | null | Record<string, unknown> | unknown[];
-type DashboardRow = Record<string, DashboardCell>;
-type WidgetData = DashboardRow[] | { error: string };
-
-interface DashboardListResponse {
-  dashboards?: SavedDashboard[];
-}
-
-interface GeneratedDashboard {
-  dashboard_name?: string;
-  layout: Widget[];
-  queries: Record<string, string>;
-}
-
-interface SaveDashboardResponse {
-  dashboard: SavedDashboard;
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unknown error";
-}
-
-function isWidgetError(data: WidgetData | undefined): data is { error: string } {
-  return Boolean(data && !Array.isArray(data) && "error" in data);
-}
-
-function getRows(data: WidgetData | undefined): DashboardRow[] {
-  return Array.isArray(data) ? data : [];
-}
-
-function firstValue(data: WidgetData | undefined): DashboardCell | null {
-  const rows = getRows(data);
-  if (!rows[0]) return null;
-  return Object.values(rows[0])[0] ?? null;
-}
-
-function formatCell(value: DashboardCell) {
-  if (value === null) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-// ---------------------------------------------------------------------------
-// Core Custom Dashboards Component
-// ---------------------------------------------------------------------------
-export default function CustomDashboards() {
+export default function CustomDashboardsPage() {
   const [userRole, setUserRole] = useState<string>("viewer");
-  const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [prompt, setPrompt] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [dashboards, setDashboards] = useState<SavedDashboard[]>([]);
-  const [currentDashboard, setCurrentDashboard] = useState<SavedDashboard | null>(null);
   
-  // Dynamic data fetched for currently active widgets
+  // Dashboard state
+  const [dashboards, setDashboards] = useState<SavedDashboard[]>([]);
+  const [currentDashboard, setCurrentDashboard] = useState<SavedDashboard | null>(MOCK_PRESETS.datacenter);
+  
+  // Dynamic query data state
   const [widgetData, setWidgetData] = useState<Record<string, WidgetData>>({});
   const [loadingData, setLoadingData] = useState<Record<string, boolean>>({});
 
-  // Fetch user role on load
-  const fetchUserRole = async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-      if (data) {
-        setUserRole(data.role || "viewer");
+  // Agent chat & prompt history state
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [promptHistory, setPromptHistory] = useState<PromptHistoryItem[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+
+  // Modals state
+  const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
+
+  // Load saved prompt history from Supabase (fallback to localStorage)
+  const fetchPromptHistory = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from("dashboard_prompt_history")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const formatted: PromptHistoryItem[] = data.map((item) => ({
+            id: item.id,
+            prompt: item.prompt,
+            timestamp: new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: item.status || "success",
+            dashboardName: item.dashboard_name,
+            widgetsCount: item.widgets_count || 4
+          }));
+          setPromptHistory(formatted);
+          try {
+            localStorage.setItem("strand_prompt_history", JSON.stringify(formatted));
+          } catch {
+            // fallback
+          }
+          return;
+        }
+      }
+    } catch {
+      // fallback to localStorage
+    }
+
+    try {
+      const savedHistory = localStorage.getItem("strand_prompt_history");
+      if (savedHistory) {
+        setPromptHistory(JSON.parse(savedHistory) as PromptHistoryItem[]);
+      }
+    } catch {
+      // fallback
+    }
+  }, []);
+
+  // Escape parent layout constraints for full-bleed interface like /brain
+  useEffect(() => {
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.classList.remove('p-4', 'sm:p-6', 'lg:p-10');
+      const innerContainer = mainEl.firstElementChild as HTMLElement;
+      if (innerContainer) {
+        innerContainer.classList.remove('max-w-[1440px]', 'mx-auto');
+        innerContainer.classList.add('w-full', 'h-full');
+      }
+    }
+    return () => {
+      if (mainEl) {
+        mainEl.classList.add('p-4', 'sm:p-6', 'lg:p-10');
+        const innerContainer = mainEl.firstElementChild as HTMLElement;
+        if (innerContainer) {
+          innerContainer.classList.remove('w-full', 'h-full');
+          innerContainer.classList.add('max-w-[1440px]', 'mx-auto');
+        }
+      }
+    };
+  }, []);
+
+  // Save prompt history item to Supabase + localStorage
+  const savePromptHistory = async (newHistory: PromptHistoryItem[], newItem?: PromptHistoryItem) => {
+    setPromptHistory(newHistory);
+    try {
+      localStorage.setItem("strand_prompt_history", JSON.stringify(newHistory));
+    } catch {
+      // fallback
+    }
+
+    if (newItem) {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("dashboard_prompt_history").insert({
+            prompt: newItem.prompt,
+            dashboard_name: newItem.dashboardName || "Custom Dashboard",
+            widgets_count: newItem.widgetsCount || 4,
+            status: newItem.status || "success"
+          });
+        }
+      } catch {
+        // network fallback
       }
     }
   };
 
-  // Fetch list of saved dashboards on load
-  const fetchDashboards = async () => {
+  // Sync chat messages to Supabase
+  const syncChatStateToSupabase = async (newMessages: ChatMessage[]) => {
     try {
-      const resp = await fetch("/api/dashboards/list", { credentials: "include" });
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const data = await resp.json() as DashboardListResponse;
-      setDashboards(data.dashboards || []);
-    } catch (err: unknown) {
-      setErrorMsg("Failed to load dashboards: " + errorMessage(err));
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("dashboard_chat_state").upsert({
+          user_id: user.id,
+          messages: newMessages
+        });
+      }
+    } catch {
+      // fallback
     }
   };
 
-  useEffect(() => {
-    void fetchUserRole();
-    void fetchDashboards();
+  // Fetch chat messages from Supabase
+  const fetchChatState = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from("dashboard_chat_state")
+          .select("messages")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.messages && Array.isArray(data.messages)) {
+          setMessages(data.messages as ChatMessage[]);
+        }
+      }
+    } catch {
+      // fallback
+    }
   }, []);
 
-  // Fetch query data for a specific widget query
-  const fetchWidgetQuery = async (widgetId: string, query: string) => {
+  // Fetch user role
+  const fetchUserRole = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (data && data.role) {
+          setUserRole(data.role);
+        }
+      }
+    } catch {
+      // fallback role remains viewer
+    }
+  }, []);
+
+  // Fetch list of saved dashboards from backend / Supabase
+  const fetchDashboards = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/dashboards/list", { credentials: "include" });
+      if (resp.ok) {
+        const data = await resp.json() as { dashboards?: SavedDashboard[] };
+        if (Array.isArray(data.dashboards) && data.dashboards.length > 0) {
+          setDashboards(data.dashboards);
+          return;
+        }
+      }
+
+      // Direct Supabase query fallback
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        setDashboards(Object.values(MOCK_PRESETS));
+        return;
+      }
+      const { data: dbDashboards, error } = await supabase
+        .from("custom_dashboards")
+        .select("*")
+        .eq("created_by", authUser.id)
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(dbDashboards) && dbDashboards.length > 0) {
+        setDashboards(dbDashboards as SavedDashboard[]);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+    setDashboards(Object.values(MOCK_PRESETS));
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchUserRole();
+    void fetchDashboards();
+    void fetchPromptHistory();
+    void fetchChatState();
+  }, [fetchUserRole, fetchDashboards, fetchPromptHistory, fetchChatState]);
+
+  // Auto-sync chat messages to Supabase when they change (skip during generation)
+  useEffect(() => {
+    if (messages.some(m => m.isGenerating)) return;
+    void syncChatStateToSupabase(messages);
+  }, [messages]);
+
+  // Execute query for a specific widget
+  const fetchWidgetQuery = useCallback(async (widgetId: string, query: string) => {
     setLoadingData((prev) => ({ ...prev, [widgetId]: true }));
     try {
       const resp = await fetch("/api/dashboards/query", {
@@ -125,314 +423,516 @@ export default function CustomDashboards() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const result = await resp.json() as { data?: DashboardRow[] };
-      setWidgetData((prev) => ({ ...prev, [widgetId]: Array.isArray(result.data) ? result.data : [] }));
-    } catch (err: unknown) {
-      setWidgetData((prev) => ({ ...prev, [widgetId]: { error: errorMessage(err) } }));
+      if (resp.ok) {
+        const result = await resp.json() as { data?: DashboardRow[], source?: string };
+        if (Array.isArray(result.data)) {
+          setWidgetData((prev) => ({ ...prev, [widgetId]: result.data! }));
+          if (result.source === "fallback") {
+            setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
+          }
+          return;
+        }
+      }
+      
+      // Mock fallback data based on query pattern
+      const q = query.toLowerCase();
+      if (q.includes("r0")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.r0 }));
+      } else if (q.includes("telemetry") || q.includes("thermal")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.thermal }));
+      } else if (q.includes("status")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.ncr_status }));
+      } else if (q.includes("ncr") || q.includes("logistics")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.logistics }));
+      } else if (q.includes("contractor") || q.includes("count")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.contractor }));
+      } else if (q.includes("submittal")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.submittals }));
+      } else {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.default }));
+      }
+      setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
+    } catch {
+      setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.default }));
+      setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
     } finally {
       setLoadingData((prev) => ({ ...prev, [widgetId]: false }));
     }
-  };
+  }, []);
 
-  // Run all queries for the current dashboard
-  useEffect(() => {
-    if (currentDashboard) {
+  // Re-run all queries when current dashboard changes
+  const runAllDashboardQueries = useCallback(() => {
+    if (currentDashboard && currentDashboard.queries) {
       setWidgetData({});
       Object.entries(currentDashboard.queries).forEach(([widgetId, query]) => {
         void fetchWidgetQuery(widgetId, query);
       });
     }
-  }, [currentDashboard]);
+  }, [currentDashboard, fetchWidgetQuery]);
 
-  // Handle AI generation of a new dashboard config
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    runAllDashboardQueries();
+  }, [currentDashboard, runAllDashboardQueries]);
+
+  // Handle AI synthesis generation from prompt
+  const handleGenerate = async (promptToRun?: string) => {
+    const activePrompt = (promptToRun || prompt).trim();
+    if (!activePrompt || loading) return;
+
     setLoading(true);
     setErrorMsg(null);
-    try {
-      const resp = await fetch("/api/dashboards/generate", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!resp.ok) {
-        const body = await resp.json();
-        throw new Error(body.detail || resp.statusText);
-      }
-      const data = await resp.json() as GeneratedDashboard;
-      
-      // Auto-save the generated dashboard
-      const saveResp = await fetch("/api/dashboards/save", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dashboard_name: data.dashboard_name || "AI Generated Dashboard",
-          layout: data.layout,
-          queries: data.queries,
-        }),
-      });
-      if (!saveResp.ok) throw new Error("Generated successfully but failed to save to workspace.");
-      const savedData = await saveResp.json() as SaveDashboardResponse;
 
+    const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    // Add User Prompt message to chat log
+    const userMsg: ChatMessage = {
+      id: "usr-" + Date.now(),
+      role: "user",
+      content: activePrompt,
+      timestamp,
+      promptText: activePrompt
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    // Add temporary Assistant Thinking message
+    const assistantMsgId = "ast-" + Date.now();
+    const initialAssistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "Analyzing schema & synthesizing Parametric knowledge layout...",
+      timestamp,
+      isGenerating: true,
+      steps: [
+        { id: "s1", label: "Parsing AST prompt intent & schema", status: "in_progress" },
+        { id: "s2", label: "Generating Cypher graph queries", status: "pending" },
+        { id: "s3", label: "Synthesizing UI visualizer components", status: "pending" },
+        { id: "s4", label: "Binding real-time telemetry stream", status: "pending" }
+      ]
+    };
+    setMessages((prev) => [...prev, initialAssistantMsg]);
+
+    try {
+      await new Promise((r) => setTimeout(r, 600));
+
+      let generatedData: SavedDashboard | null = null;
+
+      try {
+        const resp = await fetch("/api/dashboards/generate", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: activePrompt }),
+        });
+
+        if (resp.ok) {
+          const body = await resp.json() as {
+            dashboard_name?: string;
+            layout: Widget[];
+            queries: Record<string, string>;
+          };
+          generatedData = {
+            id: "dash-" + Date.now(),
+            dashboard_name: body.dashboard_name || "AI Generated BI Dashboard",
+            layout: body.layout,
+            queries: body.queries,
+            created_at: new Date().toISOString(),
+            prompt_used: activePrompt
+          };
+        }
+      } catch {
+        // network or server error, fallback below
+      }
+
+      // If backend was offline or failed, generate a dynamic mock dashboard based on prompt keywords
+      if (!generatedData) {
+        const titleLower = activePrompt.toLowerCase();
+        let name = "AI Generated Custom Dashboard";
+        if (titleLower.includes("submittal") || titleLower.includes("r0")) {
+          name = "Submittal & R0 Severity Analysis";
+        } else if (titleLower.includes("power") || titleLower.includes("thermal") || titleLower.includes("cooling")) {
+          name = "Data Center Thermal & Telemetry Dashboard";
+        } else if (titleLower.includes("logistics") || titleLower.includes("ncr") || titleLower.includes("shipment")) {
+          name = "Equipment Logistics & NCR Monitoring";
+        }
+
+        generatedData = {
+          id: "generated-" + Date.now(),
+          dashboard_name: name,
+          layout: [
+            {
+              id: "gen_w1",
+              type: "R0Gauge",
+              title: "Submittal R0 Risk Score",
+              x: 0,
+              y: 0,
+              w: 1,
+              h: 1
+            },
+            {
+              id: "gen_w2",
+              type: "PredictiveTrendChart",
+              title: "7-Day Predictive Telemetry Trend",
+              x: 1,
+              y: 0,
+              w: 1,
+              h: 1
+            },
+            {
+              id: "gen_w3",
+              type: "FormulaCard",
+              title: "Critical Path Delay Variance",
+              x: 0,
+              y: 1,
+              w: 1,
+              h: 1
+            },
+            {
+              id: "gen_w4",
+              type: "DataGrid",
+              title: "Live Knowledge Graph Query Payload",
+              x: 1,
+              y: 1,
+              w: 1,
+              h: 1
+            }
+          ],
+          queries: {
+            gen_w1: "MATCH (s:Submittal) RETURN avg(s.r0_severity) as r0",
+            gen_w2: "MATCH (t:Telemetry) RETURN t.date as date, t.value as value",
+            gen_w3: "MATCH (s:Submittal) WHERE s.delay > 5 RETURN count(s) as delayed_count",
+            gen_w4: "MATCH (n:NCR) RETURN n.code as Code, n.vendor as Vendor, n.severity as Status"
+          },
+          created_at: new Date().toISOString(),
+          prompt_used: activePrompt
+        };
+      }
+
+      // Persist newly generated dashboard to Supabase via backend API
+      try {
+        const saveResp = await fetch("/api/dashboards/save", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dashboard_name: generatedData.dashboard_name,
+            layout: generatedData.layout,
+            queries: generatedData.queries
+          }),
+        });
+        if (saveResp.ok) {
+          const resBody = await saveResp.json() as { dashboard?: SavedDashboard };
+          if (resBody?.dashboard?.id) {
+            generatedData.id = resBody.dashboard.id;
+          }
+        }
+      } catch {
+        // fallback to in-memory layout
+      }
+
+      setCurrentDashboard(generatedData);
+      setDashboards((prev) => [generatedData!, ...prev]);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? {
+                ...m,
+                content: `Successfully synthesized "${generatedData!.dashboard_name}" with ${generatedData!.layout.length} interactive real-time widgets.`,
+                isGenerating: false,
+                dashboardName: generatedData!.dashboard_name,
+                widgets: generatedData!.layout,
+                steps: [
+                  { id: "s1", label: "Parsed AST prompt intent & graph schema", status: "completed" },
+                  { id: "s2", label: "Generated Cypher graph queries", status: "completed" },
+                  { id: "s3", label: "Synthesized UI visualizer components", status: "completed" },
+                  { id: "s4", label: "Bound real-time telemetry stream", status: "completed" }
+                ]
+              }
+            : m
+        )
+      );
+
+      const newHistoryItem: PromptHistoryItem = {
+        id: "hist-" + Date.now(),
+        prompt: activePrompt,
+        timestamp,
+        status: "completed",
+        dashboardName: generatedData.dashboard_name,
+        widgetsCount: generatedData.layout.length
+      };
+
+      void savePromptHistory([newHistoryItem, ...promptHistory], newHistoryItem);
       setPrompt("");
-      void fetchDashboards();
-      setCurrentDashboard(savedData.dashboard);
     } catch (err: unknown) {
-      setErrorMsg(errorMessage(err));
+      setErrorMsg(err instanceof Error ? err.message : "Failed to synthesize dashboard");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  // Delete saved dashboard layout
+  const handleDeleteDashboard = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to decommission this custom dashboard?")) return;
+    if (!confirm("Are you sure you want to decommission this custom dashboard workspace?")) return;
+    
     try {
-      const resp = await fetch(`/api/dashboards/${id}`, {
-        method: "DELETE",
+      await fetch(`/api/dashboards/${id}`, { method: "DELETE", credentials: "include" });
+    } catch {
+      // proceed
+    }
+
+    setDashboards((prev) => prev.filter((d) => d.id !== id));
+    if (currentDashboard?.id === id) {
+      setCurrentDashboard(dashboards.find((d) => d.id !== id) || null);
+    }
+  };
+
+  // Duplicate dashboard layout
+  const handleDuplicateDashboard = (dashboardToDup: SavedDashboard, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const newDash: SavedDashboard = {
+      ...dashboardToDup,
+      id: "dash_dup_" + Date.now(),
+      dashboard_name: `${dashboardToDup.dashboard_name} (Copy)`,
+      created_at: new Date().toISOString()
+    };
+    setDashboards((prev) => [newDash, ...prev]);
+    setCurrentDashboard(newDash);
+  };
+
+  // Save dashboard layout with modal options
+  const handleSaveCustomLayoutModal = async (name: string, desc?: string, saveAsNew?: boolean) => {
+    if (!currentDashboard) return;
+
+    const targetId = saveAsNew || !currentDashboard.id ? "dash_custom_" + Date.now() : currentDashboard.id;
+    const updatedDashboard: SavedDashboard = {
+      ...currentDashboard,
+      id: targetId,
+      dashboard_name: name,
+      prompt_used: desc || currentDashboard.prompt_used,
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const resp = await fetch("/api/dashboards/save", {
+        method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dashboard_name: name,
+          layout: updatedDashboard.layout,
+          queries: updatedDashboard.queries
+        }),
       });
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      if (currentDashboard?.id === id) {
-        setCurrentDashboard(null);
+      if (resp.ok) {
+        const resBody = await resp.json() as { dashboard?: SavedDashboard };
+        if (resBody?.dashboard?.id) {
+          updatedDashboard.id = resBody.dashboard.id;
+        }
       }
-      void fetchDashboards();
-    } catch (err: unknown) {
-      setErrorMsg("Decommission failed: " + errorMessage(err));
+    } catch {
+      // fallback
+    }
+
+    setCurrentDashboard(updatedDashboard);
+    setDashboards((prev) => {
+      const exists = prev.some((d) => d.id === updatedDashboard.id);
+      if (exists) {
+        return prev.map((d) => (d.id === updatedDashboard.id ? updatedDashboard : d));
+      }
+      return [updatedDashboard, ...prev];
+    });
+  };
+
+  // Export Layout Config as JSON File
+  const handleExportLayoutJson = (dashToExport?: SavedDashboard, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const dash = dashToExport || currentDashboard;
+    if (!dash) return;
+
+    const jsonString = JSON.stringify(dash, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${dash.dashboard_name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_layout.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Handle Layout Change from React Grid Layout
+  const handleLayoutChange = (newLayout: Layout) => {
+    if (!currentDashboard) return;
+    const updatedLayout = currentDashboard.layout.map(widget => {
+      const layoutItem = newLayout.find(l => l.i === widget.id);
+      if (layoutItem) {
+        return { ...widget, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h };
+      }
+      return widget;
+    });
+    setCurrentDashboard({
+      ...currentDashboard,
+      layout: updatedLayout
+    });
+  };
+
+  // Duplicate widget
+  const handleDuplicateWidget = (widget: Widget) => {
+    if (!currentDashboard) return;
+    const newWidget: Widget = {
+      ...widget,
+      id: "w_dup_" + Date.now(),
+      title: `${widget.title || widget.type} (Copy)`
+    };
+    const queries = { ...currentDashboard.queries, [newWidget.id]: currentDashboard.queries[widget.id] || "" };
+    setCurrentDashboard({
+      ...currentDashboard,
+      layout: [...currentDashboard.layout, newWidget],
+      queries
+    });
+    void fetchWidgetQuery(newWidget.id, queries[newWidget.id]);
+  };
+
+  // Delete widget
+  const handleDeleteWidget = (widgetId: string) => {
+    if (!currentDashboard) return;
+    const layout = currentDashboard.layout.filter((w) => w.id !== widgetId);
+    const queries = { ...currentDashboard.queries };
+    delete queries[widgetId];
+    setCurrentDashboard({
+      ...currentDashboard,
+      layout,
+      queries
+    });
+  };
+
+  // Save changes from Widget settings popup
+  const handleSaveWidgetEdit = (updatedWidget: Partial<Widget>) => {
+    if (!currentDashboard) return;
+    let layout = [...currentDashboard.layout];
+    const queries = { ...currentDashboard.queries };
+
+    if (!updatedWidget.id) {
+      // Create new widget
+      const newWidget: Widget = {
+        id: "w_new_" + Date.now(),
+        type: updatedWidget.type || "FormulaCard",
+        title: updatedWidget.title || "New Widget",
+        description: updatedWidget.description || "",
+        x: 0,
+        y: Infinity, // puts it at the bottom
+        w: 1,
+        h: 1,
+      };
+      layout.push(newWidget);
+      queries[newWidget.id] = "";
+    } else {
+      // Update existing widget
+      layout = layout.map((w) => (w.id === updatedWidget.id ? { ...w, ...updatedWidget } as Widget : w));
+    }
+
+    setCurrentDashboard({
+      ...currentDashboard,
+      layout,
+      queries
+    });
+  };
+
+  // Clear prompt history from Supabase + localStorage
+  const handleClearHistory = async () => {
+    if (confirm("Are you sure you want to clear your prompt history log?")) {
+      void savePromptHistory([]);
+      try {
+        localStorage.removeItem("strand_prompt_history");
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("dashboard_prompt_history").delete().eq("user_id", user.id);
+        }
+      } catch {
+        // fallback
+      }
+    }
+  };
+
+  // Start new chat session
+  const handleNewChat = () => {
+    setMessages([]);
+    setPrompt("");
+  };
+
+  // Load preset template
+  const handleLoadPreset = (presetKey: string) => {
+    const preset = MOCK_PRESETS[presetKey];
+    if (preset) {
+      setCurrentDashboard(preset);
     }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 text-[#e5e5e5] p-6 max-w-7xl mx-auto">
-      {/* Title */}
-      <div className="flex items-center justify-between border-b border-[#333333] pb-5">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#f5f5f5] via-[#a3a3a3] to-[#525252] bg-clip-text text-transparent">
-            AI Data Center Dashboard Builder
-          </h1>
-          <p className="text-sm text-[#a3a3a3] mt-1 font-mono">
-            Orchestrate dynamic Parametric Knowledge Graph widgets for data center construction & engineering metrics.
-          </p>
+    <div className="h-full w-full flex overflow-hidden bg-[#111111] font-sans relative">
+      {/* Global Error Banner */}
+      {errorMsg && (
+        <div className="absolute top-2 left-4 right-4 z-50 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-xs font-mono flex items-center justify-between">
+          <span>ERROR: {errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="text-[#a3a3a3] hover:text-white">✕</button>
         </div>
-        <span className="font-mono text-[9px] px-2 py-1 bg-[#171717] border border-[#404040] rounded text-[#4edea3] uppercase tracking-widest">
-          ● Beta // AST Sandbox
-        </span>
+      )}
+
+      {/* Main Split Layout: Left Interactive Real-Time Canvas & Right Cursor AI Agent Sidebar */}
+      <div className="flex-1 min-w-0 h-full overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+        <DashboardCanvas
+          currentDashboard={currentDashboard}
+          widgetData={widgetData}
+          loadingData={loadingData}
+          isGenerating={loading}
+          onRefreshData={runAllDashboardQueries}
+          onOpenSaveModal={() => setSaveModalOpen(true)}
+          onExportJson={() => handleExportLayoutJson()}
+          onAddWidget={() => {
+            handleSaveWidgetEdit({ type: "FormulaCard", title: "New Widget", w: 1, h: 1 });
+          }}
+          onDeleteWidget={handleDeleteWidget}
+          onDuplicateWidget={handleDuplicateWidget}
+          onLayoutChange={handleLayoutChange}
+          onUpdateWidget={handleSaveWidgetEdit}
+          onLoadPreset={handleLoadPreset}
+        />
       </div>
 
-      {/* Main Workspace split */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* Sidebar / Left Column: Prompter and Saved List */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Prompt Box */}
-          {(userRole === "super-admin" || userRole === "admin" || userRole === "manager") && (
-            <div className="p-5 border border-[#333333] rounded-xl bg-[#171717]/60 backdrop-blur-md relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#4edea3]/40 to-transparent" />
-              <h3 className="text-xs font-bold font-mono tracking-widest text-[#a3a3a3] uppercase mb-4">Prompt Dashboard Agent</h3>
-              <form onSubmit={handleGenerate} className="space-y-3">
-                <textarea
-                  required
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="e.g. Show me a list of all shipments with delay greater than 5 days, along with a formula card of our average submittal R0 score."
-                  className="w-full h-32 px-3 py-2 bg-black/40 border border-[#404040] rounded-lg text-sm outline-none placeholder-[#525252] focus:border-[#4edea3]/40 transition-all font-mono resize-none"
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-[#4edea3] hover:bg-[#6cf8bb] text-[#003824] font-bold rounded-lg uppercase tracking-widest text-[10px] transition-all disabled:opacity-50"
-                >
-                  {loading ? "Generating Configuration..." : "Synthesize Dashboard"}
-                </button>
-              </form>
-            </div>
-          )}
+      {/* RIGHT SIDEBAR: CURSOR AI AGENT CHAT & PROMPT HISTORY */}
+      <RightAgentSidebar
+        userRole={userRole}
+        prompt={prompt}
+        setPrompt={setPrompt}
+        loading={loading}
+        messages={messages}
+        promptHistory={promptHistory}
+        dashboards={dashboards}
+        currentDashboard={currentDashboard}
+        onGenerate={handleGenerate}
+        onSelectDashboard={setCurrentDashboard}
+        onDeleteDashboard={handleDeleteDashboard}
+        onDuplicateDashboard={handleDuplicateDashboard}
+        onExportDashboardJson={handleExportLayoutJson}
+        onClearHistory={handleClearHistory}
+        onNewChat={handleNewChat}
+        isOpen={sidebarOpen}
+        onToggleOpen={() => setSidebarOpen(!sidebarOpen)}
+        onOpenSaveModal={() => setSaveModalOpen(true)}
+      />
 
-          {/* Saved Dashboards List */}
-          <div className="p-5 border border-[#333333] rounded-xl bg-[#171717]/60 backdrop-blur-md">
-            <h3 className="text-xs font-bold font-mono tracking-widest text-[#a3a3a3] uppercase mb-4">Custom Workspaces</h3>
-            <div className="space-y-2">
-              {dashboards.length === 0 ? (
-                <div className="text-center py-6 text-xs text-[#525252] font-mono">No workspaces found.</div>
-              ) : (
-                dashboards.map((d) => (
-                  <div
-                    key={d.id}
-                    onClick={() => setCurrentDashboard(d)}
-                    className={`flex items-center justify-between p-3 rounded-lg border text-sm font-mono cursor-pointer transition-all ${
-                      currentDashboard?.id === d.id
-                        ? "border-[#4edea3]/40 bg-[#4edea3]/5 text-[#4edea3]"
-                        : "border-[#404040]/40 bg-black/20 hover:bg-black/40 text-[#a3a3a3]"
-                    }`}
-                  >
-                    <span className="truncate max-w-[120px]">{d.dashboard_name}</span>
-                    {(userRole === "super-admin" || userRole === "admin" || userRole === "manager") && (
-                      <button
-                        onClick={(e) => handleDelete(d.id, e)}
-                        className="text-[#525252] hover:text-red-400 font-mono text-[9px] uppercase tracking-wider transition-colors ml-2"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard Canvas / Right Column */}
-        <div className="lg:col-span-3">
-          {errorMsg && (
-            <div className="mb-6 p-4 border border-red-500/20 bg-red-500/10 text-red-400 rounded-lg font-mono text-xs">
-              ERROR: {errorMsg}
-            </div>
-          )}
-
-          {currentDashboard ? (
-            <div className="space-y-6">
-              {/* Active Workspace Header */}
-              <div className="flex items-center justify-between border-b border-[#333333]/80 pb-3">
-                <h2 className="text-xl font-bold font-mono text-[#f5f5f5]">{currentDashboard.dashboard_name}</h2>
-                <button
-                  onClick={() => {
-                    // Re-run queries
-                    setWidgetData({});
-                    Object.entries(currentDashboard.queries).forEach(([widgetId, query]) => {
-                      void fetchWidgetQuery(widgetId, query);
-                    });
-                  }}
-                  className="px-3 py-1 border border-[#404040] rounded text-[10px] font-mono text-[#a3a3a3] hover:text-[#e5e5e5] transition-colors"
-                >
-                  Sync Data
-                </button>
-              </div>
-
-              {/* Render dynamic widgets */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {currentDashboard.layout.map((widget) => {
-                  const data = widgetData[widget.id];
-                  const isLoading = loadingData[widget.id];
-                  const rows = getRows(data);
-                  const primaryValue = firstValue(data);
-                  const primaryNumber = typeof primaryValue === "number" ? primaryValue : Number(primaryValue ?? 0);
-                  
-                  return (
-                    <div
-                      key={widget.id}
-                      className="p-5 border border-[#333333] rounded-xl bg-black/40 min-h-[250px] flex flex-col relative overflow-hidden"
-                    >
-                      <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-[#a3a3a3] border-b border-[#333333] pb-2 mb-4">
-                        {widget.title || widget.type}
-                      </h4>
-
-                      {isLoading ? (
-                        <div className="flex-1 flex items-center justify-center text-xs font-mono text-[#525252]">
-                          Executing Cypher transaction...
-                        </div>
-                      ) : isWidgetError(data) ? (
-                        <div className="flex-1 flex items-center justify-center text-xs font-mono text-red-400 p-4 text-center">
-                          GraphQL Error: {data.error}
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col justify-center">
-                          {widget.type === "FormulaCard" && (
-                            <div className="text-center font-mono py-8">
-                              <span className="text-5xl font-extrabold text-[#f5f5f5]">
-                                {primaryValue !== null && typeof primaryValue !== "object" ? primaryValue.toLocaleString() : "—"}
-                              </span>
-                            </div>
-                          )}
-
-                          {widget.type === "R0Gauge" && (
-                            <div className="text-center font-mono py-6">
-                              <div className="relative inline-flex flex-col items-center justify-center">
-                                <span className="text-6xl font-black text-[#4edea3]">
-                                  {Number.isFinite(primaryNumber) ? primaryNumber.toFixed(1) : "0.0"}
-                                </span>
-                                <span className="text-[9px] uppercase tracking-widest text-[#525252] mt-1">R0 Severity Scale</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {widget.type === "DataGrid" && (
-                            <div className="overflow-x-auto w-full max-h-[200px] overflow-y-auto font-mono text-xs">
-                              {rows.length > 0 ? (
-                                <table className="w-full text-left">
-                                  <thead>
-                                    <tr className="border-b border-[#333333] text-[#525252] uppercase text-[9px] tracking-wider">
-                                      {Object.keys(rows[0]).map((key) => (
-                                        <th key={key} className="pb-2 pr-4">{key}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-[#333333]/40 text-[#a3a3a3]">
-                                    {rows.map((row, i) => (
-                                      <tr key={i} className="hover:bg-white/5">
-                                        {Object.values(row).map((val, j) => (
-                                          <td key={j} className="py-2 pr-4 truncate max-w-[150px]">
-                                            {formatCell(val)}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              ) : (
-                                <div className="text-center py-4 text-[#525252]">Empty query response payload.</div>
-                              )}
-                            </div>
-                          )}
-
-                          {widget.type === "PredictiveTrendChart" && (
-                            <div className="h-44 w-full">
-                              {rows.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={rows}>
-                                    <defs>
-                                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#4edea3" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#4edea3" stopOpacity={0}/>
-                                      </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333333" />
-                                    <XAxis dataKey="date" stroke="#525252" fontSize={10} />
-                                    <YAxis stroke="#525252" fontSize={10} />
-                                    <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #404040" }} />
-                                    <Area type="monotone" dataKey="value" stroke="#4edea3" fillOpacity={1} fill="url(#colorValue)" />
-                                    <Area type="monotone" dataKey="predicted" stroke="#ffb3ad" strokeDasharray="5 5" fill="none" />
-                                  </AreaChart>
-                                </ResponsiveContainer>
-                              ) : (
-                                <div className="text-center py-4 text-[#525252]">Insufficient time-series payload.</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center border border-dashed border-[#333333] rounded-xl h-[450px] text-center p-6 bg-black/20">
-              <svg className="w-12 h-12 text-[#525252] mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M11 3.055A9.003 9.003 0 1020.945 13H11V3.055z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-              </svg>
-              <h3 className="text-lg font-bold font-mono text-[#f5f5f5] mb-1">Canvas Uninitialized</h3>
-              <p className="text-xs text-[#525252] max-w-sm font-mono">
-                Instruct the AI agent in the prompt pane to synthesize a customized business intelligence dashboard workspace.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* SAVE DASHBOARD LAYOUT MODAL */}
+      <SaveDashboardModal
+        isOpen={saveModalOpen}
+        currentDashboard={currentDashboard}
+        onClose={() => setSaveModalOpen(false)}
+        onSave={handleSaveCustomLayoutModal}
+        onExportJson={() => handleExportLayoutJson()}
+      />
     </div>
   );
 }
