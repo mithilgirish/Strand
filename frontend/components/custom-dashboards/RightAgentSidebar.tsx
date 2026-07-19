@@ -4,27 +4,22 @@ import React, { useState, useRef, useEffect } from "react";
 import { 
   Bot, 
   User, 
-  Send, 
   Clock, 
   CheckCircle2, 
   Loader2, 
   History, 
   FolderKanban, 
   ChevronRight, 
-  ChevronLeft,
-  X, 
   Trash2, 
   Play, 
   Plus,
   Zap,
   Layout,
-  Layers,
   MessageSquare,
   FileCode,
-  Copy,
-  Star
+  Copy
 } from "lucide-react";
-import { SavedDashboard, PromptHistoryItem, ChatMessage, AgentStep } from "./types";
+import { SavedDashboard, PromptHistoryItem, ChatMessage } from "./types";
 
 interface RightAgentSidebarProps {
   userRole: string;
@@ -459,7 +454,7 @@ export default function RightAgentSidebar({
                   </div>
 
                   <p className="text-[#e5e5e5] text-xs leading-relaxed font-sans line-clamp-3">
-                    "{item.prompt}"
+                    &quot;{item.prompt}&quot;
                   </p>
 
                   <div className="flex items-center justify-between pt-1 border-t border-[#262626]/60">

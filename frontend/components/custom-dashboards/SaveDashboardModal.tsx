@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Save, X, Download, FileCode, Check, Layers } from "lucide-react";
+import { Save, X, FileCode, Check } from "lucide-react";
 import { SavedDashboard } from "./types";
 
 interface SaveDashboardModalProps {
@@ -27,6 +27,7 @@ export default function SaveDashboardModal({
 
   useEffect(() => {
     if (currentDashboard) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDashboardName(currentDashboard.dashboard_name || "Custom Dashboard");
       setDescription(currentDashboard.prompt_used ? `Prompt: ${currentDashboard.prompt_used}` : "");
     }

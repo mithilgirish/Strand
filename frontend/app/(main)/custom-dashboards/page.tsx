@@ -8,7 +8,6 @@ import {
   WidgetData,
   PromptHistoryItem,
   ChatMessage,
-  DashboardTheme,
   DashboardRow
 } from "@/components/custom-dashboards/types";
 import RightAgentSidebar from "@/components/custom-dashboards/RightAgentSidebar";
@@ -170,6 +169,22 @@ const MOCK_QUERY_RESULTS: Record<string, DashboardRow[]> = {
     { Code: "SUB-312", Vendor: "Schneider Elec", DelayDays: 12, Status: "Critical" },
     { Code: "SUB-405", Vendor: "ABB Switchgear", DelayDays: 4, Status: "Normal" }
   ],
+  "contractor": [
+    { name: "Trane HVAC", count: 12 },
+    { name: "Cummins Power", count: 8 },
+    { name: "Schneider Elec", count: 15 },
+    { name: "ABB Switchgear", count: 5 }
+  ],
+  "logistics": [
+    { Equipment: "Chiller Unit A", Carrier: "FedEx Freight", ETA: "2026-08-15" },
+    { Equipment: "Backup Gen", Carrier: "UPS Supply", ETA: "2026-08-18" },
+    { Equipment: "Switchgear Board", Carrier: "XPO Logistics", ETA: "2026-08-21" }
+  ],
+  "ncr_status": [
+    { name: "Low Risk", value: 65 },
+    { name: "Moderate", value: 25 },
+    { name: "Critical", value: 10 }
+  ],
   "default": [
     { metric: "Data Center Node A", status: "Active", value: 142.5 },
     { metric: "Data Center Node B", status: "Active", value: 98.2 }
@@ -177,7 +192,7 @@ const MOCK_QUERY_RESULTS: Record<string, DashboardRow[]> = {
 };
 
 export default function CustomDashboardsPage() {
-  const [userRole, setUserRole] = useState<string>("admin");
+  const [userRole, setUserRole] = useState<string>("viewer");
   const [prompt, setPrompt] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -198,13 +213,44 @@ export default function CustomDashboardsPage() {
   // Modals state
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
 
-  // Load saved prompt history from localStorage on initial mount
-  useEffect(() => {
+  // Load saved prompt history from Supabase (fallback to localStorage)
+  const fetchPromptHistory = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from("dashboard_prompt_history")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const formatted: PromptHistoryItem[] = data.map((item) => ({
+            id: item.id,
+            prompt: item.prompt,
+            timestamp: new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            status: item.status || "success",
+            dashboardName: item.dashboard_name,
+            widgetsCount: item.widgets_count || 4
+          }));
+          setPromptHistory(formatted);
+          try {
+            localStorage.setItem("strand_prompt_history", JSON.stringify(formatted));
+          } catch {
+            // fallback
+          }
+          return;
+        }
+      }
+    } catch {
+      // fallback to localStorage
+    }
+
     try {
       const savedHistory = localStorage.getItem("strand_prompt_history");
       if (savedHistory) {
-        const parsed = JSON.parse(savedHistory) as PromptHistoryItem[];
-        setPromptHistory(parsed);
+        setPromptHistory(JSON.parse(savedHistory) as PromptHistoryItem[]);
       }
     } catch {
       // fallback
@@ -234,18 +280,72 @@ export default function CustomDashboardsPage() {
     };
   }, []);
 
-  // Save prompt history to localStorage
-  const savePromptHistory = (newHistory: PromptHistoryItem[]) => {
+  // Save prompt history item to Supabase + localStorage
+  const savePromptHistory = async (newHistory: PromptHistoryItem[], newItem?: PromptHistoryItem) => {
     setPromptHistory(newHistory);
     try {
       localStorage.setItem("strand_prompt_history", JSON.stringify(newHistory));
     } catch {
       // fallback
     }
+
+    if (newItem) {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("dashboard_prompt_history").insert({
+            prompt: newItem.prompt,
+            dashboard_name: newItem.dashboardName || "Custom Dashboard",
+            widgets_count: newItem.widgetsCount || 4,
+            status: newItem.status || "success"
+          });
+        }
+      } catch {
+        // network fallback
+      }
+    }
   };
 
+  // Sync chat messages to Supabase
+  const syncChatStateToSupabase = async (newMessages: ChatMessage[]) => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("dashboard_chat_state").upsert({
+          user_id: user.id,
+          messages: newMessages
+        });
+      }
+    } catch {
+      // fallback
+    }
+  };
+
+  // Fetch chat messages from Supabase
+  const fetchChatState = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from("dashboard_chat_state")
+          .select("messages")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.messages && Array.isArray(data.messages)) {
+          setMessages(data.messages as ChatMessage[]);
+        }
+      }
+    } catch {
+      // fallback
+    }
+  }, []);
+
   // Fetch user role
-  const fetchUserRole = async () => {
+  const fetchUserRole = useCallback(async () => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -260,30 +360,58 @@ export default function CustomDashboardsPage() {
         }
       }
     } catch {
-      // fallback role remains admin
+      // fallback role remains viewer
     }
-  };
+  }, []);
 
-  // Fetch list of saved dashboards from backend
-  const fetchDashboards = async () => {
+  // Fetch list of saved dashboards from backend / Supabase
+  const fetchDashboards = useCallback(async () => {
     try {
       const resp = await fetch("/api/dashboards/list", { credentials: "include" });
-      if (!resp.ok) return;
-      const data = await resp.json() as { dashboards?: SavedDashboard[] };
-      if (Array.isArray(data.dashboards) && data.dashboards.length > 0) {
-        setDashboards(data.dashboards);
-      } else {
+      if (resp.ok) {
+        const data = await resp.json() as { dashboards?: SavedDashboard[] };
+        if (Array.isArray(data.dashboards) && data.dashboards.length > 0) {
+          setDashboards(data.dashboards);
+          return;
+        }
+      }
+
+      // Direct Supabase query fallback
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
         setDashboards(Object.values(MOCK_PRESETS));
+        return;
+      }
+      const { data: dbDashboards, error } = await supabase
+        .from("custom_dashboards")
+        .select("*")
+        .eq("created_by", authUser.id)
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(dbDashboards) && dbDashboards.length > 0) {
+        setDashboards(dbDashboards as SavedDashboard[]);
+        return;
       }
     } catch {
-      setDashboards(Object.values(MOCK_PRESETS));
+      // fallback
     }
-  };
+    setDashboards(Object.values(MOCK_PRESETS));
+  }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchUserRole();
     void fetchDashboards();
-  }, []);
+    void fetchPromptHistory();
+    void fetchChatState();
+  }, [fetchUserRole, fetchDashboards, fetchPromptHistory, fetchChatState]);
+
+  // Auto-sync chat messages to Supabase when they change (skip during generation)
+  useEffect(() => {
+    if (messages.some(m => m.isGenerating)) return;
+    void syncChatStateToSupabase(messages);
+  }, [messages]);
 
   // Execute query for a specific widget
   const fetchWidgetQuery = useCallback(async (widgetId: string, query: string) => {
@@ -296,25 +424,37 @@ export default function CustomDashboardsPage() {
         body: JSON.stringify({ query }),
       });
       if (resp.ok) {
-        const result = await resp.json() as { data?: DashboardRow[] };
+        const result = await resp.json() as { data?: DashboardRow[], source?: string };
         if (Array.isArray(result.data)) {
           setWidgetData((prev) => ({ ...prev, [widgetId]: result.data! }));
+          if (result.source === "fallback") {
+            setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
+          }
           return;
         }
       }
       
       // Mock fallback data based on query pattern
-      if (query.toLowerCase().includes("r0")) {
+      const q = query.toLowerCase();
+      if (q.includes("r0")) {
         setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.r0 }));
-      } else if (query.toLowerCase().includes("telemetry") || query.toLowerCase().includes("thermal")) {
+      } else if (q.includes("telemetry") || q.includes("thermal")) {
         setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.thermal }));
-      } else if (query.toLowerCase().includes("submittal") || query.toLowerCase().includes("ncr")) {
+      } else if (q.includes("status")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.ncr_status }));
+      } else if (q.includes("ncr") || q.includes("logistics")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.logistics }));
+      } else if (q.includes("contractor") || q.includes("count")) {
+        setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.contractor }));
+      } else if (q.includes("submittal")) {
         setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.submittals }));
       } else {
         setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.default }));
       }
+      setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
     } catch {
       setWidgetData((prev) => ({ ...prev, [widgetId]: MOCK_QUERY_RESULTS.default }));
+      setErrorMsg("Warning: Live telemetry is offline. Displaying simulated demo data.");
     } finally {
       setLoadingData((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -331,6 +471,7 @@ export default function CustomDashboardsPage() {
   }, [currentDashboard, fetchWidgetQuery]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     runAllDashboardQueries();
   }, [currentDashboard, runAllDashboardQueries]);
 
@@ -521,7 +662,7 @@ export default function CustomDashboardsPage() {
         widgetsCount: generatedData.layout.length
       };
 
-      savePromptHistory([newHistoryItem, ...promptHistory]);
+      void savePromptHistory([newHistoryItem, ...promptHistory], newHistoryItem);
       setPrompt("");
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to synthesize dashboard");
@@ -700,10 +841,20 @@ export default function CustomDashboardsPage() {
     });
   };
 
-  // Clear prompt history
-  const handleClearHistory = () => {
+  // Clear prompt history from Supabase + localStorage
+  const handleClearHistory = async () => {
     if (confirm("Are you sure you want to clear your prompt history log?")) {
-      savePromptHistory([]);
+      void savePromptHistory([]);
+      try {
+        localStorage.removeItem("strand_prompt_history");
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("dashboard_prompt_history").delete().eq("user_id", user.id);
+        }
+      } catch {
+        // fallback
+      }
     }
   };
 
@@ -722,7 +873,7 @@ export default function CustomDashboardsPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex overflow-hidden bg-[#111111] font-sans relative">
+    <div className="h-full w-full flex overflow-hidden bg-[#111111] font-sans relative">
       {/* Global Error Banner */}
       {errorMsg && (
         <div className="absolute top-2 left-4 right-4 z-50 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-xs font-mono flex items-center justify-between">
