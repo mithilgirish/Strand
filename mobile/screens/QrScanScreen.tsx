@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, Keyboard } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, Keyboard, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -34,6 +34,9 @@ export default function QrScanScreen({ navigation }: any) {
   }, [permission]);
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
+    // Give physical haptic feedback immediately on successful scan
+    Vibration.vibrate(150);
+    
     setScanned(true);
     setIsScannerActive(false); 
     setTorchEnabled(false);

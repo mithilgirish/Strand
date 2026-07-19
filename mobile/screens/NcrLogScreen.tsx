@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Image, Keyboard, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function NcrLogScreen({ route, navigation }: any) {
   const { equipmentTag, stepId } = route.params;
@@ -12,7 +13,10 @@ export default function NcrLogScreen({ route, navigation }: any) {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [inputMode, setInputMode] = useState<'voice' | 'type'>('voice');
   
   // Results states
   const [resultNcr, setResultNcr] = useState<any>(null);
@@ -25,6 +29,22 @@ export default function NcrLogScreen({ route, navigation }: any) {
       }
     };
   }, [recording]);
+
+  const handleCapturePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'Camera permission is required.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
 
   const startRecording = async () => {
     try {
@@ -63,12 +83,35 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
     try {
       await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
       setRecording(null);
+      setTranscript('Transcribing audio locally on backend...');
       
-      // In a real app, send audio file to Whisper API.
-      // Since no backend endpoint exists in this version, we require manual text entry.
-      Alert.alert('Voice Transcription Unavailable', 'Please type your observation manually in the text box below.');
-      setTranscript('');
+      if (uri) {
+        const formData = new FormData();
+        formData.append('audio', {
+          uri,
+          name: 'audio.m4a',
+          type: 'audio/m4a'
+        } as any);
+
+        const headers = await buildJsonAuthHeaders();
+        // Remove Content-Type so fetch can auto-set the boundary for multipart/form-data
+        delete (headers as any)['Content-Type'];
+        
+        const response = await fetch(`${API_BASE_URL}/inspector/transcribe`, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setTranscript(data.transcript || 'No speech detected.');
+        } else {
+          setTranscript('Transcription failed. Please type manually.');
+        }
+      }
     } catch (err) {
       console.error('Failed to stop recording', err);
     }
@@ -95,6 +138,7 @@ export default function NcrLogScreen({ route, navigation }: any) {
           equipment_tag: equipmentTag,
           step_id: stepId,
           raised_by: 'field_engineer',
+          photo_url: photoUri ? photoUri : null,
         }),
         signal: controller.signal
       });
@@ -124,6 +168,7 @@ export default function NcrLogScreen({ route, navigation }: any) {
         mitigation: 'Queued locally. Sync to STRAND backend to generate NCR, severity, Spec-DNA reference, and R0 score.',
         raised_by: 'field_engineer',
         status: 'queued_offline',
+        photo_url: photoUri,
       };
 
       const localLogsRaw = await AsyncStorage.getItem('local_ncrs');
@@ -155,45 +200,86 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
         {!resultNcr ? (
           <>
-            <Text style={styles.sectionLabel}>Record Voice Observation</Text>
-            
-            <View style={styles.voiceSection}>
+            <View style={styles.segmentControl}>
               <TouchableOpacity 
-                style={[styles.recordButton, isRecording && styles.recordButtonActive]}
-                onPress={isRecording ? stopRecording : startRecording}
+                style={[styles.segmentBtn, inputMode === 'voice' && styles.segmentBtnActive]}
+                onPress={() => setInputMode('voice')}
               >
-                <Text style={styles.recordIcon}>{isRecording ? '⏹️' : '🎙️'}</Text>
+                <Text style={[styles.segmentText, inputMode === 'voice' && styles.segmentTextActive]}>🎙️ Voice</Text>
               </TouchableOpacity>
-              <Text style={styles.recordStatusText}>
-                {isRecording ? 'Recording audio... Tap to stop' : 'Tap to record audio'}
-              </Text>
-              
-              {isRecording && (
-                <View style={styles.waveformContainer}>
-                  <View style={[styles.waveBar, { height: 15 }]} />
-                  <View style={[styles.waveBar, { height: 30 }]} />
-                  <View style={[styles.waveBar, { height: 45 }]} />
-                  <View style={[styles.waveBar, { height: 25 }]} />
-                  <View style={[styles.waveBar, { height: 35 }]} />
-                  <View style={[styles.waveBar, { height: 10 }]} />
-                </View>
-              )}
+              <TouchableOpacity 
+                style={[styles.segmentBtn, inputMode === 'type' && styles.segmentBtnActive]}
+                onPress={() => setInputMode('type')}
+              >
+                <Text style={[styles.segmentText, inputMode === 'type' && styles.segmentTextActive]}>⌨️ Type Manually</Text>
+              </TouchableOpacity>
             </View>
+
+            {inputMode === 'voice' && (
+              <>
+                <Text style={styles.sectionLabel}>Record Voice Observation</Text>
+                <View style={styles.voiceSection}>
+                  <TouchableOpacity 
+                    style={[styles.recordButton, isRecording && styles.recordButtonActive]}
+                    onPress={isRecording ? stopRecording : startRecording}
+                  >
+                    <Text style={styles.recordIcon}>{isRecording ? '⏹️' : '🎙️'}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.recordStatusText}>
+                    {isRecording ? 'Recording audio... Tap to stop' : 'Tap to record audio'}
+                  </Text>
+                  
+                  {isRecording && (
+                    <View style={styles.waveformContainer}>
+                      <View style={[styles.waveBar, { height: 15 }]} />
+                      <View style={[styles.waveBar, { height: 30 }]} />
+                      <View style={[styles.waveBar, { height: 45 }]} />
+                      <View style={[styles.waveBar, { height: 25 }]} />
+                      <View style={[styles.waveBar, { height: 35 }]} />
+                      <View style={[styles.waveBar, { height: 10 }]} />
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
 
             <View style={styles.transcriptSection}>
               <View style={styles.transcriptHeader}>
-                <Text style={styles.sectionLabel}>Observation Transcript</Text>
+                <Text style={styles.sectionLabel}>{inputMode === 'voice' ? 'Transcription Result' : 'Type Observation'}</Text>
               </View>
               
               <TextInput
-                style={styles.transcriptInput}
+                style={[styles.transcriptInput, inputMode === 'type' && { minHeight: 160 }]}
                 multiline
-                numberOfLines={4}
+                numberOfLines={inputMode === 'type' ? 8 : 4}
                 value={transcript}
                 onChangeText={setTranscript}
-                placeholder="Transcribed text will appear here. You can also edit it manually."
+                placeholder={inputMode === 'voice' ? "Transcribed text will appear here..." : "Type your detailed observation here..."}
                 placeholderTextColor="#64748B"
               />
+            </View>
+
+            <View style={{ marginBottom: 24, width: '100%' }}>
+              <Text style={styles.sectionLabel}>Evidence (Optional)</Text>
+              <TouchableOpacity style={styles.attachPhotoButton} onPress={handleCapturePhoto}>
+                <Text style={styles.attachPhotoText}>📷 {photoUri ? 'Retake Photo' : 'Attach Defect Photo'}</Text>
+              </TouchableOpacity>
+              {photoUri && (
+                <TouchableOpacity
+                  onPress={() => setIsPhotoModalVisible(true)}
+                  activeOpacity={0.8}
+                  style={styles.photoPreviewBlock}
+                >
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={styles.photoPreviewBlockImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.photoPreviewLabel}>
+                    <Text style={styles.photoPreviewLabelText}>👆 Tap to view full screen</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
 
             {loading ? (
@@ -251,6 +337,30 @@ export default function NcrLogScreen({ route, navigation }: any) {
           </View>
         )}
       </ScrollView>
+
+      {/* Full Screen Photo Overlay */}
+      {isPhotoModalVisible && photoUri && (
+        <View 
+          style={[StyleSheet.absoluteFill, styles.modalBackground, { zIndex: 99999, elevation: 99999 }]}
+          pointerEvents="auto"
+        >
+          <TouchableOpacity 
+            style={styles.modalCloseButton} 
+            onPress={() => setIsPhotoModalVisible(false)}
+            onPressOut={() => setIsPhotoModalVisible(false)}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Text style={styles.modalCloseText}>✕ Close</Text>
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: photoUri }} 
+            style={styles.fullScreenImage} 
+            resizeMode="contain" 
+            pointerEvents="none" 
+          />
+        </View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -306,6 +416,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 12,
+  },
+  segmentControl: {
+    flexDirection: 'row',
+    backgroundColor: '#0A0A0A',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentBtnActive: {
+    backgroundColor: '#1C1C1C',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  segmentText: {
+    color: '#737373',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  segmentTextActive: {
+    color: '#F5F5F5',
   },
   sectionLabel: {
     color: '#A3A3A3',
@@ -371,11 +509,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  simulateText: {
-    color: '#E5E5E5',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
   transcriptInput: {
     backgroundColor: '#1C1C1C',
     borderWidth: 1,
@@ -386,6 +519,55 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlignVertical: 'top',
+  },
+  attachPhotoButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: '#404040',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  attachPhotoText: {
+    color: '#E5E5E5',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  photoPreviewBlock: {
+    marginTop: 12,
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#404040',
+  },
+  photoPreviewBlockImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPreviewLabel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  photoPreviewLabelText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  attachedPhotoPreview: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    marginLeft: 12,
+    borderWidth: 1,
+    borderColor: '#404040',
   },
   submitButton: {
     backgroundColor: '#E5E5E5',
@@ -401,6 +583,31 @@ const styles = StyleSheet.create({
     color: '#171717',
     fontWeight: '900',
     fontSize: 16,
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+  },
+  modalCloseText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '80%',
   },
   resultContainer: {
     alignItems: 'center',

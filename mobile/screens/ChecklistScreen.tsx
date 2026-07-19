@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, TextInput } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, TextInput, Pressable, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +26,7 @@ export default function ChecklistScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [steps, setSteps] = useState<TestStep[]>([]);
   const [ncrCount, setNcrCount] = useState(0);
+  const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
 
   useEffect(() => {
     loadChecklist();
@@ -247,7 +248,21 @@ export default function ChecklistScreen({ route, navigation }: any) {
                   <Text style={styles.photoButtonText}>📷 Attach Photo</Text>
                 </TouchableOpacity>
                 {step.photoUri && (
-                  <Image source={{ uri: step.photoUri }} style={styles.photoPreview} />
+                  <Pressable 
+                    style={{ marginLeft: 16, padding: 4 }}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setPreviewPhotoUri(step.photoUri || null);
+                    }}
+                    hitSlop={20}
+                  >
+                    {({ pressed }) => (
+                      <Image 
+                        source={{ uri: step.photoUri }} 
+                        style={[styles.photoPreview, { opacity: pressed ? 0.5 : 1, marginLeft: 0 }]} 
+                      />
+                    )}
+                  </Pressable>
                 )}
               </View>
               
@@ -274,6 +289,28 @@ export default function ChecklistScreen({ route, navigation }: any) {
           <Text style={styles.closeSessionButtonText}>Complete & Generate As-Built</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Full Screen Photo Overlay */}
+      {previewPhotoUri && (
+        <View 
+          style={[StyleSheet.absoluteFill, styles.modalBackground, { zIndex: 99999, elevation: 99999 }]}
+          pointerEvents="auto"
+        >
+          <TouchableOpacity 
+            style={styles.modalCloseButton} 
+            onPress={() => setPreviewPhotoUri(null)}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
+            <Text style={styles.modalCloseText}>✕ Close</Text>
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: previewPhotoUri }} 
+            style={styles.fullScreenImage} 
+            resizeMode="contain" 
+            pointerEvents="none" 
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -510,5 +547,30 @@ const styles = StyleSheet.create({
     color: '#171717',
     fontWeight: '900',
     fontSize: 16,
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+  },
+  modalCloseText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '80%',
   },
 });
