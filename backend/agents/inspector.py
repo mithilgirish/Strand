@@ -30,6 +30,11 @@ CHECKLIST_PATH = DATA_DIR / "commissioning_checklist_generator.json"
 AS_BUILT_DIR = DATA_DIR / "as_built_records"
 
 
+def _tenant_cache_part(tenant_id: str = "default") -> str:
+    """Keep Redis cache keys tenant-scoped without allowing separator bleed."""
+    return (tenant_id or "default").replace(":", "_")
+
+
 async def process_voice_ncr(
     transcript: str,
     equipment_tag: str,
@@ -123,12 +128,13 @@ async def process_voice_ncr(
         "spec_dna_ref": spec_dna_ref,
         "ncr_data": ncr_data.model_dump(),
         "raised_by": raised_by,
+        "tenant_id": tenant_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mitigation": ncr_data.immediate_action,
         "transcript": transcript,
     }
 
-    redis_client.set_json(f"inspector:ncr:{ncr_id}", result, ttl=86400)
+    redis_client.set_json(f"inspector:ncr:{_tenant_cache_part(tenant_id)}:{ncr_id}", result, ttl=86400)
     logger.info(f"Inspector: created NCR {ncr_id} (R0={r0}, severity={severity})")
     return result
 
@@ -234,7 +240,7 @@ async def close_checklist_session(
 ) -> dict:
     """Generate an as-built Markdown record from completed checklist results."""
     if not step_results:
-        checklist = await get_checklist(equipment_tag)
+        checklist = await get_checklist(equipment_tag, tenant_id=tenant_id)
         step_results = checklist["steps"]
 
     steps = [_normalise_step_result(step) for step in step_results]
@@ -250,6 +256,7 @@ async def close_checklist_session(
     markdown = _render_as_built_markdown(
         record_id=record_id,
         equipment_tag=equipment_tag.upper(),
+        tenant_id=tenant_id,
         generated_at=generated_at,
         closed_by=closed_by,
         steps=steps,
@@ -263,6 +270,7 @@ async def close_checklist_session(
         "status": "closed" if pending_count == 0 else "closed_with_pending_items",
         "record_id": record_id,
         "as_built_id": record_id,
+        "tenant_id": tenant_id,
         "equipment_tag": equipment_tag.upper(),
         "markdown_path": str(markdown_path),
         "pdf_path": None,
@@ -275,14 +283,14 @@ async def close_checklist_session(
         "generated_at": generated_at,
         "closed_by": closed_by,
     }
-    redis_client.set_json(f"inspector:as_built:{equipment_tag.upper()}", record, ttl=86400)
+    redis_client.set_json(f"inspector:as_built:{_tenant_cache_part(tenant_id)}:{equipment_tag.upper()}", record, ttl=86400)
     logger.info(f"Inspector: generated as-built record {record_id} for {equipment_tag.upper()}")
     return record
 
 
 async def get_latest_as_built(equipment_tag: str, tenant_id: str = "default") -> dict:
     """Return the latest cached as-built record for an equipment tag."""
-    record = redis_client.get_json(f"inspector:as_built:{equipment_tag.upper()}")
+    record = redis_client.get_json(f"inspector:as_built:{_tenant_cache_part(tenant_id)}:{equipment_tag.upper()}")
     return record or {}
 
 
@@ -312,7 +320,7 @@ async def list_ncrs(tenant_id: str = "default") -> list[dict]:
         logger.debug(f"Inspector: NCR graph list unavailable, using cache: {e}")
 
     ncrs = []
-    for key in redis_client.keys("inspector:ncr:*"):
+    for key in redis_client.keys(f"inspector:ncr:{_tenant_cache_part(tenant_id)}:*"):
         cached = redis_client.get_json(key)
         if cached:
             ncrs.append(cached)
@@ -322,6 +330,7 @@ async def list_ncrs(tenant_id: str = "default") -> list[dict]:
 def _render_as_built_markdown(
     record_id: str,
     equipment_tag: str,
+    tenant_id: str,
     generated_at: str,
     closed_by: str,
     steps: list[dict[str, Any]],
@@ -349,6 +358,7 @@ def _render_as_built_markdown(
         f"# As-Built Commissioning Record\n\n"
         f"- Record ID: {record_id}\n"
         f"- Equipment Tag: {equipment_tag}\n"
+        f"- Tenant ID: {tenant_id}\n"
         f"- Generated At: {generated_at}\n"
         f"- Closed By: {closed_by}\n"
         f"- Pass Count: {pass_count}\n"
@@ -360,6 +370,12 @@ def _render_as_built_markdown(
     )
 
 
-async def run_inspector(transcript: str, equipment_tag: str, step_id: str, raised_by: str = "field_engineer") -> dict:
+async def run_inspector(
+    transcript: str,
+    equipment_tag: str,
+    step_id: str,
+    raised_by: str = "field_engineer",
+    tenant_id: str = "default",
+) -> dict:
     """Convenience wrapper for the tool registry."""
-    return await process_voice_ncr(transcript, equipment_tag, step_id, raised_by)
+    return await process_voice_ncr(transcript, equipment_tag, step_id, raised_by, tenant_id=tenant_id)

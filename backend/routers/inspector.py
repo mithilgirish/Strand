@@ -78,22 +78,4 @@ async def get_as_built(tag: str, user: CurrentUser = Depends(get_current_user)):
             record["content"] = Path(markdown_path).read_text(encoding="utf-8")
         return record
 
-    record_dir = Path(__file__).resolve().parents[2] / "data" / "as_built_records"
-    patterns = [
-        f"*-{tag.upper()}.md",
-        f"*_{tag.upper()}.md",
-    ]
-    files = []
-    for pattern in patterns:
-        files.extend(record_dir.glob(pattern))
-
-    if not files:
-        raise HTTPException(status_code=404, detail=f"No as-built record found for {tag.upper()}")
-
-    latest_file = sorted(files)[-1]
-    return {
-        "equipment_tag": tag.upper(),
-        "filename": latest_file.name,
-        "markdown_path": str(latest_file),
-        "content": latest_file.read_text(encoding="utf-8"),
-    }
+    raise HTTPException(status_code=404, detail=f"No as-built record found for {tag.upper()}")
