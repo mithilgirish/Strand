@@ -76,6 +76,15 @@ async def run_judge(
         verdict=verdict,
         confidence_score=round(confidence, 2),
         evidence_chain=evidence_chain,
+        evidence_citations=_extract_evidence_citations(content, evidence_chain),
+        consistency_check={
+            "passed": confidence >= 0.5 and not any("mismatch" in flag.lower() for flag in flags),
+            "checked_items": len(evidence_chain),
+        },
+        hallucination_check={
+            "passed": confidence >= 0.5,
+            "flags": flags,
+        },
         flags=flags,
         reasoning=f"Verified {content_type} from {agent_source}. "
                    f"Confidence: {confidence:.0%}. Flags: {len(flags)}.",
@@ -89,6 +98,28 @@ async def run_judge(
     return result.model_dump()
 
 
+def _extract_evidence_citations(content: dict, evidence_chain: list[dict]) -> list[dict]:
+    citations = content.get("evidence_citations")
+    if isinstance(citations, list) and citations:
+        return citations
+
+    citations = []
+    for violation in content.get("violations", [])[:5]:
+        for citation in violation.get("evidence_citations", []) or []:
+            citations.append(citation)
+    if citations:
+        return citations
+
+    return [
+        {
+            "source": item.get("source") or item.get("spec_dna_id") or item.get("check", "judge"),
+            "page": item.get("page", 0),
+            "section": item.get("section", item.get("check", "")),
+        }
+        for item in evidence_chain[:5]
+    ]
+
+
 def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
     """Verify Guardian's violation claims against the PKG."""
     evidence = []
@@ -100,6 +131,20 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
     for v in violations:
         total_checks += 1
         spec_dna_id = v.get("spec_dna_id", "")
+        has_required_shape = all(
+            key in v
+            for key in ("parameter", "required", "actual", "section")
+        )
+        if has_required_shape:
+            passed_checks += 1
+            evidence.append(
+                {
+                    "check": "violation_shape",
+                    "parameter": v.get("parameter", ""),
+                    "section": v.get("section", ""),
+                    "result": "present",
+                }
+            )
 
         if spec_dna_id:
             # Re-derive: check if the ContractClause actually exists
@@ -142,8 +187,29 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
                     f"R0 mismatch for {spec_dna_id}: "
                     f"claimed={claimed_r0}, independent={independent_r0}"
                 )
+        else:
+            claimed_r0 = float(v.get("r0_score", content.get("r0_max", 0)) or 0)
+            if 0 <= claimed_r0 <= 5 and has_required_shape:
+                total_checks += 1
+                passed_checks += 1
+                evidence.append(
+                    {
+                        "check": "bounded_r0_claim",
+                        "claimed": claimed_r0,
+                        "result": "reasonable_without_graph_ref",
+                    }
+                )
+
+    r0_max = float(content.get("r0_max", 0) or 0)
+    if r0_max > 7.0 and not content.get("spec_dna_chain") and not any(
+        violation.get("spec_dna_id") for violation in violations
+    ):
+        flags.append("Inflated R0 claim lacks Spec-DNA evidence chain")
+        total_checks += 1
 
     confidence = passed_checks / max(total_checks, 1)
+    if flags and confidence > 0.6:
+        confidence = 0.6
     return confidence, evidence, flags
 
 

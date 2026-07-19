@@ -55,69 +55,10 @@ export default function ChecklistScreen({ route, navigation }: any) {
             return;
           }
         } catch (apiErr) {
-          console.log("Backend offline, falling back to local simulation checklist.");
+          console.log("Backend offline and no cached checklist is available.", apiErr);
+          Alert.alert('Backend Unavailable', 'No cached checklist exists for this equipment. Connect to STRAND backend and retry.');
+          setSteps([]);
         }
-
-        // Local simulation fallback
-        const mockSteps: TestStep[] = [
-          {
-            step_id: 'IST-001',
-            sequence: 1,
-            description: 'Verify fuel level at minimum 90% capacity',
-            acceptance_criteria: '>= 900 litres',
-            parameter_name: 'fuel_level_litres',
-            expected_value: 900,
-            unit: 'litres',
-            tia942_clause: '§8.3.1',
-            status: 'pass'
-          },
-          {
-            step_id: 'IST-002',
-            sequence: 2,
-            description: 'Measure fuel consumption at full load',
-            acceptance_criteria: '<= 260 litres/hour at rated load',
-            parameter_name: 'fuel_consumption_lph',
-            expected_value: 260,
-            unit: 'l/hr',
-            tia942_clause: '§8.3.4',
-            status: 'pending'
-          },
-          {
-            step_id: 'IST-003',
-            sequence: 3,
-            description: 'Test automatic transfer switch (ATS) reaction time',
-            acceptance_criteria: '<= 10 seconds transfer window',
-            parameter_name: 'ats_delay_seconds',
-            expected_value: 10,
-            unit: 'seconds',
-            tia942_clause: '§5.2.1',
-            status: 'pending'
-          },
-          {
-            step_id: 'IST-004',
-            sequence: 4,
-            description: 'Verify UPS redundancy configurations',
-            acceptance_criteria: 'N+1 minimum configuration',
-            parameter_name: 'ups_redundancy',
-            expected_value: 'N+1',
-            unit: '',
-            tia942_clause: '§5.2.3',
-            status: 'pass'
-          },
-          {
-            step_id: 'IST-005',
-            sequence: 5,
-            description: 'Measure cooling tower thermal exhaust capability',
-            acceptance_criteria: 'Capable of operation up to 50°C ambient',
-            parameter_name: 'ambient_temperature_max',
-            expected_value: 50,
-            unit: '°C',
-            tia942_clause: '§6.7.1',
-            status: 'pending'
-          }
-        ];
-        setSteps(mockSteps);
-        await AsyncStorage.setItem(`checklist_${equipmentTag}`, JSON.stringify(mockSteps));
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to load checklist.');

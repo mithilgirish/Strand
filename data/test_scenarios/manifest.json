@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-07-19T12:25:32.065249",
+  "scenarios": {
+    "clean": {
+      "description": "Golden-path data — all fields valid, formats consistent, values within spec ranges",
+      "files": [
+        "clean\\commissioning_checklist_ch_clean.json",
+        "clean\\commissioning_checklist_gen_clean.json",
+        "clean\\commissioning_checklist_ups_clean.json",
+        "clean\\project_schedule_clean.csv",
+        "clean\\rfi_data_clean.json",
+        "clean\\submittal_clean.json",
+        "clean\\supplier_graph_clean.json"
+      ]
+    },
+    "messy": {
+      "description": "Real-world imperfections — mixed casing, inconsistent date formats, extra whitespace, invalid enum values, string numbers",
+      "files": [
+        "messy\\commissioning_checklist_messy.json",
+        "messy\\project_schedule_messy.csv",
+        "messy\\rfi_data_messy.json",
+        "messy\\submittal_messy.json",
+        "messy\\supplier_graph_messy.json"
+      ]
+    },
+    "edge_cases": {
+      "description": "Boundary conditions — circular deps, self-references, duplicate IDs, null fields, XSS payloads, negative values, absurd ranges",
+      "files": [
+        "edge_cases\\commissioning_checklist_edge_cases.json",
+        "edge_cases\\project_schedule_edge_cases.csv",
+        "edge_cases\\rfi_data_edge_cases.json",
+        "edge_cases\\submittal_edge_cases.json",
+        "edge_cases\\supplier_graph_edge_cases.json"
+      ]
+    }
+  }
+}

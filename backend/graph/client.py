@@ -63,6 +63,9 @@ class Neo4jClient:
             with neo4j_client.get_session() as session:
                 result = session.run("MATCH ...", param=value)
         """
+        if self._using_fallback and settings.NEO4J_PASSWORD:
+            self._connect()
+
         if self._driver:
             session_kwargs = {}
             if settings.NEO4J_DATABASE:

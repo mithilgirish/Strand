@@ -1,0 +1,21 @@
+{
+    "submittal_id": "SUB-EDGE-001",
+    "vendor": "",
+    "equipment": "Unknown Equipment Model (TBD)",
+    "equipment_tag": "EQ-UNKNOWN-99",
+    "document_type": "vendor_submittal",
+    "parameters": {
+        "ups_redundancy": "",
+        "ambient_temperature_max": -40.0,
+        "cooling_capacity": 0.0,
+        "pdu_efficiency": 100.1,
+        "fire_suppression": null,
+        "generator_fuel_consumption": 99999.0,
+        "cable_derating": 0.0,
+        "floor_loading": -5.0,
+        "chilled_water_supply_temp": 999.0,
+        "extra_unknown_param": "surprise_value"
+    },
+    "compliance_status": null,
+    "notes": null
+}

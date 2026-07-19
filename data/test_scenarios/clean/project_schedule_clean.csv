@@ -1,0 +1,61 @@
+task_id,task_name,start_date,end_date,status,progress_pct,predecessors,discipline,equipment_tag
+TC001,UPS Room Civil Works,2026-08-01,2026-08-09,on_track,3,,Documentation,
+TC002,UPS Room Civil Works,2026-08-03,2026-08-07,on_track,4,TC001,Civil,
+TC003,UPS Room Civil Works - Zone D,2026-08-05,2026-08-12,at_risk,91,TC001,Architectural,EQ-BAT-01
+TC004,External Wall Cladding,2026-08-07,2026-08-13,at_risk,89,TC001;TC003,Controls,
+TC005,Generator Electrical Hookup,2026-08-09,2026-08-13,on_track,48,TC001,Electrical,
+TC006,Steel Column Erection - Zone C,2026-08-11,2026-08-18,on_track,68,TC004,Electrical,EQ-PDU-03
+TC007,UPS Room Civil Works,2026-08-13,2026-08-20,on_track,90,TC006;TC003,Electrical,
+TC008,ATS Panel Installation,2026-08-15,2026-08-20,on_track,48,TC003,HVAC,CT-02
+TC009,Server Rack Placement - Zone B,2026-08-17,2026-08-21,on_track,89,TC005;TC006,Logistics,EQ-UPS-01
+TC010,Fire Suppression Piping,2026-08-19,2026-08-27,on_track,59,TC006,Controls,
+TC011,Pile Driving,2026-08-21,2026-08-29,at_risk,98,TC008,Training,
+TC012,Fire Detection System Install - Zone A,2026-08-23,2026-08-28,delayed,29,TC007;TC008,Commissioning,EQ-PDU-01
+TC013,PDU Installation - Row B,2026-08-25,2026-09-02,delayed,8,TC011;TC009,Mechanical,
+TC014,Raised Floor Tile Installation,2026-08-27,2026-09-03,on_track,46,TC013;TC012,Structural,EQ-GEN-01
+TC015,Smoke Detection Testing - Zone D,2026-08-29,2026-09-04,on_track,19,TC010,Architectural,
+TC016,Battery Room Construction,2026-08-31,2026-09-06,at_risk,48,TC014,Commissioning,EQ-FD-01
+TC017,Metal Deck Laying,2026-09-02,2026-09-09,on_track,96,TC016,HVAC,EQ-PDU-01
+TC018,Raised Floor Tile Installation - Zone C,2026-09-04,2026-09-09,delayed,0,TC016,Documentation,EQ-CRAH-01
+TC019,ATS Panel Installation,2026-09-06,2026-09-10,at_risk,81,TC016,Security,EQ-GEN-01
+TC020,ATS Panel Installation,2026-09-08,2026-09-12,at_risk,41,TC019,IT Infrastructure,
+TC021,Chilled Water Loop Commissioning - Zone B,2026-09-10,2026-09-15,on_track,72,TC017,Electrical,
+TC022,Battery Room Construction,2026-09-12,2026-09-15,at_risk,84,TC018,IT Infrastructure,EQ-GEN-02
+TC023,Fire Alarm Panel Integration,2026-09-14,2026-09-21,at_risk,91,TC019;TC022,HVAC,
+TC024,Generator Exhaust System - Zone A,2026-09-16,2026-09-24,on_track,15,TC023;TC022,Structural,
+TC025,Fire Suppression Piping,2026-09-18,2026-09-21,at_risk,28,TC024,Civil,
+TC026,Fire Alarm Panel Integration,2026-09-20,2026-09-23,on_track,42,TC021,Electrical,EQ-CRAH-01
+TC027,CRAH Unit Placement - Zone D,2026-09-22,2026-09-28,on_track,73,TC026,IT Infrastructure,
+TC028,Cooling Tower Assembly,2026-09-24,2026-09-30,on_track,84,TC023,Controls,
+TC029,Roof Steel Installation,2026-09-26,2026-10-02,on_track,51,TC024,Documentation,
+TC030,Chiller Installation & Hookup - Zone C,2026-09-28,2026-10-02,on_track,57,TC029,Mechanical,EQ-CRAH-01
+TC031,Site Clearing & Grading,2026-09-30,2026-10-04,on_track,6,TC030;TC026,Architectural,CT-02
+TC032,Cooling Tower Foundation,2026-10-02,2026-10-05,on_track,62,TC030,IT Infrastructure,
+TC033,Generator Pad Construction - Zone B,2026-10-04,2026-10-07,on_track,33,TC028;TC031,Logistics,EQ-BAT-02
+TC034,SCADA Integration,2026-10-06,2026-10-12,at_risk,37,TC030;TC033,Structural,EQ-FA-01
+TC035,HV Switchgear Room Build,2026-10-08,2026-10-15,on_track,74,TC030;TC034,IT Infrastructure,EQ-FD-01
+TC036,UPS Unit Delivery & Placement - Zone A,2026-10-10,2026-10-13,at_risk,8,TC032,Commissioning,
+TC037,Fire Alarm Panel Integration,2026-10-12,2026-10-18,on_track,76,TC036,Civil,EQ-BAT-01
+TC038,Battery Room Construction,2026-10-14,2026-10-21,at_risk,85,TC035;TC034,Documentation,
+TC039,Chiller Installation & Hookup - Zone D,2026-10-16,2026-10-22,on_track,96,TC037;TC036,Logistics,
+TC040,Generator Electrical Hookup,2026-10-18,2026-10-25,at_risk,68,TC035,Structural,EQ-GEN-01
+TC041,Hot/Cold Aisle Containment,2026-10-20,2026-10-23,on_track,56,TC038;TC037,Project Management,EQ-CRAH-02
+TC042,Battery Room Construction - Zone C,2026-10-22,2026-10-30,at_risk,38,TC041,Logistics,EQ-GEN-01
+TC043,Generator Exhaust System,2026-10-24,2026-10-27,on_track,36,TC040,Commissioning,
+TC044,Pile Driving,2026-10-26,2026-10-30,on_track,11,TC041;TC039,Architectural,EQ-CRAH-01
+TC045,Cooling Water Piping - Zone B,2026-10-28,2026-10-31,on_track,20,TC042,Documentation,EQ-ACS-01
+TC046,Pile Driving,2026-10-30,2026-11-06,on_track,88,TC041,Logistics,
+TC047,Pile Driving,2026-11-01,2026-11-06,at_risk,16,TC045,Civil,
+TC048,Hot/Cold Aisle Containment - Zone A,2026-11-03,2026-11-08,on_track,45,TC043,Training,EQ-BAT-01
+TC049,SCADA Integration,2026-11-05,2026-11-13,on_track,22,TC045,Logistics,EQ-GEN-02
+TC050,Pile Driving,2026-11-07,2026-11-12,delayed,5,TC047,Training,EQ-PDU-03
+TC051,UPS Room Civil Works - Zone D,2026-11-09,2026-11-15,on_track,44,TC049,HVAC,EQ-CH-02
+TC052,FM-200 System Installation,2026-11-11,2026-11-14,on_track,8,TC049;TC051,Training,
+TC053,Battery Room Construction,2026-11-13,2026-11-20,delayed,28,TC048;TC052,HVAC,
+TC054,Generator Load Bank Testing - Zone C,2026-11-15,2026-11-18,on_track,55,TC051;TC053,Commissioning,EQ-UPS-02
+TC055,Smoke Detection Testing,2026-11-17,2026-11-24,on_track,0,TC050;TC053,Security,EQ-FS-01
+TC056,Generator Fuel System Install,2026-11-19,2026-11-27,on_track,85,TC054;TC051,Logistics,
+TC057,BMS Controller Installation - Zone B,2026-11-21,2026-11-29,on_track,85,TC056;TC054,Controls,
+TC058,SCADA Integration,2026-11-23,2026-11-28,at_risk,53,TC054,Architectural,EQ-NET-01
+TC059,RPP Panel Wiring,2026-11-25,2026-11-29,at_risk,38,TC057;TC054,HVAC,
+TC060,SCADA Integration - Zone A,2026-11-27,2026-12-04,on_track,86,TC058;TC059,Structural,CT-01

@@ -1,0 +1,19 @@
+{
+    "submittal_id": "SUB-CLEAN-001",
+    "vendor": "Schneider Electric India",
+    "equipment": "Symmetra PX 500kVA UPS",
+    "equipment_tag": "EQ-UPS-01",
+    "document_type": "vendor_submittal",
+    "parameters": {
+        "ups_redundancy": "N+1",
+        "ambient_temperature_max": 55.0,
+        "cooling_capacity": 550.0,
+        "pdu_efficiency": 97.2,
+        "fire_suppression": "FM-200",
+        "generator_fuel_consumption": 245.0,
+        "cable_derating": 0.8,
+        "floor_loading": 14.5,
+        "chilled_water_supply_temp": 8.0
+    },
+    "compliance_status": "fully_compliant"
+}

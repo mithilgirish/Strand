@@ -1,0 +1,51 @@
+task_id,task_name,start_date,end_date,status,progress_pct,predecessors,discipline,equipment_tag
+TM001,BMS Controller Installation,01-Aug-2026,05-Aug-2026,DELAYED,,,Electrical,EQ-SCADA-01
+TM002,Generator Set Delivery,03-Aug-2026,07-Aug-2026,On_Track, 18 ,TM001,Documentation,
+TM003,Steel Column Erection,2026-08-05,2026-08-12,On_Track,94,"TM001, TM002",Training,
+TM004,Steel Column Erection,07/08/2026,11/08/2026,On_Track,,"TM003,TM002,TM001",Fire Safety,EQ-PDU-03
+TM005,  Raised Floor Tile Installation  ,09-Aug-2026,16-Aug-2026,on_track,,TM001; TM002,controls,EQ-BMS-01
+TM006,  BMS Controller Installation  ,11/08/2026,19/08/2026,On_Track,,TM002,Documentation,EQ-UPS-01
+TM007,Cooling Tower Assembly,13-Aug-2026,16-Aug-2026,On_Track,50.9,TM003,Structural,EQ-UPS-01
+TM008,External Wall Cladding,15-Aug-2026,21-Aug-2026,at_risk,,TM005; TM003; TM004,IT Infrastructure,EQ-CH-02
+TM009,FM-200 System Installation (REVISED),08-17-2026,08-21-2026,at risk,-5,"TM004, TM006",project management,EQ-UPS-02
+TM010,Generator Exhaust System (REVISED),08-19-2026,08-25-2026,on_track,78.2,"TM006,TM008,TM007",Project Management,EQ-SCADA-01
+TM011,CCTV Installation,2026-08-21,2026-08-27,at risk,29,TM006; TM010; TM009, Civil ,
+TM012,LV DISTRIBUTION BOARD INSTALL,23-Aug-2026,29-Aug-2026,delayed, 87 ,TM011,Commissioning,EQ-CH-02
+TM013,Generator Electrical Hookup,25-Aug-2026,30-Aug-2026,On_Track,,TM008; TM011,Project Management,EQ-UPS-02
+TM014,  Access Control System  ,27-Aug-2026,03-Sep-2026,at_risk,-5,"TM011, TM013, TM009",Project Management,EQ-BMS-01
+TM015,Smoke Detection Testing,08-29-2026,09-02-2026,  on_track ,-5,TM014,Training,EQ-UPS-01
+TM016,Under-Floor Cable Routing,31-Aug-2026,05-Sep-2026,  on_track ,87.6,"TM012,TM015",Training,EQ-BAT-02
+TM017,Metal Deck Laying,09-02-2026,09-06-2026,at risk,N/A,TM015,Electrical,EQ-FS-01
+TM018,Pile Driving (REVISED),04/09/2026,11/09/2026,delayed,83,TM013; TM016; TM015,Controls,EQ-FS-01
+TM019,Pile Driving,09-06-2026,09-14-2026,  on_track ,40.8,TM017,Electrical,EQ-SCADA-01
+TM020,  Server Rack Placement  ,09-08-2026,09-14-2026,at_risk,-5,TM015,Structural,
+TM021,External Wall Cladding,2026-09-10,2026-09-17,delayed,110,"TM017,TM020,TM019",mechanical,EQ-CH-02
+TM022,Chiller Unit Delivery,2026-09-12,2026-09-15,delayed,,"TM017, TM018",Documentation,EQ-BAT-02
+TM023,  Steel Column Erection  ,14/09/2026,17/09/2026,on_track,62,TM021;TM022,HVAC,EQ-PDU-03
+TM024,Access Control System,16-Sep-2026,23-Sep-2026,at_risk,-5,TM023;TM022,Fire Safety,EQ-PDU-01
+TM025,SCADA Integration,09-18-2026,09-26-2026,at_risk,11,TM021;TM023,architectural,
+TM026,External Wall Cladding,09-20-2026,09-28-2026,at risk, 13 ,TM021; TM023,Electrical,EQ-FS-01
+TM027,Generator Set Delivery,22-Sep-2026,29-Sep-2026,DELAYED,110,TM026; TM022; TM024,electrical,eq-hv-01
+TM028,Access Control System,2026-09-24,2026-10-01,delayed,31.2,TM026; TM027,architectural,EQ-BAT-01
+TM029,RPP Panel Wiring (REVISED),26-Sep-2026,02-Oct-2026,On_Track,-5,TM025; TM024,commissioning,
+TM030,COOLING WATER PIPING,28-Sep-2026,02-Oct-2026,at risk,-5,TM027,Security,CT-01
+TM031,Cooling Tower Foundation,09-30-2026,10-06-2026,at risk,N/A,"TM026, TM029, TM030",Mechanical,eq-pdu-02
+TM032,  Generator Exhaust System  ,2026-10-02,2026-10-05,delayed, 39 ,TM031;TM030,Security,
+TM033,  CCTV Installation  ,04-Oct-2026,12-Oct-2026,at risk, 25 ,"TM029,TM032,TM028",IT Infrastructure,EQ-FA-01
+TM034,Battery Bank Installation (REVISED),06-Oct-2026,13-Oct-2026,at_risk,110,TM031;TM030;TM032,it infrastructure,
+TM035,Server Rack Placement (REVISED),2026-10-08,2026-10-13,on_track,65.2,TM030;TM033;TM031,Training,EQ-FD-01
+TM036,Cooling Tower Assembly (REVISED),10-10-2026,10-13-2026,delayed,,"TM034,TM035,TM033",Electrical,
+TM037,Generator Set Delivery,2026-10-12,2026-10-17,  on_track ,14.1,TM036;TM033;TM035,HVAC,
+TM038,LV Distribution Board Install,14/10/2026,18/10/2026,  on_track ,1.8,"TM037, TM033, TM035",mechanical,EQ-UPS-02
+TM039,EXTERNAL WALL CLADDING,16/10/2026,23/10/2026,at risk,,TM038; TM034; TM036,Documentation,EQ-CH-02
+TM040,Cable Tray Routing,10-18-2026,10-25-2026,at_risk,110,"TM038,TM036,TM037",Training,CT-02
+TM041,Metal Deck Laying,20/10/2026,27/10/2026,delayed,N/A,TM036; TM039,Project Management,
+TM042,  Steel Column Erection  ,2026-10-22,2026-10-28,at_risk,,TM040,Project Management,
+TM043,  Battery Room Construction  ,24-Oct-2026,27-Oct-2026,at_risk,78,"TM039, TM041",Electrical,
+TM044,Raised Floor Tile Installation,10-26-2026,10-30-2026,On_Track,-5,TM043;TM042;TM039,Structural,EQ-FD-01
+TM045,Battery Room Construction (REVISED),28/10/2026,31/10/2026,DELAYED,38.7,"TM044, TM040, TM041",Documentation,EQ-TX-02
+TM046,RAISED FLOOR SUBSTRUCTURE,30-Oct-2026,02-Nov-2026,at_risk,110,"TM043, TM042, TM045", Civil ,
+TM047,Generator Pad Construction,2026-11-01,2026-11-04,at_risk, 4 ,"TM046, TM045",Training,EQ-PDU-03
+TM048,Server Rack Placement,11-03-2026,11-07-2026,On_Track,,TM046; TM045; TM047,Architectural,EQ-GEN-02
+TM049,Underground Cable Trench,05/11/2026,10/11/2026,On_Track,35,TM046,civil,CT-01
+TM050,Smoke Detection Testing,07/11/2026,11/11/2026,on_track, 72 ,TM047,Security,

@@ -31,12 +31,12 @@ export default function RiskCockpit() {
   const [violations, setViolations] = useState<GuardianViolation[]>([]);
   const [topAlert, setTopAlert] = useState<SchedulerAlert | null>(null);
   const [loading, setLoading] = useState(true);
-  const [agents, setAgents] = useState([
-    { name: 'Guardian', status: 'active' as const },
-    { name: 'Scheduler', status: 'active' as const },
-    { name: 'Oracle', status: 'active' as const },
-    { name: 'Inspector', status: 'idle' as const },
-    { name: 'Brain', status: 'active' as const },
+  const [agents, setAgents] = useState<{ name: string; status: 'active' | 'idle' }[]>([
+    { name: 'Guardian', status: 'active' },
+    { name: 'Scheduler', status: 'active' },
+    { name: 'Oracle', status: 'active' },
+    { name: 'Inspector', status: 'active' },
+    { name: 'Brain', status: 'active' },
   ]);
 
   useEffect(() => {
@@ -76,13 +76,7 @@ export default function RiskCockpit() {
           }
         }
 
-        setSummary(summaryData || {
-          immunityScore: 67.5,
-          violationsToday: 2,
-          openNCRs: 5,
-          atRiskShipments: 3,
-          criticalR0Max: 4.2,
-        });
+        setSummary(summaryData);
 
         // Guardian Violations
         if (violationsRes.status === 'fulfilled' && violationsRes.value.ok) {
@@ -90,19 +84,7 @@ export default function RiskCockpit() {
           const viols = violData.violations || violData;
           setViolations(Array.isArray(viols) ? viols : []);
         } else {
-          setViolations([
-            {
-              id: 'DEMO-CT-01:ambient_temperature_max',
-              submittal_id: 'DEMO-CT-01',
-              parameter: 'ambient_temperature_max',
-              required: 50,
-              actual: 45,
-              unit: '°C',
-              section: '6.7.1',
-              r0_score: 3.0,
-              severity: 'Critical',
-            }
-          ]);
+          setViolations([]);
         }
 
         // Scheduler top alert
@@ -230,17 +212,17 @@ export default function RiskCockpit() {
                 {topAlert?.severity || 'At Risk'}
               </span>
               <span className="text-[12px] font-medium tracking-[0.02em] text-on-surface-variant font-mono">
-                R0: {topAlert?.r0Score?.toFixed(1) || summary?.criticalR0Max?.toFixed(1) || '2.8'}
+                R0: {topAlert?.r0Score?.toFixed(1) || summary?.criticalR0Max?.toFixed(1) || '--'}
               </span>
             </div>
             
             <h4 className="font-bold text-on-surface font-sans text-base pl-3">
-              {topAlert?.taskName || 'Generator Installation Delay'}
+              {topAlert?.taskName || 'No live scheduler alert'}
             </h4>
             <p className="text-sm text-on-surface-variant font-sans mt-2 mb-5 pl-3 leading-relaxed">
               Delay probability estimated at <span className="text-on-surface font-semibold font-mono">
                 {topAlert ? `${topAlert.delayProbability}%` : '85%'}
-              </span> {topAlert?.discipline ? `in ${topAlert.discipline} discipline.` : 'due to predecessor cooling tower procurement hold.'} Downstream cascading risk detected.
+              </span> {topAlert?.discipline ? `in ${topAlert.discipline} discipline.` : 'with no current live risk task selected.'} Downstream cascading risk detected when live Scheduler data is available.
             </p>
             
             <div className="pl-3">

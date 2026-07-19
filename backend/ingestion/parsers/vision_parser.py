@@ -42,6 +42,11 @@ def analyze_drawing_with_vision(file_path: str, submittal_id: str) -> list[dict]
         
         prompt = load_prompt("guardian_vision", submittal_id=submittal_id)
         
+        from backend.config import settings
+        if settings.LLM_PROVIDER.lower() == "groq":
+            logger.warning("Groq vision models decommissioned, skipping vision analysis")
+            return []
+
         logger.info(f"Sending vision request for {file_path}")
         result = invoke_vision_structured(
             prompt=prompt,

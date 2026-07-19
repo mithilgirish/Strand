@@ -21,6 +21,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.RATE_
 
 _jwks_cache = None
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 class CurrentUser(BaseModel):
     id: str
@@ -47,6 +48,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception as e:
         logger.error(f"Unexpected authentication error: {str(e)}")
         raise credentials_exception
+
+
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+) -> CurrentUser | None:
+    """Return a verified user when a bearer token is present, otherwise None.
+
+    Demo-compatible endpoints use this to support local smoke tests without
+    cookies while still enforcing JWT tenant claims when a real user is signed in.
+    """
+    if credentials is None:
+        return None
+    return await get_current_user(credentials)
 
 
 async def _decode_supabase_jwt(token: str) -> dict[str, Any]:

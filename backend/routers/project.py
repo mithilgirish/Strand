@@ -202,8 +202,9 @@ async def get_project_summary():
             "guardian": "active",
             "scheduler": "active",
             "oracle": "active",
-            "inspector": "idle",
+            "inspector": "active",
             "brain": "active",
+            "judge": "active",
         },
     }
 

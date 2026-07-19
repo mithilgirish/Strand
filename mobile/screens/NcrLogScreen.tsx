@@ -134,33 +134,26 @@ export default function NcrLogScreen({ route, navigation }: any) {
         return;
       }
     } catch (apiErr) {
-      console.log("Backend offline, submitting via mock simulation.");
-    }
-
-    // Local simulation fallback
-    setTimeout(async () => {
-      const mockResponse = {
-        ncr_id: `NCR-${Math.floor(1000 + Math.random() * 9000)}`,
+      console.log("Backend offline, queueing observation for sync.", apiErr);
+      const queuedObservation = {
+        ncr_id: `QUEUED-${Date.now()}`,
         equipment_tag: equipmentTag,
         step_id: stepId,
         transcript: transcript,
-        r0_score: stepId === 'IST-002' ? 4.2 : 3.1,
-        severity: stepId === 'IST-002' ? 'Critical' : 'Major',
-        mitigation: stepId === 'IST-002' 
-          ? 'Verify governor settings or replace fuel injector unit.' 
-          : 'Escalate to engineering lead for temperature tolerance override.'
+        r0_score: 'pending',
+        severity: 'Pending',
+        mitigation: 'Queued locally. Sync to STRAND backend to generate NCR, severity, Spec-DNA reference, and R0 score.',
+        raised_by: 'field_engineer',
+        status: 'queued_offline',
       };
 
-      setResultNcr(mockResponse);
-      setLoading(false);
-
-      // Add to local logs for syncing/audit
       const localLogsRaw = await AsyncStorage.getItem('local_ncrs');
       const logs = localLogsRaw ? JSON.parse(localLogsRaw) : [];
-      logs.push(mockResponse);
+      logs.push(queuedObservation);
       await AsyncStorage.setItem('local_ncrs', JSON.stringify(logs));
-      
-    }, 1200);
+      setResultNcr(queuedObservation);
+      setLoading(false);
+    }
   };
 
   return (
@@ -238,7 +231,9 @@ export default function NcrLogScreen({ route, navigation }: any) {
         ) : (
           <View style={styles.resultContainer}>
             <View style={styles.successBadge}>
-              <Text style={styles.successBadgeText}>✓ NCR GENERATED SUCCESSFULLY</Text>
+              <Text style={styles.successBadgeText}>
+                {resultNcr.status === 'queued_offline' ? 'OBSERVATION QUEUED FOR SYNC' : '✓ NCR GENERATED SUCCESSFULLY'}
+              </Text>
             </View>
 
             <View style={styles.ncrDetailsCard}>

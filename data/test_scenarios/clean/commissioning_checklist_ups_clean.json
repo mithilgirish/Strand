@@ -1,0 +1,67 @@
+{
+    "checklist_id": "IST-CLEAN-EQ-UPS-01",
+    "title": "EQ-UPS-01 Commissioning Checklist",
+    "equipment_tag": "EQ-UPS-01",
+    "steps": [
+        {
+            "step": 1,
+            "description": "Verify oil level is within operating range",
+            "status": "pending"
+        },
+        {
+            "step": 2,
+            "description": "Check coolant temperature ≤ 85°C at full load",
+            "status": "pending"
+        },
+        {
+            "step": 3,
+            "description": "Confirm battery terminal voltage ≥ 24V DC",
+            "status": "pending"
+        },
+        {
+            "step": 4,
+            "description": "Inspect exhaust flange gasket for leaks",
+            "status": "pending"
+        },
+        {
+            "step": 5,
+            "description": "Test emergency stop button functionality",
+            "status": "pending"
+        },
+        {
+            "step": 6,
+            "description": "Verify phase rotation A-B-C sequence",
+            "status": "pending"
+        },
+        {
+            "step": 7,
+            "description": "Check vibration levels ≤ 4.5 mm/s RMS",
+            "status": "pending"
+        },
+        {
+            "step": 8,
+            "description": "Confirm fuel system leak test pass at 1.5x operating pressure",
+            "status": "pending"
+        },
+        {
+            "step": 9,
+            "description": "Verify automatic transfer switch response ≤ 10 seconds",
+            "status": "pending"
+        },
+        {
+            "step": 10,
+            "description": "Check generator frequency within 50Hz ± 0.5Hz",
+            "status": "pending"
+        },
+        {
+            "step": 11,
+            "description": "Measure insulation resistance ≥ 10 MΩ at 1000V DC",
+            "status": "pending"
+        },
+        {
+            "step": 12,
+            "description": "Verify fire suppression interlock with main breaker",
+            "status": "pending"
+        }
+    ]
+}

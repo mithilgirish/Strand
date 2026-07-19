@@ -48,6 +48,9 @@ class JudgeVerdict(BaseModel):
     verdict: str = "approved"  # approved | approved_with_flag | rejected
     confidence_score: float = 0.0
     evidence_chain: list[dict] = []
+    evidence_citations: list[dict] = []
+    consistency_check: dict[str, Any] = {}
+    hallucination_check: dict[str, Any] = {}
     flags: list[str] = []
     reasoning: str = ""
 
