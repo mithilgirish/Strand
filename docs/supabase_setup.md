@@ -11,7 +11,7 @@ This document outlines the steps to initialize the unified authentication and da
 
 The core database schema, including Row-Level Security (RLS) policies and Role-Based Access Control (RBAC) triggers, is located in the `db` directory.
 
-1.  Open the file: `../db/supabase_schema.sql`
+1.  Open the file: `../supabase/supabase_schema.sql`
 2.  Copy the entire content of the file.
 3.  Go to the **SQL Editor** in your Supabase Dashboard.
 4.  Paste the SQL script and click **Run**.
