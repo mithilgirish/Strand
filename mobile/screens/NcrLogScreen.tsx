@@ -48,21 +48,15 @@ export default function NcrLogScreen({ route, navigation }: any) {
       console.error('Failed to start recording', err);
       // Fallback if recording fails (e.g. on emulators)
       setIsRecording(true);
-      setTranscript('Listening (Simulation)...');
+      setTranscript('Listening... (No hardware found)');
     }
   };
 
   const stopRecording = async () => {
     setIsRecording(false);
     if (!recording) {
-      // Simulate transcription fallback
-      setTimeout(() => {
-        if (stepId === 'IST-002') {
-          setTranscript('Fuel consumption reads 285 litres per hour against spec 260');
-        } else {
-          setTranscript('Ambient operating temperature is 45°C which is below the TIA-942 spec of 50°C');
-        }
-      }, 1000);
+      Alert.alert('Voice Transcription Unavailable', 'Please type your observation manually in the text box below.');
+      setTranscript('');
       return;
     }
 
@@ -71,26 +65,11 @@ export default function NcrLogScreen({ route, navigation }: any) {
       setRecording(null);
       
       // In a real app, send audio file to Whisper API.
-      // For demo, we simulate transcription based on standard inputs.
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        if (stepId === 'IST-002') {
-          setTranscript('Fuel consumption reads 285 litres per hour against spec 260');
-        } else {
-          setTranscript('Ambient operating temperature is 45°C which is below the TIA-942 spec of 50°C');
-        }
-      }, 1200);
+      // Since no backend endpoint exists in this version, we require manual text entry.
+      Alert.alert('Voice Transcription Unavailable', 'Please type your observation manually in the text box below.');
+      setTranscript('');
     } catch (err) {
       console.error('Failed to stop recording', err);
-    }
-  };
-
-  const handleSimulateSpeech = () => {
-    if (stepId === 'IST-002') {
-      setTranscript('Fuel consumption reads 285 litres per hour against spec 260');
-    } else {
-      setTranscript('Ambient operating temperature is 45°C which is below the TIA-942 spec of 50°C');
     }
   };
 
@@ -204,9 +183,6 @@ export default function NcrLogScreen({ route, navigation }: any) {
             <View style={styles.transcriptSection}>
               <View style={styles.transcriptHeader}>
                 <Text style={styles.sectionLabel}>Observation Transcript</Text>
-                <TouchableOpacity onPress={handleSimulateSpeech}>
-                  <Text style={styles.simulateText}>Auto-Fill Demo</Text>
-                </TouchableOpacity>
               </View>
               
               <TextInput

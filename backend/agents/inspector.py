@@ -35,6 +35,7 @@ async def process_voice_ncr(
     equipment_tag: str,
     step_id: str,
     raised_by: str = "field_engineer",
+    tenant_id: str = "default"
 ) -> dict:
     """
     Convert voice observation to structured NCR with Spec-DNA.
@@ -97,6 +98,7 @@ async def process_voice_ncr(
                 "status": "pending_approval",  # v1.2: HITL gate
                 "voice_transcript": transcript,
                 "r0_score": r0,
+                "tenant_id": tenant_id
             },
         )
 
@@ -191,7 +193,7 @@ def generate_checklist(tag: str) -> list[dict]:
     return result
 
 
-async def get_checklist(equipment_tag: str) -> dict:
+async def get_checklist(equipment_tag: str, tenant_id: str = "default") -> dict:
     """Return the mobile-facing IST checklist loaded from the Phase 3 data source."""
     checklist_id = "IST-23"
     title = f"TIA-942 System Validation Checklist — {equipment_tag.upper()}"
@@ -228,6 +230,7 @@ async def close_checklist_session(
     equipment_tag: str,
     step_results: list[dict[str, Any]],
     closed_by: str = "field_engineer",
+    tenant_id: str = "default"
 ) -> dict:
     """Generate an as-built Markdown record from completed checklist results."""
     if not step_results:
@@ -277,16 +280,16 @@ async def close_checklist_session(
     return record
 
 
-async def get_latest_as_built(equipment_tag: str) -> dict:
+async def get_latest_as_built(equipment_tag: str, tenant_id: str = "default") -> dict:
     """Return the latest cached as-built record for an equipment tag."""
     record = redis_client.get_json(f"inspector:as_built:{equipment_tag.upper()}")
     return record or {}
 
 
-async def list_ncrs() -> list[dict]:
+async def list_ncrs(tenant_id: str = "default") -> list[dict]:
     """Return NCRs from Neo4j, falling back to recently generated agent cache."""
     try:
-        rows = neo4j_client.execute_query(queries.GET_OPEN_NCRS)
+        rows = neo4j_client.execute_query(queries.GET_OPEN_NCRS, {"tenant_id": tenant_id})
         if rows:
             return [
                 {

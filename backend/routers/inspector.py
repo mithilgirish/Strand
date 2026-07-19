@@ -1,10 +1,9 @@
 """Phase 3 Inspector API routes wired to the real QA agent."""
 
-
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 
 from backend.agents.inspector import (
@@ -14,7 +13,7 @@ from backend.agents.inspector import (
     list_ncrs,
     process_voice_ncr,
 )
-from backend.deps import limiter
+from backend.deps import limiter, get_current_user, CurrentUser
 
 
 router = APIRouter(tags=["inspector"])
@@ -33,44 +32,46 @@ class ChecklistCloseRequest(BaseModel):
 
 
 @router.get("/inspector/checklist/{tag}")
-async def get_checklist(tag: str):
-    return await inspector_get_checklist(tag)
+async def get_checklist(tag: str, user: CurrentUser = Depends(get_current_user)):
+    return await inspector_get_checklist(tag, tenant_id=user.tenant_id)
 
 
 @router.post("/inspector/ncr")
 @limiter.limit("30/minute")
-async def log_ncr(request: Request, ncr: NcrSubmission):
+async def log_ncr(request: Request, ncr: NcrSubmission, user: CurrentUser = Depends(get_current_user)):
     try:
         return await process_voice_ncr(
             transcript=ncr.transcript,
             equipment_tag=ncr.equipment_tag.upper(),
             step_id=ncr.step_id,
             raised_by=ncr.raised_by,
+            tenant_id=user.tenant_id
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inspector NCR creation failed: {e}") from e
 
 
 @router.get("/inspector/ncrs")
-async def get_ncrs():
-    return await list_ncrs()
+async def get_ncrs(user: CurrentUser = Depends(get_current_user)):
+    return await list_ncrs(tenant_id=user.tenant_id)
 
 
 @router.post("/inspector/checklist/{tag}/close")
-async def close_checklist(tag: str, payload: ChecklistCloseRequest):
+async def close_checklist(tag: str, payload: ChecklistCloseRequest, user: CurrentUser = Depends(get_current_user)):
     try:
         return await close_checklist_session(
             equipment_tag=tag.upper(),
             step_results=payload.steps,
             closed_by=payload.closed_by,
+            tenant_id=user.tenant_id
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Checklist closeout failed: {e}") from e
 
 
 @router.get("/inspector/as-built/{tag}")
-async def get_as_built(tag: str):
-    record = await get_latest_as_built(tag)
+async def get_as_built(tag: str, user: CurrentUser = Depends(get_current_user)):
+    record = await get_latest_as_built(tag, tenant_id=user.tenant_id)
     if record:
         markdown_path = record.get("markdown_path") or record.get("pdf_path")
         if markdown_path and Path(markdown_path).exists():

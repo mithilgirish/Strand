@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, ScrollView, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, ScrollView, Dimensions, Platform, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../supabase';
 import { API_BASE_URL } from '../config';
@@ -26,6 +26,10 @@ export default function DashboardsScreen() {
   const [selectedDashboard, setSelectedDashboard] = useState<Dashboard | null>(null);
   const [widgetData, setWidgetData] = useState<Record<string, any>>({});
   const [loadingWidgets, setLoadingWidgets] = useState<Record<string, boolean>>({});
+  const [synthesizePrompt, setSynthesizePrompt] = useState('');
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [unsavedDashboard, setUnsavedDashboard] = useState<Dashboard | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchDashboards();
@@ -41,15 +45,26 @@ export default function DashboardsScreen() {
 
   const fetchDashboards = async () => {
     try {
-      const { data, error } = await supabase
-        .from('custom_dashboards')
-        .select('*')
-        .order('created_at', { ascending: false });
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
 
-      if (error) {
-        console.error('Error fetching dashboards:', error);
-      } else if (data) {
-        setDashboards(data as Dashboard[]);
+      const response = await fetch(`${API_BASE_URL}/dashboards/list`, {
+        headers,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setDashboards(result.dashboards || []);
+      } else {
+        console.error('Failed to fetch dashboards from API', response.status);
       }
     } catch (err) {
       console.error(err);
@@ -108,28 +123,78 @@ export default function DashboardsScreen() {
       }
       throw new Error(`API status ${response.status}`);
     } catch (err) {
-      console.log('Mobile query falling back to mock offline analytics:', err);
-      // Fallback local simulation logic
-      const lower = query.toLowerCase();
-      if (lower.includes('max(s.r0_score)')) {
-        return [{ value: 4.2 }];
-      }
-      if (lower.includes('delay_days') || lower.includes('shipment')) {
-        return [
-          { shipment_id: 'SH-09', equipment_tag: 'GEN-01', status: 'delayed', delay_days: 14 },
-          { shipment_id: 'SH-12', equipment_tag: 'CT-01', status: 'delayed', delay_days: 8 },
-          { shipment_id: 'SH-15', equipment_tag: 'PUMP-03', status: 'delayed', delay_days: 3 },
-        ];
-      }
-      if (lower.includes('count(n.id)') || lower.includes('ncr')) {
-        return [{ count: 12 }];
-      }
-      return [
-        { period: 'Jan', value: 40 },
-        { period: 'Feb', value: 55 },
-        { period: 'Mar', value: 75 },
-        { period: 'Apr', value: 120 },
-      ];
+      console.log('Mobile query failed, backend offline or error:', err);
+      // In production, we don't fall back to mock data. We return empty array to show no data.
+      return [];
+    }
+  };
+
+  const handleSynthesize = async () => {
+    if (!synthesizePrompt.trim()) return;
+    setIsSynthesizing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE_URL}/dashboards/generate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: synthesizePrompt }),
+      });
+
+      if (!response.ok) throw new Error('Synthesis failed');
+      const result = await response.json();
+      
+      const newDash: Dashboard = {
+        id: 'unsaved-' + Date.now(),
+        dashboard_name: result.dashboard_name || 'Custom Generated Widget',
+        layout: result.layout,
+        queries: result.queries,
+        created_at: new Date().toISOString(),
+      };
+      
+      setUnsavedDashboard(newDash);
+      setSelectedDashboard(newDash);
+      setSynthesizePrompt('');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to synthesize widget.');
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
+
+  const handleSaveDashboard = async () => {
+    if (!unsavedDashboard) return;
+    setIsSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE_URL}/dashboards/save`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          dashboard_name: unsavedDashboard.dashboard_name,
+          layout: unsavedDashboard.layout,
+          queries: unsavedDashboard.queries,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Save failed');
+      
+      Alert.alert('Success', 'Dashboard saved successfully!');
+      setUnsavedDashboard(null);
+      fetchDashboards(); // refresh list
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to save dashboard.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -273,6 +338,19 @@ export default function DashboardsScreen() {
           <Text style={styles.subHeaderTitle} numberOfLines={1}>
             {selectedDashboard.dashboard_name}
           </Text>
+          {unsavedDashboard?.id === selectedDashboard.id && (
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={handleSaveDashboard}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#003824" />
+              ) : (
+                <Text style={styles.saveButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView style={styles.widgetsScroll} contentContainerStyle={styles.widgetsContainer}>
@@ -308,6 +386,32 @@ export default function DashboardsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Custom Dashboards</Text>
         <Text style={styles.subtitle}>Field Operations & BI Hub</Text>
+      </View>
+
+      {/* Synthesize UI */}
+      <View style={styles.synthesizeContainer}>
+        <TextInput
+          style={styles.synthesizeInput}
+          placeholder="Ask BI Agent to build a dashboard..."
+          placeholderTextColor="#737373"
+          value={synthesizePrompt}
+          onChangeText={setSynthesizePrompt}
+          multiline
+        />
+        <TouchableOpacity 
+          style={styles.synthesizeButton} 
+          onPress={handleSynthesize}
+          disabled={isSynthesizing || !synthesizePrompt.trim()}
+        >
+          {isSynthesizing ? (
+            <ActivityIndicator size="small" color="#003824" />
+          ) : (
+            <>
+              <Ionicons name="flash" size={16} color="#003824" />
+              <Text style={styles.synthesizeButtonText}>Synthesize</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
       
       {loading ? (
@@ -370,6 +474,50 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#e5e5e5',
+  },
+  saveButton: {
+    backgroundColor: '#4edea3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  saveButtonText: {
+    color: '#003824',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  synthesizeContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 10,
+  },
+  synthesizeInput: {
+    backgroundColor: '#171717',
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    color: '#e5e5e5',
+    padding: 12,
+    minHeight: 80,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlignVertical: 'top',
+  },
+  synthesizeButton: {
+    backgroundColor: '#4edea3',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  synthesizeButtonText: {
+    color: '#003824',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   listContainer: {
     paddingHorizontal: 20,
