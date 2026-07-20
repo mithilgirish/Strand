@@ -23,23 +23,6 @@ export async function login(formData: FormData) {
   redirect('/') // Redirect to main dashboard after successful login
 }
 
-export async function signup(formData: FormData) {
-  const supabase = await createClient()
-
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
-
-  const { error } = await supabase.auth.signUp(data)
-
-  if (error) {
-    redirect('/signup?message=' + encodeURIComponent('Registration failed. The email may already be in use.'))
-  }
-
-  revalidatePath('/', 'layout')
-  redirect('/')
-}
 
 export async function resetPassword(formData: FormData) {
   const supabase = await createClient()

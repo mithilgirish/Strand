@@ -307,7 +307,6 @@ export default function ChecklistScreen({ route, navigation }: any) {
             source={{ uri: previewPhotoUri }} 
             style={styles.fullScreenImage} 
             resizeMode="contain" 
-            pointerEvents="none" 
           />
         </View>
       )}

@@ -270,10 +270,10 @@ export default function NcrLogScreen({ route, navigation }: any) {
                   activeOpacity={0.8}
                   style={styles.photoPreviewBlock}
                 >
-                  <Image
-                    source={{ uri: photoUri }}
-                    style={styles.photoPreviewBlockImage}
-                    resizeMode="cover"
+                  <Image 
+                    source={{ uri: photoUri }} 
+                    style={styles.photoPreviewBlockImage} 
+                    resizeMode="cover" 
                   />
                   <View style={styles.photoPreviewLabel}>
                     <Text style={styles.photoPreviewLabelText}>👆 Tap to view full screen</Text>
@@ -356,7 +356,7 @@ export default function NcrLogScreen({ route, navigation }: any) {
             source={{ uri: photoUri }} 
             style={styles.fullScreenImage} 
             resizeMode="contain" 
-            pointerEvents="none" 
+             
           />
         </View>
       )}

@@ -194,7 +194,7 @@ function IntegrationsHubContent() {
       setTimeout(() => setErrorMessage(""), 6000);
       router.replace("/integrations");
     }
-  }, [searchParams, selectedTenant]);
+  }, [searchParams, selectedTenant, fetchConfigs, fetchStatus, router]);
 
   const handleSaveConfig = async (e: React.FormEvent, integrationId: string) => {
     e.preventDefault();
@@ -220,7 +220,7 @@ function IntegrationsHubContent() {
         const errorData = await res.json();
         setErrorMessage(errorData.detail || "Failed to update configuration.");
       }
-    } catch (err) {
+    } catch {
       setErrorMessage("Error updating credentials.");
     } finally {
       setLoading(false);
@@ -258,7 +258,7 @@ function IntegrationsHubContent() {
         const errorData = await connectRes.json();
         setErrorMessage(errorData.detail || "Failed to authenticate 2-legged OAuth.");
       }
-    } catch (err) {
+    } catch {
       setErrorMessage("Error establishing 2-legged connection.");
     } finally {
       setLoading(false);
@@ -303,7 +303,7 @@ function IntegrationsHubContent() {
         setErrorMessage(errData.detail || "Failed to initiate OAuth.");
         setLoading(false);
       }
-    } catch (err) {
+    } catch {
       setErrorMessage("Error establishing 3-legged connection.");
       setLoading(false);
     }
