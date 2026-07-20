@@ -6,11 +6,18 @@
 <p align="center"><em>The Autonomous Intelligence Layer for Data Centre EPC Delivery</em></p>
 
 <p align="center">
-  <a href="#overview">Overview</a> •
-  <a href="#core-architecture">Core Architecture</a> •
-  <a href="#the-agent-ecosystem">The Agent Ecosystem</a> •
-  <a href="#enterprise-integrations">Integrations</a> •
-  <a href="#quick-start">Quick Start</a>
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Made_for-ET_AI_Hackathon_2.0-ff69b4.svg" alt="ET AI Hackathon 2.0">
+</p>
+
+<p align="center">
+  <a href="#overview-the-information-fragmentation-crisis">Overview</a> •
+  <a href="#technology-stack">Tech Stack</a> •
+  <a href="#core-architecture--technical-innovations">Architecture</a> •
+  <a href="#the-agent-ecosystem">Agents</a> •
+  <a href="#quick-start-guide">Quick Start</a>
 </p>
 
 ---
@@ -22,6 +29,21 @@ India's data centre capacity is projecting extreme growth, targeting over 2,700 
 The root cause of these delays is **information fragmentation**. A single hyperscale facility involves up to 40,000 equipment line items and 200 concurrent trade contractors. Specifications, vendor submittals, test records, RFIs, and schedules exist in completely disconnected silos. By the time a specification deviation is caught on-site, it has already caused a critical path delay.
 
 **STRAND** solves this by unifying project documents, supply chain data, and quality records into a living intelligence ecosystem. STRAND shifts quality control to the extreme left—catching specification deviations *before* they are manufactured, and predicting schedule risks weeks in advance through probabilistic modeling.
+
+---
+
+## 💻 Technology Stack
+
+| Layer | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend** | Next.js 16 | React framework with Edge-synchronized cookies (`proxy.ts`) |
+| **Mobile** | React Native / Expo | Offline-first app with `AbortController` & `AsyncStorage` |
+| **Backend** | FastAPI | High-performance Python async API |
+| **AI/Orchestration** | LangGraph | State machine for multi-agent autonomous cascades |
+| **Vector DB** | ChromaDB | Semantic vector search for unstructured documents |
+| **Graph DB** | Neo4j | Parametric Knowledge Graph for physical BIM constraints |
+| **Auth/DB** | Supabase | PostgreSQL with Row-Level Security (RLS) |
+| **Caching** | Redis | Ephemeral state and fast-access memory |
 
 ---
 
@@ -80,6 +102,9 @@ STRAND does not replace existing construction software; it supercharges them. Ou
 
 We have provided synthetic demo data (`data/vendor_submittal_cooling_tower.pdf`, `project_schedule_100tasks.csv`) to evaluate the platform locally.
 
+> [!IMPORTANT]
+> **Tenant Provisioning Notice:** Due to strict enterprise tenant isolation and Supabase RLS policies, self-registration is disabled by default. You must provision a tenant via the Supabase admin panel, or use the provided backend seed script before logging in.
+
 ### 1. Database Setup (Supabase)
 1. Create a free project at [supabase.com](https://supabase.com/).
 2. Navigate to the SQL Editor in your dashboard.
@@ -119,7 +144,6 @@ npm install
 # Start development server
 npm run dev
 ```
-*Note: Due to strict enterprise tenant isolation, self-registration is disabled. You must provision a tenant via the Supabase admin panel, or use the provided backend seed script.*
 
 ### 4. React Native Mobile App
 ```bash
@@ -137,5 +161,5 @@ npx expo start
 <p align="center">
   <em>Developed for the ET AI Hackathon 2.0</em>
   <br>
-  <em>By team TokenSpark</em>
+  <em>By Team TokenSpark</em>
 </p>
