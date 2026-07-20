@@ -1,109 +1,89 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/81d90464-9e74-42a3-a17f-eeff905360e8" width="120" alt="STRAND Logo" style="border-radius: 20px;" />
+  <img src="https://github.com/user-attachments/assets/81d90464-9e74-42a3-a17f-eeff905360e8" width="150" alt="STRAND Logo" style="border-radius: 20px;" />
 </p>
 
 <h1 align="center">STRAND</h1>
-<p align="center"><em>The DNA of Every Great Build</em></p>
+<p align="center"><em>The Autonomous Intelligence Layer for Data Centre EPC Delivery</em></p>
 
 <p align="center">
-  <strong>An AI-Powered Project Intelligence Platform for Hyperscale Data Centre EPC Delivery</strong><br>
-  Built for <strong>ET AI Hackathon 2.0 (Theme: Industrial Intelligence / Infrastructure Construction)</strong>
+  <a href="#overview">Overview</a> •
+  <a href="#core-architecture">Core Architecture</a> •
+  <a href="#the-agent-ecosystem">The Agent Ecosystem</a> •
+  <a href="#enterprise-integrations">Integrations</a> •
+  <a href="#quick-start">Quick Start</a>
 </p>
 
 ---
 
-## 🏗️ The Problem: The 67% Schedule Overrun Crisis
+## 🏗️ Overview: The Information Fragmentation Crisis
 
-India's data centre capacity is projected to triple by 2027, requiring over $15 billion in capital deployment. A single hyperscale facility involves up to 40,000 equipment line items, 200 concurrent trade contractors, and zero tolerance for commissioning errors.
+India's data centre capacity is projecting extreme growth, targeting over 2,700 MW by 2027. However, **67% of data centre EPC projects experience schedule overruns exceeding 10%**. 
 
-According to a 2024 Turner & Townsend survey, **67% of data centre EPC projects experience schedule overruns exceeding 10%**. The root cause? **Information fragmentation**. 
+The root cause of these delays is **information fragmentation**. A single hyperscale facility involves up to 40,000 equipment line items and 200 concurrent trade contractors. Specifications, vendor submittals, test records, RFIs, and schedules exist in completely disconnected silos. By the time a specification deviation is caught on-site, it has already caused a critical path delay.
 
-Specifications, vendor submittals, test records, RFIs, and schedules exist in siloed, disconnected systems. By the time a spec deviation is caught on-site or a supply chain delay is manually noticed, it has already caused a critical path delay.
-
-## 🚀 The Solution: STRAND
-
-**STRAND** is an autonomous AI ecosystem that unifies fragmented project data into a living intelligence layer. It catches specification deviations before they reach the site, predicts schedule risks weeks in advance, and ensures the as-built facility meets rigorous Tier III/IV certification standards.
-
-Unlike standard conversational chatbots, STRAND is a **Multi-Platform Agentic System**:
-1. **Next.js Web Client**: The "Risk Cockpit" featuring a **Custom BI Dashboard Builder**.
-2. **React Native Mobile App**: The "QA Copilot" for field engineers to scan equipment and log issues on the ground.
-3. **Multi-Agent Python Backend**: A LangGraph-orchestrated brain that continuously processes documents, models schedules, and automates compliance.
+**STRAND** solves this by unifying project documents, supply chain data, and quality records into a living intelligence ecosystem. STRAND shifts quality control to the extreme left—catching specification deviations *before* they are manufactured, and predicting schedule risks weeks in advance through probabilistic modeling.
 
 ---
 
-## 🤖 Deep Dive: The 5 AI Agents of STRAND
+## 🧬 Core Architecture & Technical Innovations
 
-STRAND is powered by a multi-agent orchestration pattern, allowing specialized AI models to handle specific engineering domains while strictly adhering to **Human-In-The-Loop (HITL)** safety policies.
+STRAND is not a standard conversational wrapper; it is an enterprise-grade **Multi-Agent Orchestration System** built to handle immense industrial complexity.
 
-### 1. 🛡️ The Guardian (Specification & Quality Compliance)
-* **The AI Solution**: The Guardian agent ingests equipment specifications and automatically cross-checks vendor submittals and shop drawings. It utilizes a **Spec-DNA Chain**, creating a cryptographic lineage from a single contract clause down to a field test record, instantly flagging non-conformances before equipment is even manufactured.
+### 1. Autonomous Agentic Cascades (LangGraph)
+STRAND employs a dynamic state machine for multi-agent workflows. We engineered a proprietary **R0 Contagion Engine**. If our `Guardian` agent flags a specification deviation with an R0 contagion score > `5.0`, it autonomously triggers the `Planner`, which dynamically spawns the `Scheduler` agent. The `Scheduler` then maps the delay probability across a NetworkX critical path schedule, generating cross-disciplinary mitigation options automatically.
 
-### 2. ⏱️ The Planner (Predictive Schedule Risk Engine)
-* **The AI Solution**: Uses a proprietary **R0 Contagion Engine** mapped over a NetworkX critical path. The Planner analyzes real-time procurement statuses from our integrations. If a localized hardware failure occurs, it probabilistically cascades that delay across the entire MEP schedule, generating actionable mitigation options.
+### 2. Hybrid RRF GraphRAG (ChromaDB + Neo4j)
+Standard RAG fails on relational construction data (e.g., "Pump A connects to Valve B"). We combine **ChromaDB** (Semantic Vector search) with **Neo4j** (Parametric Knowledge Graph) using **Reciprocal Rank Fusion (RRF)**. The `Brain` agent extracts vector chunk IDs to execute a 1-hop Neo4j graph traversal, injecting actual physical BIM constraints into the LLM context for unparalleled accuracy.
 
-### 3. 🌍 The Oracle (Supply Chain Visibility)
-* **The AI Solution**: Geospatial AI that tracks multi-tier supplier shipments (e.g., UPS systems, generators, switchgear). It models procurement alternatives and predicts exactly when a localized logistics bottleneck will morph into a critical path issue on-site.
+### 3. Edge-Synchronized Auth & AST Cypher Sanitization
+* **Enterprise Multi-Tenancy**: Built on **Next.js 16**, STRAND utilizes Edge-synchronized cookies (via `proxy.ts`) and Supabase Row-Level Security (RLS). 
+* **Database Security**: Natural language graph queries are parsed through an Abstract Syntax Tree (AST) sanitizer. It strips destructive mutators (like `DELETE`) and statically injects parameterized `$tenant_id` clauses, making cross-tenant data leaks structurally impossible.
 
-### 4. 📱 The Inspector (Commissioning QA Copilot)
-* **The AI Solution**: An offline-first React Native mobile app. Field workers scan an equipment QR code and use **Voice-to-Text** to log an observation. The Inspector agent automatically parses this unstructured speech into a formal Non-Conformance Report (NCR) and verifies it against TIA-942 and Uptime Institute acceptance criteria.
-
-### 5. 🧠 The Brain (Project Knowledge & RFI Intelligence)
-* **The Challenge**: Resolving an RFI (Request for Information) requires searching through thousands of disconnected PDFs, contracts, and emails.
-* **The AI Solution**: A **Hybrid-GraphRAG** layer combining ChromaDB (vector search) with Neo4j (Knowledge Graph). It answers complex contractual queries with exact citations and proactively flags when similar RFIs have been resolved in the past. **This agent is fully accessible via the Mobile App** through a multi-threaded conversational UI, allowing field engineers to start new chats, switch between ongoing context threads, and resolve RFI queries directly from the construction site.
+### 4. True Offline-First Mobile Execution
+Our **React Native** mobile app is built for underground data centre basements. It uses strict `AbortController` network wrappers. If offline, it queues Voice-to-Text field notes into `AsyncStorage` and relies on a robust background sync engine to push multipart audio payloads to the backend once connectivity is restored.
 
 ---
 
+## 🤖 The Agent Ecosystem
 
-## 🔗 Enterprise Integrations & The Integrations Hub
+STRAND is powered by five deeply specialized AI agents, guarded by a strict Human-In-The-Loop (HITL) approval manager to ensure construction data integrity.
 
-STRAND does not replace existing construction software; it acts as the intelligence layer built on top of them. Our Next.js frontend features a dedicated **Integrations Hub** (`/integrations`) that handles secure 2-Legged and 3-Legged OAuth connections, webhook configurations, and on-demand data syncing for the industry's most relied-upon tools:
+1. 🛡️ **The Guardian (Quality Compliance)**
+   Ingests thousands of pages of equipment specifications and automatically cross-checks vendor submittals using Vision models. It creates a cryptographic **Spec-DNA Chain**, flagging non-conformances immediately and drafting formal RFIs with exact evidentiary citations.
 
-* **Autodesk Construction Cloud (ACC)**: Syncs shop drawings and design models directly into our GraphRAG layer. Includes webhook listeners for live design changes.
-* **Procore**: Two-way sync for Requests for Information (RFIs) and vendor submittals.
-* **Oracle Primavera P6**: Ingests critical path schedules via EPPM REST API for real-time risk modeling.
-* **IBM Maximo**: Syncs work orders and asset histories to create a comprehensive digital thread of maintenance operations.
+2. ⏱️ **The Planner (Predictive Schedule)**
+   The core orchestration layer interfacing with the Critical Path Method (CPM). It analyzes real-time procurement statuses against the NetworkX schedule graph to probabilistically cascade downstream delays.
 
----
+3. 🌍 **The Oracle (Supply Chain Visibility)**
+   Geospatial AI that tracks multi-tier supplier shipments (UPS, switchgears, cooling towers). Uses deterministic hashing to build stable supply chain trees and queries Neo4j for healthy alternative suppliers if disruptions occur.
 
-## 🧬 Technical Architecture & Innovations
+4. 📱 **The Inspector (Commissioning QA Copilot)**
+   An offline-first mobile agent. Field engineers use **Voice-to-Text** to log observations. The backend parses this unstructured speech into formal Non-Conformance Reports (NCRs) verified against TIA-942 and Uptime Institute standards.
 
-STRAND is built on a modern, scalable, enterprise-grade technology stack designed to handle the complexity of massive infrastructure projects.
-
-### 1. Custom BI Dashboarding Engine
-Project Managers aren't limited to static views. STRAND features a fully customizable **Dashboard Engine** where users can drag, drop, and configure widgets to monitor specific schedule risks, open NCRs, and supply chain health—all fueled by real-time agent data.
-
-### 2. Multi-Tenant Architecture & Security (Tenant-Wise Auth)
-STRAND is built for B2B SaaS scalability. It employs a strict **multi-tenant architecture**:
-* **Supabase Row-Level Security (RLS)**: Every database query is cryptographically scoped to the authenticated user's `tenant_id`.
-* **AST Cypher Sanitization**: Enterprise AI must be secure. All AI-generated database queries are run through an AST sanitizer that blocks destructive mutators (`DELETE`, `DROP`) and forcibly injects `$tenant_id` scoping directly into the Neo4j Graph to prevent cross-project data leaks.
-
-### 3. Hybrid GraphRAG
-Standard vector RAG fails on highly relational construction data. We combined vector embeddings (Chroma) with a Parametric Knowledge Graph (Neo4j) so the AI understands physical *relationships* (e.g., "Pump A is connected to Valve B").
-
-### 4. Human-In-The-Loop (HITL) Orchestration
-Agents can freely read and analyze data, but any system-altering action (such as generating an RFI in Procore or altering a Primavera schedule baseline) routes to a centralized "Approval Manager" requiring explicit human sign-off.
-
-### 5. Offline-First Edge AI
-Data centers under construction often lack Wi-Fi. The Inspector mobile app caches voice logs and NCRs locally, seamlessly syncing them to the AI agents the moment a connection is re-established.
+5. 🧠 **The Brain (Project Knowledge & RFI)**
+   The omniscient conversational layer over all project documents. It answers complex contractual queries in seconds utilizing Hybrid GraphRAG, proactively identifying when similar RFIs have been resolved previously.
 
 ---
 
-## 🧪 Demo Data & Evaluation
+## 🔗 Enterprise Integrations
 
-To evaluate the capabilities of STRAND, we have provided synthetic demo data representing a real-world Data Centre EPC project:
-* **Location**: Check the `data/` directory in this repository.
-* **Contents**: Includes `project_schedule_100tasks.csv`, synthetic vendor submittal PDFs (e.g., `vendor_submittal_cooling_tower.pdf`), and detailed commissioning checklists.
-* **Usage**: You can use the Web Dashboard's ingestion portal to upload these documents and watch the **Guardian** agent flag non-conformances in real-time, or use the mobile app to scan a mock QR code and log an NCR against this data.
+STRAND does not replace existing construction software; it supercharges them. Our dedicated **Integrations Hub** handles secure 2-Legged and 3-Legged OAuth connections via a seamless cross-window popup bridge:
+
+*   **Autodesk Construction Cloud (ACC)**: Syncs 3D models and CAD sheets directly into our Vision AI pipeline.
+*   **Procore**: Two-way sync for Requests for Information (RFIs) and Field NCRs.
+*   **Oracle Primavera P6**: Ingests critical path schedules via EPPM REST API for the R0 Contagion Risk Engine.
+*   **IBM Maximo**: Syncs work orders and asset histories to create a digital thread of maintenance operations.
 
 ---
 
 ## ⚡ Quick Start Guide
 
+We have provided synthetic demo data (`data/vendor_submittal_cooling_tower.pdf`, `project_schedule_100tasks.csv`) to evaluate the platform locally.
+
 ### 1. Database Setup (Supabase)
-To run STRAND locally, you will need a Supabase backend for Authentication and PostgreSQL.
 1. Create a free project at [supabase.com](https://supabase.com/).
 2. Navigate to the SQL Editor in your dashboard.
-3. Execute the scripts found in the `supabase/` folder of this repository (`supabase_schema.sql` and `seed_dashboards.sql`).
+3. Execute the script found at `supabase/supabase_schema.sql` to provision the RLS profiles and dashboards.
 
 ### 2. Backend API (FastAPI)
 ```bash
@@ -112,7 +92,7 @@ cd backend
 
 # Setup Python virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -121,7 +101,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Open .env and add your GROQ_API_KEY, NEO4J_URI, NEO4J_PASSWORD, and SUPABASE credentials
 
-# Seed the Database
+# Seed the Project Knowledge Graph
 python scripts/seed_db.py
 
 # Run the Server
@@ -139,6 +119,7 @@ npm install
 # Start development server
 npm run dev
 ```
+*Note: Due to strict enterprise tenant isolation, self-registration is disabled. You must provision a tenant via the Supabase admin panel, or use the provided backend seed script.*
 
 ### 4. React Native Mobile App
 ```bash
@@ -151,3 +132,10 @@ npm install
 # Start Expo bundler
 npx expo start
 ```
+
+---
+<p align="center">
+  <em>Developed for the ET AI Hackathon 2.0</em>
+  <br>
+  <em>By team TokenSpark</em>
+</p>
