@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     API_KEY: str = "strand-dev-key"                # Static X-API-Key for write routes §9
     RATE_LIMIT_PER_MINUTE: int = 30                # §14.20 — per IP on LLM routes
     BACKEND_URL: str = "http://localhost:8000"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081"
+    CORS_ORIGINS: str = "https://strand-iota.vercel.app,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081"
     APS_WEBHOOK_SECRET: str = "strand-fallback-webhook-secret-98765"
 
     # ── Demo Mode ───────────────────────────────────────────────
