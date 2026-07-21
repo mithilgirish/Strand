@@ -76,20 +76,26 @@ function formatRelativeTime(date: Date): string {
 async function queryBrainApi(question: string): Promise<ChatMessage> {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // Try real backend first — only fall back on network/server failure
   let data: { answer?: string; citations?: { document?: string; page?: number; section?: string }[]; confidence?: string } | null = null;
 
   try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
     const res = await fetch(`${apiBase}/api/v1/brain/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ question }),
     });
     if (res.ok) {
       data = await res.json();
     }
   } catch {
-    // Network error — backend offline, use demo response below
+    // Network error
   }
 
   if (data) {

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
-from backend.deps import limiter, get_current_user, CurrentUser
+from backend.deps import limiter, get_optional_current_user, CurrentUser
 from backend.agents.brain import run_brain
 from backend.models.query import BrainQuery
 
@@ -10,12 +10,11 @@ router = APIRouter()
 async def query_brain(
     request: Request, 
     query: BrainQuery,
-    user: CurrentUser = Depends(get_current_user)
+    user: CurrentUser | None = Depends(get_optional_current_user)
 ):
+    tenant_id = user.tenant_id if user else "default"
     try:
-        # Use user.tenant_id for data isolation instead of query.project_id if applicable
-        # The run_brain function accepts project_id, so we pass tenant_id into it to ensure scoping.
-        return await run_brain(query.question, project_id=user.tenant_id)
+        return await run_brain(query.question, project_id=tenant_id)
     except Exception as e:
         import traceback
         traceback.print_exc()

@@ -176,9 +176,8 @@ function IntegrationsHubContent() {
 
   useEffect(() => {
     if (selectedTenant) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      fetchStatus();
-      fetchConfigs();
+      void fetchStatus();
+      void fetchConfigs();
     }
     // Check if we returned from OAuth flow
     const statusParam = searchParams.get("status");
@@ -194,7 +193,8 @@ function IntegrationsHubContent() {
       setTimeout(() => setErrorMessage(""), 6000);
       router.replace("/integrations");
     }
-  }, [searchParams, selectedTenant, fetchConfigs, fetchStatus, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTenant]);
 
   const handleSaveConfig = async (e: React.FormEvent, integrationId: string) => {
     e.preventDefault();

@@ -15,7 +15,7 @@ from backend.agents.inspector import (
     list_ncrs,
     process_voice_ncr,
 )
-from backend.deps import limiter, get_current_user, CurrentUser
+from backend.deps import limiter, get_current_user, get_optional_current_user, CurrentUser
 
 
 router = APIRouter(tags=["inspector"])
@@ -91,8 +91,9 @@ async def log_ncr(request: Request, ncr: NcrSubmission, user: CurrentUser = Depe
 
 
 @router.get("/inspector/ncrs")
-async def get_ncrs(user: CurrentUser = Depends(get_current_user)):
-    return await list_ncrs(tenant_id=user.tenant_id)
+async def get_ncrs(user: CurrentUser | None = Depends(get_optional_current_user)):
+    tenant_id = user.tenant_id if user else "default"
+    return await list_ncrs(tenant_id=tenant_id)
 
 
 @router.post("/inspector/checklist/{tag}/close")

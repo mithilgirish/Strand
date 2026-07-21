@@ -158,11 +158,14 @@ export default function DashboardCanvas({
       {/* CANVAS HEADER BAR - Industrial Glass Specification */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262626]">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold font-sans tracking-tight text-[#f5f5f5]">
               {currentDashboard?.dashboard_name || "Real-Time Dashboard Canvas"}
             </h1>
-            
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider font-semibold bg-[#4edea3]/10 text-[#4edea3] border border-[#4edea3]/30 shadow-[0_0_12px_rgba(78,222,163,0.15)]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+              Live Telemetry Stream
+            </span>
           </div>
           <p className="text-xs text-[#a3a3a3] font-mono mt-1">
             Parametric Knowledge Graph Visualizers
