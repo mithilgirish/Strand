@@ -91,6 +91,27 @@ async def get_violation(
                 }
     raise HTTPException(status_code=404, detail="Violation not found")
 
+@router.get("/guardian/rfi/outbox")
+async def get_rfi_outbox(
+    tenant_id: str | None = None,
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    resolved_tenant_id = _resolve_tenant(user, tenant_id)
+    cache_prefix = f"rfi_approval:{_tenant_cache_part(resolved_tenant_id)}:"
+    
+    # keys() returns the raw full keys (e.g., cache:rfi_approval:...)
+    raw_keys = redis_client.keys(f"cache:{cache_prefix}*")
+    
+    approvals = []
+    for key in raw_keys:
+        data = redis_client.get_json(key)
+        if data:
+            approvals.append(data)
+            
+    # Sort by approval time, newest first
+    approvals.sort(key=lambda x: x.get("approved_at", ""), reverse=True)
+    return {"approvals": approvals}
+
 
 @router.get("/guardian/rfi/{violation_id}")
 async def get_rfi(
@@ -114,7 +135,7 @@ async def approve_rfi(
         "tenant_id": resolved_tenant_id,
         "status": "approved_sent",
         "approved_at": datetime.now(timezone.utc).isoformat(),
-        "delivery_channel": "demo_outbox",
+        "delivery_channel": "System Outbox",
         "message": "RFI approved and queued for sending.",
     }
     redis_client.set_cache(f"rfi_approval:{_tenant_cache_part(resolved_tenant_id)}:{violation_id}", approval)

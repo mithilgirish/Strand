@@ -350,7 +350,7 @@ export default function DashboardCanvas({
                 xxs: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h }))
               }}
               cols={{ lg: 2, md: 2, sm: 1, xs: 1, xxs: 1 }}
-              rowHeight={320}
+              rowHeight={220}
               onLayoutChange={(layout) => {
                 if (onLayoutChange) onLayoutChange(layout);
               }}
@@ -547,7 +547,7 @@ export default function DashboardCanvas({
 
                       {/* DATA GRID */}
                       {widget.type === "DataGrid" && (
-                        <div className="overflow-x-auto max-h-[260px] overflow-y-auto font-mono text-xs custom-scrollbar">
+                        <div className="overflow-x-auto max-h-[160px] overflow-y-auto font-mono text-xs custom-scrollbar">
                           {rows.length > 0 ? (
                             <table className="w-full text-left">
                               <thead>
@@ -587,7 +587,7 @@ export default function DashboardCanvas({
 
                       {/* PREDICTIVE TREND CHART */}
                       {widget.type === "PredictiveTrendChart" && (
-                        <div className="h-52 w-full pt-2">
+                        <div className="h-40 w-full pt-2">
                           {rows.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                               <AreaChart data={rows}>

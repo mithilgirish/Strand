@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { CheckCircle2, FileSignature, Loader2, Send } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 interface RfiPreviewProps {
   rfiDraft: string;
@@ -21,9 +22,15 @@ export default function RfiPreview({ rfiDraft, violationId }: RfiPreviewProps) {
     setMessage('');
 
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBase}/api/v1/guardian/rfi/${encodeURIComponent(violationId)}/approve`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
+        }
       });
 
       if (!response.ok) {
