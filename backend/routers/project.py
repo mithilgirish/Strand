@@ -111,9 +111,10 @@ async def get_project_summary():
                 )
     except Exception as e:
         logger.warning(f"Summary: guardian data unavailable: {e}")
-        violations_today = 2
-        critical_violations = 1
-    if violations_today == 0:
+        if settings.DEMO_MODE:
+            violations_today = 2
+            critical_violations = 1
+    if settings.DEMO_MODE and violations_today == 0:
         violations_today = 2
         critical_violations = 1
 
@@ -138,7 +139,8 @@ async def get_project_summary():
             redis_client.set_cache("scheduler:latest", sched_result, ttl=600)
     except Exception as e:
         logger.warning(f"Summary: scheduler data unavailable: {e}")
-        critical_r0_max = 4.2
+        if settings.DEMO_MODE:
+            critical_r0_max = 4.2
 
     # 3. Oracle at-risk shipments
     at_risk_shipments = 0
@@ -148,7 +150,8 @@ async def get_project_summary():
         at_risk_shipments = oracle_result.get("at_risk_count", 0)
     except Exception as e:
         logger.warning(f"Summary: oracle data unavailable: {e}")
-        at_risk_shipments = 3
+        if settings.DEMO_MODE:
+            at_risk_shipments = 3
 
     # 4. Open NCRs from Neo4j
     open_ncrs = 0
@@ -172,9 +175,10 @@ async def get_project_summary():
             )
     except Exception as e:
         logger.warning(f"Summary: NCR data unavailable: {e}")
-        open_ncrs = 5
-        open_ncrs_critical = 1
-    if open_ncrs == 0 or open_ncrs_critical == 0:
+        if settings.DEMO_MODE:
+            open_ncrs = 5
+            open_ncrs_critical = 1
+    if settings.DEMO_MODE and (open_ncrs == 0 or open_ncrs_critical == 0):
         open_ncrs = max(open_ncrs, 5)
         open_ncrs_critical = 1
 
@@ -206,6 +210,7 @@ async def get_project_summary():
             "brain": "active",
             "judge": "active",
         },
+        "demo_mode": settings.DEMO_MODE,
     }
 
 

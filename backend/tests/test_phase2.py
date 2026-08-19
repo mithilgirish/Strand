@@ -88,8 +88,13 @@ class Phase2RouteTests(unittest.TestCase):
         task_r0 = responses["/api/v1/scheduler/r0/T023"].json()
         self.assertGreater(task_r0["downstream_count"], 0)
         summary = responses["/api/v1/project/summary"].json()
-        self.assertGreaterEqual(summary["immunity_score"], 50)
-        self.assertLessEqual(summary["immunity_score"], 80)
+        # The immunity score must be a valid 0-100 value. We no longer assert a
+        # narrow 50-80 band: that band only held because fabricated fallback
+        # numbers were injected when subsystems returned zero. With honest
+        # degradation a genuinely clean project can legitimately score higher.
+        self.assertGreaterEqual(summary["immunity_score"], 0)
+        self.assertLessEqual(summary["immunity_score"], 100)
+        self.assertIn("demo_mode", summary)
 
 
 if __name__ == "__main__":

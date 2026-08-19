@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from loguru import logger
+
 from backend.deps import get_current_user, get_optional_current_user, CurrentUser
 from backend.config import settings
 from backend.graph.client import get_neo4j_session
@@ -410,21 +412,30 @@ async def execute_dashboard_query(
 ):
     """
     Executes a read-only Cypher query with strict tenant isolation.
-    Returns real-time telemetry stream data.
+
+    Returns live graph data (``source: "live"``) — including a legitimately
+    empty result set. If the query cannot be executed, the response is marked
+    degraded: seeded demo data (``source: "demo"``) only in DEMO_MODE, otherwise
+    an honest empty/unavailable payload. Seeded data is never labelled "live".
     """
     try:
         secured_cypher = sanitize_and_inject_tenant(payload.query, user.tenant_id)
         with get_neo4j_session(default_access_mode="READ") as session:
             result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
-            if result:
-                return {"data": result, "source": "live"}
+        # A successful query is live data even when it returns zero rows.
+        return {"data": result, "source": "live"}
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Neo4j query execution info: {e}")
-    
-    fallback_data = _get_seed_fallback(payload.query)
-    return {"data": fallback_data, "source": "live"}
+        logger.warning(f"Dashboard query failed, serving degraded response: {e}")
+
+    if settings.DEMO_MODE:
+        return {
+            "data": _get_seed_fallback(payload.query),
+            "source": "demo",
+            "degraded": True,
+        }
+    return {"data": [], "source": "unavailable", "degraded": True}
 
 # ---------------------------------------------------------------------------
 # POST /dashboards/save

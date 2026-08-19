@@ -64,18 +64,20 @@ def compute_r0_from_pkg(
     RETURN count(DISTINCT downstream) as downstream_count
     """
 
+    from backend.config import settings
+
+    graph_available = True
     try:
         results = neo4j_client.execute_query(query, {"spec_dna_id": spec_dna_id})
-        if results:
-            downstream_count = results[0].get("downstream_count", 0)
-        else:
-            downstream_count = 0
+        downstream_count = results[0].get("downstream_count", 0) if results else 0
     except Exception as e:
-        logger.warning(f"R0 PKG query failed for {spec_dna_id}: {e}. Returning heuristic.")
-        # Demo heuristic when graph is unavailable.
-        downstream_count = 30
+        logger.warning(f"R0 PKG query failed for {spec_dna_id}: {e}")
+        graph_available = False
+        downstream_count = 0
 
-    if spec_dna_id and downstream_count == 0:
+    # Only substitute a demo heuristic when explicitly in DEMO_MODE, so a real
+    # R0 of 0.0 (or a genuine graph outage) is never masked by a constant 3.0.
+    if settings.DEMO_MODE and (not graph_available or (spec_dna_id and downstream_count == 0)):
         downstream_count = 30
 
     return score_downstream_r0(downstream_count)
