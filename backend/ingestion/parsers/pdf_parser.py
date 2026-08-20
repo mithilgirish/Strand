@@ -79,6 +79,20 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
             page = doc[page_num]
             text = page.get_text("text")
 
+            # If the page is a scanned raster drawing with no vector text, OCR it
+            if len(text.strip()) < 10:
+                try:
+                    from PIL import Image
+                    import pytesseract
+                    import io
+                    pix = page.get_pixmap(dpi=150)
+                    img = Image.open(io.BytesIO(pix.tobytes("png")))
+                    ocr_text = pytesseract.image_to_string(img)
+                    if ocr_text.strip():
+                        text = ocr_text
+                except Exception as ocr_err:
+                    logger.debug(f"OCR fallback on page {page_num+1} skipped: {ocr_err}")
+
             # Try to extract tables
             tables = []
             try:
@@ -103,6 +117,20 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
         return _fallback_extract(file_path)
     except Exception as e:
         logger.error(f"PDF extraction failed for {file_path}: {e}")
+        return _fallback_extract(file_path)
+
+
+def extract_text_from_image(file_path: str) -> list[dict]:
+    """Extract text from an image file (PNG, JPG, TIFF) using OCR."""
+    try:
+        from PIL import Image
+        import pytesseract
+
+        img = Image.open(file_path)
+        text = pytesseract.image_to_string(img)
+        return [{"page": 1, "text": text, "tables": []}]
+    except Exception as e:
+        logger.warning(f"Image OCR extraction failed for {file_path}: {e}")
         return _fallback_extract(file_path)
 
 

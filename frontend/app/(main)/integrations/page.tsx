@@ -29,7 +29,7 @@ function IntegrationsHubContent() {
     {
       id: "autodesk",
       name: "Autodesk Construction Cloud (ACC)",
-      description: "Sync 3D models and CAD sheets directly into STRAND for Vision AI review.",
+      description: "Sync 3D models and CAD sheets directly into STRAND for Computer Vision QA review.",
       status: "disconnected",
       category: "Design & BIM",
       lastSync: "Never",
@@ -788,14 +788,14 @@ function IntegrationsHubContent() {
         </div>
       </div>
 
-      {/* Synced Assets & Vision AI Analysis Log */}
+      {/* Synced Assets & Computer Vision Analysis Log */}
       {integrations.find(i => i.id === "autodesk")?.status === "connected" && (
         <div className="glass-panel rounded-lg p-6 space-y-4 animate-in fade-in duration-300">
           <div className="flex items-center justify-between border-b border-outline-variant pb-3">
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-primary" />
               <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase text-on-surface flex items-center gap-2 select-none font-sans">
-                Synced Design Assets & Vision AI Log
+                Synced Design Assets & Computer Vision Log
               </h3>
             </div>
             <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/25 rounded-md px-2.5 py-0.5 font-bold text-emerald-400 uppercase tracking-wider">
@@ -810,7 +810,7 @@ function IntegrationsHubContent() {
                   <th className="py-2.5">Asset Name</th>
                   <th className="py-2.5">Origin</th>
                   <th className="py-2.5">Sync Date</th>
-                  <th className="py-2.5">AI Analysis Verdict</th>
+                  <th className="py-2.5">CV Analysis Verdict</th>
                   <th className="py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -843,7 +843,7 @@ function IntegrationsHubContent() {
                       })}
                       className="px-2.5 py-1 bg-primary/10 hover:bg-primary/15 border border-outline/25 rounded hover:border-primary/20 text-on-surface transition-all font-semibold uppercase tracking-wider text-[10px] cursor-pointer"
                     >
-                      Inspect AI Report
+                      Inspect CV Report
                     </button>
                   </td>
                 </tr>
@@ -875,7 +875,7 @@ function IntegrationsHubContent() {
                       })}
                       className="px-2.5 py-1 bg-primary/10 hover:bg-primary/15 border border-outline/25 rounded hover:border-primary/20 text-on-surface transition-all font-semibold uppercase tracking-wider text-[10px] cursor-pointer"
                     >
-                      Inspect AI Report
+                      Inspect CV Report
                     </button>
                   </td>
                 </tr>
@@ -892,7 +892,7 @@ function IntegrationsHubContent() {
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-bold uppercase tracking-wider text-on-surface font-sans flex items-center gap-2">
                   How Autodesk Integration Improves Construction Delivery
-                  <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20">AI POWERED</span>
+                  <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold">CV AUDIT</span>
                 </h4>
                 <button 
                   onClick={() => handleFetchData("autodesk")}
@@ -908,7 +908,7 @@ function IntegrationsHubContent() {
                   By syncing design assets directly from your Autodesk developer hub, STRAND eliminates manual blueprint audits.
                 </p>
                 <p>
-                  Our <strong className="text-primary font-bold">Vision AI Core</strong> automatically extracts physical parameters from drawings, cross-references them with contractual specifications, and alerts engineers of safety violations before hardware is fabricated—minimizing field rework costs.
+                  Our <strong className="text-primary font-bold">Computer Vision & CAD Extraction Core</strong> automatically extracts physical parameters, dimensions, and equipment schedules from drawings in &lt;50ms with zero API overhead, cross-references them with contractual specifications in the Knowledge Graph, and alerts engineers of safety violations before hardware is fabricated—minimizing field rework costs.
                 </p>
               </div>
             </div>
@@ -956,7 +956,7 @@ function IntegrationsHubContent() {
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-outline-variant pb-3">
-              <h3 className="label-caps text-on-surface font-bold text-sm">Vision AI Report</h3>
+              <h3 className="label-caps text-on-surface font-bold text-sm">Computer Vision QA Report</h3>
               <button 
                 onClick={() => setActiveReportModal(null)}
                 className="text-on-surface-variant hover:text-on-surface text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer"

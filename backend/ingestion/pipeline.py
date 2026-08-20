@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from loguru import logger
 
-from backend.ingestion.parsers.pdf_parser import extract_text_from_pdf, extract_parameters_from_pdf
+from backend.ingestion.parsers.pdf_parser import extract_text_from_pdf, extract_parameters_from_pdf, extract_text_from_image
 from backend.ingestion.parsers.csv_parser import parse_schedule_csv
 from backend.ingestion.parsers.json_parser import parse_supplier_graph, parse_checklist
 from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
@@ -42,6 +42,8 @@ def ingest_document(file_path: str, document_type: Optional[str] = None, tenant_
     try:
         if ext == ".pdf":
             return _ingest_pdf(file_path, filename, doc_id, document_type, tenant_id)
+        elif ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".webp"):
+            return _ingest_image_doc(file_path, filename, doc_id, document_type, tenant_id)
         elif ext == ".csv":
             return _ingest_csv(file_path, filename, doc_id)
         elif ext == ".json":
@@ -168,6 +170,62 @@ def _ingest_pdf(
     return {
         "document_id": doc_id,
         "filename": filename,
+        "status": "ingested",
+        "node_count": node_count,
+        "chunk_count": chunk_count,
+    }
+
+
+def _ingest_image_doc(
+    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
+) -> dict:
+    """Ingest a CAD/blueprint image document: OCR text, extract parameters, store in Chroma + PKG."""
+    pages = extract_text_from_image(file_path)
+    node_count = 0
+    chunk_count = 0
+
+    for page_data in pages:
+        documents, metadatas, ids = prepare_chunks_for_storage(
+            text=page_data["text"],
+            document_source=filename,
+            page_number=page_data["page"],
+        )
+        if documents:
+            chroma_store.add_documents(documents, metadatas, ids)
+            chunk_count += len(documents)
+
+    if doc_type in ("spec", "specification"):
+        params = extract_parameters_from_pdf(file_path)
+        for param_name, param_data in params.items():
+            spec_dna_id = generate_spec_dna_id(
+                document_source=filename,
+                section=param_data.get("section", ""),
+                parameter_name=param_name,
+                parameter_value=str(param_data["value"]),
+            )
+            neo4j_client.execute_query(
+                queries.MERGE_CONTRACT_CLAUSE,
+                {
+                    "id": spec_dna_id,
+                    "section": param_data.get("section", "Section 1"),
+                    "title": f"{param_name} Requirement",
+                    "text": f"Required {param_name}: {param_data['value']} {param_data.get('unit', '')}",
+                    "document_source": filename,
+                    "parameter_name": param_name,
+                    "required_value": float(param_data["value"]) if isinstance(param_data["value"], (int, float)) else 0.0,
+                    "unit": param_data.get("unit", ""),
+                    "page_number": param_data.get("page", 1),
+                },
+            )
+            node_count += 1
+
+    logger.info(
+        f"Image ingestion complete: {filename} → {node_count} nodes, {chunk_count} chunks"
+    )
+    return {
+        "document_id": doc_id,
+        "filename": filename,
+        "document_type": doc_type or "blueprint_image",
         "status": "ingested",
         "node_count": node_count,
         "chunk_count": chunk_count,
