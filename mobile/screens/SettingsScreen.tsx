@@ -71,7 +71,8 @@ export default function SettingsScreen({ navigation }: any) {
           .single();
 
         if (data) {
-          const name = data.full_name || user.email?.split('@')[0] || 'Operator';
+          const emailName = typeof user.email === 'string' ? user.email.split('@')[0] : '';
+          const name = data.full_name || emailName || 'Operator';
           setProfile({
             email: user.email || '',
             name: name,
@@ -79,7 +80,8 @@ export default function SettingsScreen({ navigation }: any) {
           });
           setDisplayName(name);
         } else {
-          const name = user.email?.split('@')[0] || 'Operator';
+          const emailName = typeof user.email === 'string' ? user.email.split('@')[0] : '';
+          const name = emailName || 'Operator';
           setProfile({
             email: user.email || '',
             name: name,

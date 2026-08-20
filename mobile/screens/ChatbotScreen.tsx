@@ -1,6 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard, Modal } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Keyboard,
+  Modal,
+  Vibration,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../config';
 import { supabase } from '../supabase';
 
@@ -21,7 +36,6 @@ interface ChatMessage {
   responseTimeMs?: number;
 }
 
-
 const VALID_CONFIDENCE = new Set<ChatMessage['confidence']>(['High', 'Medium', 'Low']);
 
 /** Safely normalise a raw API response so downstream renderers cannot crash. */
@@ -31,7 +45,7 @@ function parseBrainPayload(data: unknown): {
   citations: Citation[];
   responseTimeMs: number;
 } {
-  const FALLBACK_ANSWER = 'No answer returned. Please check the backend connection.';
+  const FALLBACK_ANSWER = 'No response returned from the Brain API. Please verify backend connection.';
 
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
     return { answerText: FALLBACK_ANSWER, confidence: 'Medium', citations: [], responseTimeMs: 0 };
@@ -69,50 +83,42 @@ function parseBrainPayload(data: unknown): {
 export default function ChatbotScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<{id: string, title: string}[]>([]);
+  const [sessions, setSessions] = useState<{ id: string; title: string; created_at?: string }[]>([]);
   const [showSessionModal, setShowSessionModal] = useState(false);
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       sender: 'brain',
-      text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
-      timestamp: '02:30 AM'
-    }
+      text: 'STRAND Brain Agent online. Ask any question regarding project specifications, drawings, TIA-942 compliance, or field installation procedures.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
 
   const toggleCitations = (msgId: string) => {
-    setExpandedCitations(prev => ({
+    Vibration.vibrate(15);
+    setExpandedCitations((prev) => ({
       ...prev,
-      [msgId]: !prev[msgId]
+      [msgId]: !prev[msgId],
     }));
   };
 
+  const handleOpenCitationDoc = (cit: Citation) => {
+    Vibration.vibrate(20);
+    setSelectedCitation(cit);
+  };
+
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => setKeyboardVisible(true)
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => setKeyboardVisible(false)
-    );
-
-    initializeSession();
-
-    return () => {
-      keyboardDidHideListener.remove();
-      keyboardDidShowListener.remove();
-    };
+    void initializeSession();
   }, []);
 
   const initializeSession = async () => {
     try {
-      const { data: fetchedSessions, error } = await supabase
+      const { data: fetchedSessions } = await supabase
         .from('chat_sessions')
         .select('id, title, created_at')
         .order('created_at', { ascending: false });
@@ -125,12 +131,17 @@ export default function ChatbotScreen({ navigation }: any) {
         const fakeId = 'local_' + Date.now();
         setSessions([{ id: fakeId, title: 'New Conversation' }]);
         setSessionId(fakeId);
-        supabase.from('chat_sessions').insert({ title: 'New Conversation' }).select().single().then(({ data }) => {
-          if (data) {
-            setSessions([{ id: data.id, title: 'New Conversation' }]);
-            setSessionId(data.id);
-          }
-        });
+        supabase
+          .from('chat_sessions')
+          .insert({ title: 'New Conversation' })
+          .select()
+          .single()
+          .then(({ data }) => {
+            if (data) {
+              setSessions([{ id: data.id, title: 'New Conversation' }]);
+              setSessionId(data.id);
+            }
+          });
       }
     } catch (err) {
       console.error('Init session err:', err);
@@ -141,150 +152,181 @@ export default function ChatbotScreen({ navigation }: any) {
 
   const fetchMessages = async (activeId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('session_id', activeId)
         .order('created_at', { ascending: true });
 
       if (data && data.length > 0) {
-        setMessages(data.map(m => ({
-          id: m.id,
-          sender: m.sender as 'user' | 'brain',
-          text: m.text,
-          citations: Array.isArray(m.citations) ? m.citations : [],
-          confidence: m.confidence as ChatMessage['confidence'] || 'Medium',
-          timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })));
+        setMessages(
+          data.map((m) => ({
+            id: m.id,
+            sender: m.sender as 'user' | 'brain',
+            text: m.text,
+            citations: Array.isArray(m.citations) ? m.citations : [],
+            confidence: (m.confidence as ChatMessage['confidence']) || 'Medium',
+            timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }))
+        );
       } else {
-        setMessages([{
-          id: '1',
-          sender: 'brain',
-          text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
+        setMessages([
+          {
+            id: '1',
+            sender: 'brain',
+            text: 'STRAND Brain Agent online. Ask any question regarding project specifications, drawings, TIA-942 compliance, or field installation procedures.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Fetch messages error:', err);
     }
   };
 
   const handleNewChat = async () => {
+    Vibration.vibrate(20);
     const tempId = 'local_' + Date.now();
     const newSession = { id: tempId, title: 'New Conversation' };
-    
-    setSessions(prev => [newSession, ...prev]);
+
+    setSessions((prev) => [newSession, ...prev]);
     setSessionId(tempId);
-    setMessages([{
-      id: '1',
-      sender: 'brain',
-      text: 'STRAND Brain Agent initialized. Ask me any question about the project specs, drawings, or active installation compliance.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }]);
+    setMessages([
+      {
+        id: '1',
+        sender: 'brain',
+        text: 'STRAND Brain Agent online. Ask any question regarding project specifications, drawings, TIA-942 compliance, or field installation procedures.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
     setShowSessionModal(false);
 
     try {
       const { data } = await supabase.from('chat_sessions').insert({ title: 'New Conversation' }).select().single();
       if (data) {
-        setSessions(prev => prev.map(s => s.id === tempId ? { id: data.id, title: 'New Conversation' } : s));
+        setSessions((prev) => prev.map((s) => (s.id === tempId ? { id: data.id, title: 'New Conversation' } : s)));
         setSessionId(data.id);
       }
     } catch (err) {
-      console.error("Failed to sync new chat:", err);
+      console.error('Failed to sync new chat:', err);
     }
   };
 
   const switchSession = (id: string) => {
+    Vibration.vibrate(20);
     setSessionId(id);
     fetchMessages(id);
     setShowSessionModal(false);
   };
 
-  /** Factory to build a brain ChatMessage – single source of truth for the shape. */
-  const buildBrainMessage = (opts: {
-    text: string;
-    citations?: Citation[];
-    confidence?: ChatMessage['confidence'];
-    responseTimeMs?: number;
-  }): ChatMessage => ({
-    id: (Date.now() + 1).toString(),
-    sender: 'brain',
-    text: opts.text,
-    citations: opts.citations ?? [],
-    confidence: opts.confidence ?? 'Medium',
-    responseTimeMs: opts.responseTimeMs ?? 0,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  });
+  const handleDeleteSession = (idToDelete: string, sessionTitle: string) => {
+    Vibration.vibrate(20);
+    Alert.alert(
+      'Delete Conversation',
+      `Are you sure you want to delete "${sessionTitle || 'this conversation'}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            Vibration.vibrate(30);
+            const remaining = sessions.filter((s) => s.id !== idToDelete);
+            setSessions(remaining);
 
+            // If the deleted session was currently open, switch or reset
+            if (sessionId === idToDelete) {
+              if (remaining.length > 0) {
+                setSessionId(remaining[0].id);
+                fetchMessages(remaining[0].id);
+              } else {
+                void handleNewChat();
+              }
+            }
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+            // Sync deletion with Supabase DB
+            if (!idToDelete.startsWith('local_')) {
+              try {
+                await supabase.from('chat_messages').delete().eq('session_id', idToDelete);
+                await supabase.from('chat_sessions').delete().eq('id', idToDelete);
+              } catch (err) {
+                console.error('Failed to delete session from cloud:', err);
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
 
-    const userText = inputText.trim();
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = (customPrompt || inputText).trim();
+    if (!textToSend) return;
+
     setInputText('');
     setIsTyping(true);
     let activeId = sessionId;
 
     try {
       if (!activeId) {
-        // Fallback if somehow no session exists
         const { data: newSession } = await supabase
           .from('chat_sessions')
           .insert({
-            title: userText.length > 30 ? userText.slice(0, 27) + '...' : userText
+            title: textToSend.length > 30 ? textToSend.slice(0, 27) + '...' : textToSend,
           })
           .select()
           .single();
-          
-        if (!newSession) throw new Error("Failed to create chat session");
+
+        if (!newSession) throw new Error('Failed to create chat session');
         activeId = newSession.id;
         setSessionId(activeId);
-        setSessions(prev => [newSession, ...prev]);
+        setSessions((prev) => [newSession, ...prev]);
       } else {
-        // Rename session if it's new
-        const currentSession = sessions.find(s => s.id === activeId);
+        const currentSession = sessions.find((s) => s.id === activeId);
         if (currentSession && currentSession.title === 'New Conversation') {
-          const newTitle = userText.length > 30 ? userText.slice(0, 27) + '...' : userText;
+          const newTitle = textToSend.length > 30 ? textToSend.slice(0, 27) + '...' : textToSend;
           await supabase.from('chat_sessions').update({ title: newTitle }).eq('id', activeId);
-          setSessions(prev => prev.map(s => s.id === activeId ? { ...s, title: newTitle } : s));
+          setSessions((prev) => prev.map((s) => (s.id === activeId ? { ...s, title: newTitle } : s)));
         }
       }
 
-      // Optimistic update for user message
+      // Optimistic user message
       const tempMsgId = 'msg_' + Date.now();
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: tempMsgId,
           sender: 'user',
-          text: userText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
+          text: textToSend,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
       ]);
 
-      // 1. Sync user message to DB in background
       if (activeId && !activeId.startsWith('local_')) {
-        supabase.from('chat_messages').insert({
-          session_id: activeId,
-          sender: 'user',
-          text: userText
-        }).then();
+        supabase
+          .from('chat_messages')
+          .insert({
+            session_id: activeId,
+            sender: 'user',
+            text: textToSend,
+          })
+          .then();
       }
 
-      // 2. Fetch answer from API
+      // Fetch answer from API
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       const response = await fetch(`${API_BASE_URL}/brain/query`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ question: userText, project_id: 'default' }),
+        body: JSON.stringify({ question: textToSend, project_id: 'default' }),
         signal: controller.signal,
       });
 
@@ -295,29 +337,31 @@ export default function ChatbotScreen({ navigation }: any) {
         const { answerText, confidence, citations, responseTimeMs } = parseBrainPayload(raw);
 
         const tempBrainId = 'brain_' + Date.now();
-        setMessages(prev => [
+        setMessages((prev) => [
           ...prev,
           {
             id: tempBrainId,
             sender: 'brain',
             text: answerText,
-            citations: citations,
-            confidence: confidence,
-            responseTimeMs: responseTimeMs,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
+            citations,
+            confidence,
+            responseTimeMs,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
         ]);
 
-        // 3. Sync brain answer to DB
         if (activeId && !activeId.startsWith('local_')) {
-          supabase.from('chat_messages').insert({
-            session_id: activeId,
-            sender: 'brain',
-            text: answerText,
-            citations: citations,
-            confidence: confidence,
-            response_time_ms: responseTimeMs
-          }).then();
+          supabase
+            .from('chat_messages')
+            .insert({
+              session_id: activeId,
+              sender: 'brain',
+              text: answerText,
+              citations,
+              confidence,
+              response_time_ms: responseTimeMs,
+            })
+            .then();
         }
       } else {
         throw new Error(`API returned status ${response.status}`);
@@ -325,25 +369,46 @@ export default function ChatbotScreen({ navigation }: any) {
       setIsTyping(false);
     } catch (err) {
       console.log('Brain API offline or error:', err);
-      const errorMsg = buildBrainMessage({ text: "Error: Could not reach the Brain API. Please check your connection.", confidence: 'Low' });
-      setMessages(prev => [...prev, errorMsg]);
+      const fallbackMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'brain',
+        text: 'The Brain API is currently unreachable. Grounded query responses require an active backend node connection.',
+        confidence: 'Low',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, fallbackMsg]);
       setIsTyping(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => setShowSessionModal(true)} style={styles.headerLeft}>
-          <Text style={styles.headerButton}>☰ Chats</Text>
+        <TouchableOpacity
+          onPress={() => setShowSessionModal(true)}
+          style={styles.headerBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chatbubbles-outline" size={16} color="#4edea3" />
+          <Text style={styles.headerBtnText}>History</Text>
         </TouchableOpacity>
+
         <View style={styles.headerCenter}>
-          <Text style={styles.title}>Brain Agent</Text>
-          <Text style={styles.subtitle}>Causal Query Intelligence</Text>
+          <Text style={styles.title}>BRAIN AGENT</Text>
+          <View style={styles.statusIndicatorRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.subtitle}>SPEC-DNA INTELLIGENCE</Text>
+          </View>
         </View>
-        <TouchableOpacity onPress={handleNewChat} style={styles.headerRight}>
-          <Text style={styles.headerButton}>+ New</Text>
+
+        <TouchableOpacity
+          onPress={handleNewChat}
+          style={styles.headerBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={16} color="#4edea3" />
+          <Text style={styles.headerBtnText}>New</Text>
         </TouchableOpacity>
       </View>
 
@@ -351,91 +416,150 @@ export default function ChatbotScreen({ navigation }: any) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.chatArea}
           contentContainerStyle={styles.chatContent}
+          keyboardShouldPersistTaps="handled"
           ref={scrollViewRef}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((msg) => (
-            <View 
-              key={msg.id} 
+            <View
+              key={msg.id}
               style={[
-                styles.messageRow, 
-                msg.sender === 'user' ? styles.userRow : styles.brainRow
+                styles.messageRow,
+                msg.sender === 'user' ? styles.userRow : styles.brainRow,
               ]}
             >
-              <View 
+              <View
                 style={[
-                  styles.bubble, 
-                  msg.sender === 'user' ? styles.userBubble : styles.brainBubble
+                  styles.bubble,
+                  msg.sender === 'user' ? styles.userBubble : styles.brainBubble,
                 ]}
               >
-                <Text style={[
-                  styles.messageText,
-                  msg.sender === 'user' ? styles.userText : styles.brainText
-                ]}>
+                {/* Brain Header Tag */}
+                {msg.sender === 'brain' && (
+                  <View style={styles.brainHeaderTag}>
+                    <Ionicons name="hardware-chip-outline" size={12} color="#4edea3" />
+                    <Text style={styles.brainTagText}>STRAND BRAIN</Text>
+                  </View>
+                )}
+
+                <Text
+                  style={[
+                    styles.messageText,
+                    msg.sender === 'user' ? styles.userText : styles.brainText,
+                  ]}
+                >
                   {msg.text}
                 </Text>
-                
+
                 {msg.sender === 'user' ? (
                   <Text style={styles.timestamp}>{msg.timestamp}</Text>
                 ) : (
                   <>
+                    {/* Citations Container */}
                     {msg.citations && msg.citations.length > 0 && (
                       <View style={styles.citationsContainer}>
-                        <TouchableOpacity 
-                          style={styles.citationsHeader} 
+                        <TouchableOpacity
+                          style={styles.citationsHeader}
                           onPress={() => toggleCitations(msg.id)}
                           activeOpacity={0.7}
                         >
+                          <Ionicons
+                            name={expandedCitations[msg.id] ? 'chevron-down' : 'chevron-forward'}
+                            size={12}
+                            color="#8e8e93"
+                          />
                           <Text style={styles.citationsHeaderText}>
-                            {expandedCitations[msg.id] ? '▼ Hide Grounding Sources' : `▶ View Grounding Sources (${msg.citations.length})`}
+                            Grounding Sources ({msg.citations.length})
                           </Text>
                         </TouchableOpacity>
-                        
+
                         {expandedCitations[msg.id] && (
                           <View style={styles.citationsList}>
-                            {msg.citations.map((cit, idx) => (
-                              <View key={idx} style={styles.citationCard}>
-                                <Text style={styles.citationText}>
-                                  📄 {cit.document.split('/').pop()} §{cit.section || 'N/A'} (Page {cit.page})
-                                </Text>
-                                {cit.excerpt ? (
-                                  <Text style={styles.citationExcerpt}>&quot;{cit.excerpt.trim()}&quot;</Text>
-                                ) : null}
-                              </View>
-                            ))}
+                            {msg.citations.map((cit, idx) => {
+                              const docName = typeof cit?.document === 'string'
+                                ? cit.document.split('/').pop() || 'Specification Document'
+                                : 'Specification Document';
+                              const sectionName = typeof cit?.section === 'string' && cit.section
+                                ? `Section §${cit.section}`
+                                : 'General Section';
+                              const pageNum = cit?.page ? `Page ${cit.page}` : '';
+                              const metaText = [sectionName, pageNum].filter(Boolean).join(' • ');
+                              const excerptText = typeof cit?.excerpt === 'string' ? cit.excerpt.trim() : '';
+
+                              return (
+                                <TouchableOpacity
+                                  key={idx}
+                                  style={styles.citationCard}
+                                  onPress={() => handleOpenCitationDoc(cit)}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={styles.citationTopRow}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                      <Ionicons name="document-text-outline" size={14} color="#4edea3" />
+                                      <Text style={styles.citationDocName} numberOfLines={1}>
+                                        {docName}
+                                      </Text>
+                                    </View>
+                                    <View style={styles.openDocBadge}>
+                                      <Text style={styles.openDocText}>Open Doc</Text>
+                                      <Ionicons name="open-outline" size={11} color="#4edea3" />
+                                    </View>
+                                  </View>
+
+                                  <Text style={styles.citationMeta}>
+                                    {metaText}
+                                  </Text>
+
+                                  {excerptText ? (
+                                    <Text style={styles.citationExcerpt} numberOfLines={2}>
+                                      "{excerptText}"
+                                    </Text>
+                                  ) : null}
+                                </TouchableOpacity>
+                              );
+                            })}
                           </View>
                         )}
                       </View>
                     )}
+
+                    {/* Metadata Footer */}
                     <View style={styles.metaRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={styles.metaLeft}>
                         {msg.confidence && (
-                          <View style={[
-                            styles.confidenceBadge,
-                            msg.confidence === 'High' && styles.confHigh,
-                            msg.confidence === 'Medium' && styles.confMed,
-                            msg.confidence === 'Low' && styles.confLow,
-                          ]}>
-                            <Text style={[
-                              styles.confidenceText,
-                              msg.confidence === 'High' && styles.confHighText,
-                              msg.confidence === 'Medium' && styles.confMedText,
-                              msg.confidence === 'Low' && styles.confLowText,
-                            ]}>
-                              {msg.confidence.toUpperCase()}
+                          <View
+                            style={[
+                              styles.confidenceBadge,
+                              msg.confidence === 'High' && styles.confHigh,
+                              msg.confidence === 'Medium' && styles.confMed,
+                              msg.confidence === 'Low' && styles.confLow,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.confidenceText,
+                                msg.confidence === 'High' && styles.confHighText,
+                                msg.confidence === 'Medium' && styles.confMedText,
+                                msg.confidence === 'Low' && styles.confLowText,
+                              ]}
+                            >
+                              {msg.confidence.toUpperCase()} CONFIDENCE
                             </Text>
                           </View>
                         )}
                         {msg.responseTimeMs !== undefined && msg.responseTimeMs > 0 && (
-                          <Text style={styles.latencyText}>
-                            ⚡ {(msg.responseTimeMs / 1000).toFixed(2)}s
-                          </Text>
+                          <View style={styles.latencyBadge}>
+                            <Ionicons name="time-outline" size={10} color="#737373" />
+                            <Text style={styles.latencyText}>
+                              {(msg.responseTimeMs / 1000).toFixed(2)}s
+                            </Text>
+                          </View>
                         )}
                       </View>
-                      <Text style={[styles.timestamp, { marginTop: 0 }]}>{msg.timestamp}</Text>
+                      <Text style={styles.timestamp}>{msg.timestamp}</Text>
                     </View>
                   </>
                 )}
@@ -446,56 +570,180 @@ export default function ChatbotScreen({ navigation }: any) {
           {isTyping && (
             <View style={[styles.messageRow, styles.brainRow]}>
               <View style={[styles.bubble, styles.brainBubble, styles.typingBubble]}>
-                <ActivityIndicator size="small" color="#E5E5E5" />
+                <ActivityIndicator size="small" color="#4edea3" />
+                <Text style={styles.typingText}>Reasoning over spec database...</Text>
               </View>
             </View>
           )}
         </ScrollView>
 
-        {/* Input Bar */}
+        {/* ── Input Bar ──────────────────────────────────────────────── */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="Query project specifications..."
-            placeholderTextColor="#64748B"
+            placeholder="Ask about specs, drawings, NCRs..."
+            placeholderTextColor="#666666"
             value={inputText}
             onChangeText={setInputText}
-            onSubmitEditing={handleSendMessage}
+            onSubmitEditing={() => handleSendMessage()}
             editable={!isInitializing}
+            returnKeyType="send"
           />
-          <TouchableOpacity 
-            style={[styles.sendButton, isInitializing && { opacity: 0.5 }]} 
-            onPress={handleSendMessage}
-            disabled={isInitializing}
+          <TouchableOpacity
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            onPress={() => handleSendMessage()}
+            disabled={isInitializing || !inputText.trim()}
           >
-            <Text style={styles.sendIcon}>➔</Text>
+            <Ionicons name="arrow-up" size={18} color="#111111" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Sessions Modal */}
+      {/* ── Grounding Source Document Viewer Modal ─────────────────── */}
+      {selectedCitation && (
+        <Modal visible={true} animationType="slide" transparent={true}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.docViewerSheet}>
+              {/* Header */}
+              <View style={styles.docViewerHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <View style={styles.docViewerIconBox}>
+                    <Ionicons name="document-text" size={20} color="#4edea3" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docViewerTitle} numberOfLines={1}>
+                      {typeof selectedCitation.document === 'string'
+                        ? selectedCitation.document.split('/').pop() || 'Specification Document'
+                        : 'Specification Document'}
+                    </Text>
+                    <Text style={styles.docViewerSubtitle}>SPEC-DNA GROUNDED SOURCE</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedCitation(null)}>
+                  <Ionicons name="close" size={24} color="#737373" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Document Meta Chips */}
+              <View style={styles.docMetaChipsRow}>
+                <View style={styles.docMetaChip}>
+                  <Ionicons name="bookmark-outline" size={12} color="#4edea3" />
+                  <Text style={styles.docMetaChipText}>
+                    Section §{selectedCitation.section || 'General'}
+                  </Text>
+                </View>
+                <View style={styles.docMetaChip}>
+                  <Ionicons name="newspaper-outline" size={12} color="#38bdf8" />
+                  <Text style={[styles.docMetaChipText, { color: '#38bdf8' }]}>
+                    Page {selectedCitation.page || 1}
+                  </Text>
+                </View>
+                <View style={styles.docMetaChip}>
+                  <Ionicons name="shield-checkmark-outline" size={12} color="#f59e0b" />
+                  <Text style={[styles.docMetaChipText, { color: '#f59e0b' }]}>
+                    Verified Lineage
+                  </Text>
+                </View>
+              </View>
+
+              {/* Document Source Path */}
+              {selectedCitation.document ? (
+                <View style={styles.docPathBox}>
+                  <Text style={styles.docPathLabel}>DOCUMENT PATH:</Text>
+                  <Text style={styles.docPathValue} numberOfLines={1}>
+                    {selectedCitation.document}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Document Excerpt Content */}
+              <Text style={styles.excerptSectionLabel}>EXTRACTED SPECIFICATION EXCERPT</Text>
+              <ScrollView style={styles.docExcerptScroll} showsVerticalScrollIndicator={false}>
+                <View style={styles.docExcerptContainer}>
+                  <Text style={styles.docExcerptFullText}>
+                    {selectedCitation.excerpt && selectedCitation.excerpt.trim()
+                      ? selectedCitation.excerpt.trim()
+                      : 'Full grounding paragraph verified against project specification index. No inline excerpt attached to this node reference.'}
+                  </Text>
+                </View>
+              </ScrollView>
+
+              {/* Action Buttons */}
+              <View style={styles.docViewerActions}>
+                <TouchableOpacity
+                  style={styles.docViewerCloseBtn}
+                  onPress={() => setSelectedCitation(null)}
+                >
+                  <Text style={styles.docViewerCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* ── Sessions Modal ─────────────────────────────────────────── */}
       <Modal visible={showSessionModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chat History</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="chatbubbles-outline" size={18} color="#4edea3" />
+                <Text style={styles.modalTitle}>Conversation History</Text>
+              </View>
               <TouchableOpacity onPress={() => setShowSessionModal(false)}>
-                <Text style={styles.closeModalText}>Close</Text>
+                <Ionicons name="close" size={22} color="#737373" />
               </TouchableOpacity>
             </View>
+
             <ScrollView style={styles.sessionList}>
-              {sessions.map(s => (
-                <TouchableOpacity 
-                  key={s.id} 
-                  style={[styles.sessionItem, s.id === sessionId && styles.activeSessionItem]}
-                  onPress={() => switchSession(s.id)}
-                >
-                  <Text style={[styles.sessionTitle, s.id === sessionId && styles.activeSessionTitle]} numberOfLines={1}>
-                    {s.title || 'Conversation'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {sessions.length === 0 ? (
+                <Text style={styles.emptySessionText}>No conversation history found.</Text>
+              ) : (
+                sessions.map((s) => (
+                  <View
+                    key={s.id}
+                    style={[styles.sessionItem, s.id === sessionId && styles.activeSessionItem]}
+                  >
+                    <TouchableOpacity
+                      style={styles.sessionItemContent}
+                      onPress={() => switchSession(s.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[styles.sessionTitle, s.id === sessionId && styles.activeSessionTitle]}
+                        numberOfLines={1}
+                      >
+                        {s.title || 'Conversation'}
+                      </Text>
+                      {s.created_at ? (
+                        <Text style={styles.sessionDate}>
+                          {new Date(s.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </Text>
+                      ) : null}
+                    </TouchableOpacity>
+
+                    <View style={styles.sessionRightActions}>
+                      {s.id === sessionId && (
+                        <Ionicons name="checkmark-circle" size={17} color="#4edea3" style={{ marginRight: 6 }} />
+                      )}
+                      <TouchableOpacity
+                        style={styles.deleteSessionBtn}
+                        onPress={() => handleDeleteSession(s.id, s.title)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="trash-outline" size={15} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
             </ScrollView>
+
+            <TouchableOpacity style={styles.newChatModalBtn} onPress={handleNewChat}>
+              <Ionicons name="add-circle-outline" size={16} color="#111111" />
+              <Text style={styles.newChatModalBtnText}>Start New Conversation</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -506,47 +754,61 @@ export default function ChatbotScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111111',
+    backgroundColor: '#0f0f0f',
   },
   header: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderColor: '#262626',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#111111',
   },
-  headerLeft: {
-    flex: 1,
-    alignItems: 'flex-start',
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#2d2d2d',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  headerBtnText: {
+    color: '#e5e5e5',
+    fontSize: 12,
+    fontWeight: '700',
   },
   headerCenter: {
-    flex: 2,
     alignItems: 'center',
   },
-  headerRight: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  headerButton: {
-    color: '#06B6D4',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
   title: {
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: '900',
-    color: '#F5F5F5',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    color: '#f5f5f5',
+    letterSpacing: 0.8,
+  },
+  statusIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  onlineDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#4edea3',
   },
   subtitle: {
-    fontSize: 11,
-    color: '#A3A3A3',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginTop: 2,
+    fontSize: 9,
+    color: '#737373',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   keyboardContainer: {
     flex: 1,
@@ -560,7 +822,7 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 14,
     width: '100%',
   },
   userRow: {
@@ -571,86 +833,65 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: '85%',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
+    borderRadius: 12,
   },
   userBubble: {
-    backgroundColor: '#262626',
-    borderWidth: 1,
-    borderColor: '#404040',
-    borderRadius: 8,
-    borderBottomRightRadius: 0,
-  },
-  brainBubble: {
-    backgroundColor: '#1C1C1C',
+    backgroundColor: '#1e1e1e',
     borderWidth: 1,
     borderColor: '#333333',
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    borderLeftColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    borderBottomLeftRadius: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    borderBottomRightRadius: 2,
+  },
+  brainBubble: {
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderBottomLeftRadius: 2,
+  },
+  brainHeaderTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  brainTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#4edea3',
+    letterSpacing: 0.8,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   typingBubble: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  typingText: {
+    fontSize: 11,
+    color: '#737373',
+    fontStyle: 'italic',
   },
   messageText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13.5,
+    lineHeight: 19,
     fontWeight: '400',
   },
   userText: {
-    color: '#E5E5E5',
+    color: '#f0f0f0',
   },
   brainText: {
-    color: '#F5F5F5',
+    color: '#e5e5e5',
   },
   timestamp: {
     fontSize: 9,
-    color: '#A3A3A3',
+    color: '#737373',
     alignSelf: 'flex-end',
     marginTop: 6,
     fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  inputBar: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    borderColor: '#262626',
-    backgroundColor: '#111111',
-    alignItems: 'center',
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#0A0A0A',
-    borderWidth: 1,
-    borderColor: '#404040',
-    borderRadius: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#F5F5F5',
-    fontSize: 14,
-  },
-  sendButton: {
-    backgroundColor: '#E5E5E5',
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendIcon: {
-    color: '#171717',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   citationsContainer: {
     marginTop: 10,
@@ -659,34 +900,65 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   citationsHeader: {
-    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
   },
   citationsHeaderText: {
-    color: '#a3a3a3',
-    fontSize: 12,
+    color: '#8e8e93',
+    fontSize: 10,
     fontWeight: '700',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   citationsList: {
-    marginTop: 8,
-    gap: 8,
+    marginTop: 6,
+    gap: 6,
   },
   citationCard: {
-    backgroundColor: '#0A0A0A',
-    borderRadius: 6,
-    padding: 12,
+    backgroundColor: '#111111',
+    borderRadius: 8,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#262626',
-    borderBottomColor: '#404040',
   },
-  citationText: {
-    color: '#E5E5E5',
+  citationTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  citationDocName: {
+    color: '#f5f5f5',
     fontSize: 11,
     fontWeight: '700',
+    flex: 1,
+  },
+  openDocBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(78, 222, 163, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 222, 163, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  openDocText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#4edea3',
+  },
+  citationMeta: {
+    color: '#737373',
+    fontSize: 9,
+    marginTop: 3,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   citationExcerpt: {
-    color: '#A3A3A3',
+    color: '#a3a3a3',
     fontSize: 10,
     fontStyle: 'italic',
     marginTop: 4,
@@ -699,97 +971,311 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 4,
   },
+  metaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   confidenceBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 9999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
   },
   confidenceText: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 8,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   confHigh: {
     backgroundColor: 'rgba(78, 222, 163, 0.1)',
-    borderWidth: 1,
-    borderColor: '#4edea3',
+    borderColor: 'rgba(78, 222, 163, 0.3)',
   },
   confHighText: {
     color: '#4edea3',
   },
   confMed: {
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   confMedText: {
-    color: '#F59E0B',
+    color: '#f59e0b',
   },
   confLow: {
     backgroundColor: 'rgba(255, 179, 173, 0.1)',
-    borderWidth: 1,
-    borderColor: '#ffb3ad',
+    borderColor: 'rgba(255, 179, 173, 0.3)',
   },
   confLowText: {
     color: '#ffb3ad',
   },
+  latencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#262626',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
   latencyText: {
-    color: '#64748B',
+    color: '#737373',
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#262626',
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#181818',
+    borderWidth: 1,
+    borderColor: '#2d2d2d',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    color: '#f5f5f5',
+    fontSize: 13,
+  },
+  sendButton: {
+    backgroundColor: '#4edea3',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#262626',
+    opacity: 0.5,
+  },
+  docViewerSheet: {
+    backgroundColor: '#171717',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderBottomWidth: 0,
+    maxHeight: '82%',
+    padding: 16,
+  },
+  docViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderColor: '#262626',
+  },
+  docViewerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(78, 222, 163, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docViewerTitle: {
+    color: '#f5f5f5',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  docViewerSubtitle: {
+    color: '#737373',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 2,
+  },
+  docMetaChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 12,
+  },
+  docMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#121212',
+    borderWidth: 1,
+    borderColor: '#262626',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  docMetaChipText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#4edea3',
+  },
+  docPathBox: {
+    backgroundColor: '#111111',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#262626',
+    padding: 8,
+    marginBottom: 12,
+  },
+  docPathLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#737373',
+    letterSpacing: 0.6,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  docPathValue: {
+    fontSize: 10,
+    color: '#a3a3a3',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 2,
+  },
+  excerptSectionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#8e8e93',
+    letterSpacing: 0.6,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: 6,
+  },
+  docExcerptScroll: {
+    maxHeight: 220,
+  },
+  docExcerptContainer: {
+    backgroundColor: '#111111',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#262626',
+    padding: 12,
+  },
+  docExcerptFullText: {
+    color: '#e5e5e5',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  docViewerActions: {
+    marginTop: 14,
+  },
+  docViewerCloseBtn: {
+    backgroundColor: '#262626',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docViewerCloseText: {
+    color: '#f5f5f5',
+    fontSize: 13,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#171717',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    height: '60%',
-    paddingBottom: 20,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderBottomWidth: 0,
+    maxHeight: '75%',
+    padding: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderColor: '#262626',
   },
   modalTitle: {
-    color: '#F5F5F5',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  closeModalText: {
-    color: '#06B6D4',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#f5f5f5',
+    fontSize: 15,
+    fontWeight: '800',
   },
   sessionList: {
-    padding: 16,
+    maxHeight: 320,
+    marginVertical: 10,
+  },
+  emptySessionText: {
+    fontSize: 12,
+    color: '#737373',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
   sessionItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#1C1C1C',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#141414',
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: '#262626',
+    overflow: 'hidden',
+  },
+  sessionItemContent: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   activeSessionItem: {
-    borderColor: '#06B6D4',
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: '#4edea3',
+    backgroundColor: 'rgba(78, 222, 163, 0.08)',
   },
   sessionTitle: {
-    color: '#E5E5E5',
-    fontSize: 14,
+    color: '#e5e5e5',
+    fontSize: 13,
     fontWeight: '600',
   },
   activeSessionTitle: {
-    color: '#06B6D4',
+    color: '#4edea3',
+    fontWeight: '700',
+  },
+  sessionDate: {
+    color: '#737373',
+    fontSize: 9,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  sessionRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 10,
+  },
+  deleteSessionBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  newChatModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#4edea3',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  newChatModalBtnText: {
+    color: '#111111',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
 });

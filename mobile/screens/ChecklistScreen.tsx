@@ -206,7 +206,7 @@ export default function ChecklistScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {steps.map((step) => (
           <View key={step.step_id} style={[
             styles.card, 

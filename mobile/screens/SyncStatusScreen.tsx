@@ -53,6 +53,7 @@ export default function SyncStatusScreen({ navigation }: any) {
             equipment_tag: ncr.equipment_tag,
             step_id: ncr.step_id,
             raised_by: ncr.raised_by || 'field_engineer',
+            photo_url: ncr.photo_url || null,
           }),
           signal: controller.signal
         });
@@ -81,7 +82,7 @@ export default function SyncStatusScreen({ navigation }: any) {
     } catch (err) {
       Alert.alert(
         'Sync Failed',
-        'Backend server is unreachable. Please ensure the backend is running on your host machine at http://192.168.0.100:8000'
+        `Backend server is unreachable. Please ensure the backend is running and accessible at ${API_BASE_URL}`
       );
     } finally {
       setLoading(false);

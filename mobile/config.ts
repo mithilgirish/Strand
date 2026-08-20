@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export let API_BASE_URL = 'http://192.168.0.100:8000/api/v1';
+export const DEFAULT_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.107:8000/api/v1';
+
+export let API_BASE_URL = DEFAULT_API_BASE_URL;
 
 export const initApiConfig = async () => {
   try {
