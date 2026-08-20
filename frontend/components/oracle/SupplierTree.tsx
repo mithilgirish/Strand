@@ -68,14 +68,15 @@ export default function SupplierTree({
       setState("idle");
       return;
     }
+    const targetId: string = shipmentId;
     const controller = new AbortController();
-    async function load() {
+    async function load(id: string) {
       setState("loading");
       setData(null);
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const response = await fetch(
-          `${apiBase}/api/v1/oracle/supply-chain/${encodeURIComponent(shipmentId)}`,
+          `${apiBase}/api/v1/oracle/supply-chain/${encodeURIComponent(id)}`,
           { signal: controller.signal },
         );
         if (!response.ok) throw new Error(`Supply chain returned ${response.status}`);
@@ -104,7 +105,8 @@ export default function SupplierTree({
         }
       }
     }
-    void load();
+
+    load(targetId);
     return () => controller.abort();
   }, [shipmentId, shipment]);
 

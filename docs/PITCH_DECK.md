@@ -37,7 +37,7 @@
 * LangGraph state flow diagram: **Guardian Agent** $\rightarrow$ **Planner Agent** $\rightarrow$ **Scheduler Agent** $\rightarrow$ **Oracle Agent**.
 * Highlighted Equation Box:
 
-$$R_0 = \frac{\text{downstream\_count} + 2 \times \text{critical\_downstream\_count}}{\text{normalizer}}$$
+$$R_0 = \frac{\text{downstream count} + 2 \times \text{critical downstream count}}{\text{normalizer}}$$
 
 ### 📌 Slide Content
 * **Epidemiological Contagion Math**: Calculates the exact disruption blast radius of a component non-conformance.

@@ -6,6 +6,8 @@ frontend/.env*
 !frontend/.env.example
 mobile/.env*
 !mobile/.env.example
+backend/.env*
+!backend/.env.example
 .venv/
 backend/.venv/
 __pycache__/

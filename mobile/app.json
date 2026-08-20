@@ -23,7 +23,13 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      "expo-barcode-scanner"
+      "expo-camera",
+      "expo-image-picker",
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-audio",
+      "expo-font",
+      "expo-asset"
     ]
   }
 }

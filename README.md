@@ -85,18 +85,18 @@ graph TD
 ### 1. Mathematical R0 Contagion Risk Score Engine
 STRAND adapts epidemiological modeling to calculate downstream disruption when component non-conformances occur:
 
-$$R_0 = \frac{\text{downstream\_count} + 2 \times \text{critical\_downstream\_count}}{\text{normalizer}}$$
+$$R_0 = \frac{\text{downstream count} + 2 \times \text{critical downstream count}}{\text{normalizer}}$$
 
 * If $R_0 > 5.0$, the **Guardian Agent** automatically triggers the **Planner** and **Scheduler** agents to alter baseline critical paths, identify fallback vendors via the **Oracle Agent**, and queue an evidence-backed RFI.
 
 ### 2. Hybrid GraphRAG (Reciprocal Rank Fusion)
-Combines **ChromaDB** dense vector embeddings with **`rank_bm25`** sparse keyword matching using Reciprocal Rank Fusion ($RRF\_k=60$). It takes document vector hits and executes a 1-hop Neo4j neighborhood query (`GET_SPEC_DNA_NEIGHBORHOOD`), injecting physical BIM constraints directly into the LLM context.
+Combines **ChromaDB** dense vector embeddings with **`rank_bm25`** sparse keyword matching using Reciprocal Rank Fusion ($RRF_k=60$). It takes document vector hits and executes a 1-hop Neo4j neighborhood query (`GET_SPEC_DNA_NEIGHBORHOOD`), injecting physical BIM constraints directly into the LLM context.
 
 ### 3. AST Cypher Security & Multi-Tenancy
 All AI-generated database queries pass through an AST sanitizer that blocks mutating Cypher keywords (`CREATE`, `MERGE`, `DROP`, `DELETE`) and uses regex pattern matching to inject `{tenant_id: $tenant_id}` into all node patterns, guaranteeing zero cross-tenant data leakage.
 
 ### 4. Edge-Resilient Mobile Operations
-Field basements lack Wi-Fi. The React Native mobile app implements **3-second `AbortController` timeouts**, falling back to local `AsyncStorage` queues (`local_ncrs`). When connectivity is restored, an automated background sync engine pushes pending NCRs. Audio voice recordings via `expo-av` strip default `Content-Type` headers so native layers correctly assign multipart boundaries.
+Field basements lack Wi-Fi. The React Native mobile app implements **3-second `AbortController` timeouts**, falling back to local `AsyncStorage` queues (`local_ncrs`). When connectivity is restored, an automated background sync engine pushes pending NCRs. Audio voice recordings via `expo-audio` strip default `Content-Type` headers so native layers correctly assign multipart boundaries.
 
 ---
 
@@ -108,7 +108,7 @@ Field basements lack Wi-Fi. The React Native mobile app implements **3-second `A
 | **Brain** | Conversational Hybrid GraphRAG search & 1-hop BIM traversal | ChromaDB, `rank_bm25`, RRF, Neo4j |
 | **Scheduler**| Critical Path Method (CPM) simulation & delay probability | NetworkX, Task DAGs |
 | **Oracle** | Supply chain resiliency, fallback supplier ranking, GeoJSON maps | Deterministic Hashing, Leaflet GeoJSON |
-| **Inspector**| Multimodal field voice note intake & offline NCR processing | `expo-av`, Whisper, FastAPI |
+| **Inspector**| Multimodal field voice note intake & offline NCR processing | `expo-audio`, Whisper, FastAPI |
 | **Planner** | Strategic mitigation synthesis & HITL approval triggers | LangGraph State Graph |
 | **Judge** | Independent plan verification & compliance validation | LangChain Rule Evaluator |
 | **Dashboard**| Natural language to visual grid widget translator | Recharts, Cypher AST Sanitizer |
@@ -120,7 +120,7 @@ Field basements lack Wi-Fi. The React Native mobile app implements **3-second `A
 | Layer | Technologies |
 | :--- | :--- |
 | **Frontend Web** | Next.js 14, TypeScript, `react-grid-layout`, Recharts, Tailwind CSS |
-| **Mobile App** | React Native, Expo, `AsyncStorage`, `expo-av` |
+| **Mobile App** | React Native, Expo, `AsyncStorage`, `expo-audio` |
 | **Backend API** | Python 3.11.9, FastAPI, Uvicorn, Pydantic v2 |
 | **Agent Framework** | LangGraph, LangChain, OpenAI Vision |
 | **Graph Database** | Neo4j AuraDB (Cypher AST parameterized) |

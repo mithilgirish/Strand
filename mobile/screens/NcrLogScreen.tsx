@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Image, Keyboard, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 export default function NcrLogScreen({ route, navigation }: any) {
   const { equipmentTag, stepId } = route.params;
   
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -24,11 +24,13 @@ export default function NcrLogScreen({ route, navigation }: any) {
   // Clean up recording on unmount
   useEffect(() => {
     return () => {
-      if (recording) {
-        recording.stopAndUnloadAsync();
-      }
+      try {
+        if (audioRecorder.isRecording) {
+          audioRecorder.stop().catch(() => {});
+        }
+      } catch (e) {}
     };
-  }, [recording]);
+  }, [audioRecorder]);
 
   const handleCapturePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -48,21 +50,19 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
         Alert.alert('Permission Denied', 'Microphone permissions are required to record voice NCR.');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecording(true);
       setTranscript('Listening...');
     } catch (err) {
@@ -75,16 +75,10 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
   const stopRecording = async () => {
     setIsRecording(false);
-    if (!recording) {
-      Alert.alert('Voice Transcription Unavailable', 'Please type your observation manually in the text box below.');
-      setTranscript('');
-      return;
-    }
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       setTranscript('Transcribing audio locally on backend...');
       
       if (uri) {
@@ -111,9 +105,13 @@ export default function NcrLogScreen({ route, navigation }: any) {
         } else {
           setTranscript('Transcription failed. Please type manually.');
         }
+      } else {
+        Alert.alert('Voice Transcription Unavailable', 'Please type your observation manually in the text box below.');
+        setTranscript('');
       }
     } catch (err) {
       console.error('Failed to stop recording', err);
+      setTranscript('Voice Transcription Unavailable. Please type manually.');
     }
   };
 
