@@ -17,8 +17,7 @@ from backend.graph.client import neo4j_client
 from backend.graph import queries
 from backend.ingestion.spec_dna.fingerprint import generate_ncr_spec_dna
 from backend.ingestion.spec_dna.chain import trace_spec_dna
-from backend.r0.engine import compute_r0_from_pkg
-from backend.r0.classifier import r0_to_severity
+from backend.r0.engine import compute_violation_r0
 from backend.llm.client import invoke_structured
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.models.ncr import NcrData
@@ -70,6 +69,8 @@ async def process_voice_ncr(
 
     # Step 2: Trace Spec-DNA
     spec_dna_ref = ""
+    required_value = None
+    operator = None
     if ncr_data.parameter_name:
         try:
             clause_results = neo4j_client.execute_query(
@@ -78,15 +79,24 @@ async def process_voice_ncr(
             )
             if clause_results:
                 spec_dna_ref = clause_results[0].get("spec_dna_id", "")
+                required_value = clause_results[0].get("required_value")
+                operator = clause_results[0].get("operator")
         except Exception as e:
             logger.warning(f"Inspector: Spec-DNA lookup skipped for {ncr_data.parameter_name}: {e}")
 
     if not spec_dna_ref:
         spec_dna_ref = generate_ncr_spec_dna(ncr_id, equipment_tag, ncr_data.parameter_name)
 
-    # Step 3: Compute R0
-    r0 = compute_r0_from_pkg(spec_dna_id=spec_dna_ref)
-    severity = r0_to_severity(r0)
+    # Step 3: Compute R0 from spec miss + contagion
+    breakdown = compute_violation_r0(
+        spec_dna_id=spec_dna_ref,
+        parameter=ncr_data.parameter_name,
+        actual=ncr_data.actual_value,
+        required=required_value,
+        operator=operator,
+    )
+    r0 = breakdown["r0"]
+    severity = breakdown["severity"]
 
     # Step 4: Write NCR to PKG with pending_approval status (v1.2 HITL)
     try:
@@ -295,35 +305,93 @@ async def get_latest_as_built(equipment_tag: str, tenant_id: str = "default") ->
 
 
 async def list_ncrs(tenant_id: str = "default") -> list[dict]:
-    """Return NCRs from Neo4j, falling back to recently generated agent cache."""
+    """Return NCRs from the latest submittal, then Neo4j / Redis."""
+    from backend.project_state import ncrs_from_submittal
+
+    ncrs: list[dict] = []
+    seen: set[str] = set()
+
+    def _append(row: dict):
+        ncr_id = str(row.get("ncr_id") or "").strip()
+        if not ncr_id or ncr_id in seen:
+            return
+        seen.add(ncr_id)
+        severity = str(row.get("severity") or "Minor")
+        if severity.lower() in {"systemic", "critical"}:
+            severity = "Critical"
+        elif severity.lower() not in {"major", "minor", "critical"}:
+            severity = "Major"
+        ncrs.append(
+            {
+                "ncr_id": ncr_id,
+                "title": row.get("title", ""),
+                "description": row.get("description") or row.get("transcript") or "",
+                "equipment_tag": row.get("equipment_tag") or row.get("submittal_id") or "",
+                "step_id": row.get("step_id") or row.get("clause_section") or row.get("parameter") or "",
+                "transcript": row.get("transcript") or row.get("voice_transcript") or row.get("description") or "",
+                "r0_score": float(row.get("r0_score") or 0),
+                "severity": severity,
+                "mitigation": row.get("mitigation") or row.get("immediate_action") or "",
+                "raised_by": row.get("raised_by") or "field_engineer",
+                "timestamp": str(row.get("timestamp") or row.get("raised_at") or ""),
+                "status": row.get("status") or "open",
+            }
+        )
+
+    for row in ncrs_from_submittal():
+        _append(row)
+    if ncrs:
+        return sorted(ncrs, key=lambda ncr: ncr.get("timestamp", ""), reverse=True)
+
     try:
-        rows = neo4j_client.execute_query(queries.GET_OPEN_NCRS, {"tenant_id": tenant_id})
-        if rows:
-            return [
-                {
-                    "ncr_id": row.get("ncr_id", ""),
-                    "title": row.get("title", ""),
-                    "description": row.get("description", ""),
-                    "equipment_tag": row.get("equipment_tag", ""),
-                    "step_id": row.get("step_id", ""),
-                    "transcript": row.get("description", ""),
-                    "r0_score": row.get("r0_score", 0.0),
-                    "severity": row.get("severity", "Minor"),
-                    "mitigation": "",
-                    "raised_by": row.get("raised_by", ""),
-                    "timestamp": str(row.get("raised_at", "")),
-                    "status": row.get("status", ""),
-                }
-                for row in rows
-            ]
+        rows = neo4j_client.execute_query(queries.GET_OPEN_NCRS, {"tenant_id": tenant_id or "default"})
+        if not rows:
+            rows = neo4j_client.execute_query(queries.GET_ALL_OPEN_NCRS)
+        for row in rows or []:
+            _append(row)
     except Exception as e:
         logger.debug(f"Inspector: NCR graph list unavailable, using cache: {e}")
 
-    ncrs = []
     for key in redis_client.keys(f"inspector:ncr:{_tenant_cache_part(tenant_id)}:*"):
         cached = redis_client.get_json(key)
         if cached:
-            ncrs.append(cached)
+            _append(cached)
+    if tenant_id not in {"default", ""}:
+        for key in redis_client.keys("inspector:ncr:default:*"):
+            cached = redis_client.get_json(key)
+            if cached:
+                _append(cached)
+
+    if not ncrs:
+        for key in redis_client.keys("cache:guardian:*"):
+            cached = redis_client.get_json(key)
+            if not cached:
+                continue
+            for violation in cached.get("violations", []):
+                _append(
+                    {
+                        "ncr_id": f"NCR-{violation.get('id') or violation.get('parameter')}",
+                        "title": f"{violation.get('parameter')} deviation",
+                        "description": (
+                            f"{violation.get('parameter')}: actual {violation.get('actual')} "
+                            f"{violation.get('unit', '')} vs required {violation.get('required')} "
+                            f"{violation.get('unit', '')}"
+                        ),
+                        "equipment_tag": violation.get("submittal_id", ""),
+                        "step_id": violation.get("section") or violation.get("parameter") or "",
+                        "transcript": (
+                            f"{violation.get('parameter')}: actual {violation.get('actual')} "
+                            f"vs required {violation.get('required')}"
+                        ),
+                        "r0_score": violation.get("r0_score", 0),
+                        "severity": violation.get("severity", "Major"),
+                        "mitigation": "Resubmit compliant documentation or request a spec variance.",
+                        "raised_by": "guardian",
+                        "timestamp": "",
+                        "status": "open",
+                    }
+                )
+
     return sorted(ncrs, key=lambda ncr: ncr.get("timestamp", ""), reverse=True)
 
 

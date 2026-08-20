@@ -10,7 +10,8 @@ mobile/.env*
 backend/.venv/
 __pycache__/
 *.py[cod]
-chroma_db/
+# Runtime analysis artifacts (latest vendor submittal)
+data/runtime/
 backend/ncr_db.json
 backend/mock_ncr_db.json
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import {
   Widget,
@@ -13,6 +13,7 @@ import {
 import RightAgentSidebar from "@/components/custom-dashboards/RightAgentSidebar";
 import DashboardCanvas from "@/components/custom-dashboards/DashboardCanvas";
 import SaveDashboardModal from "@/components/custom-dashboards/SaveDashboardModal";
+import ProvenanceBadge from "@/components/shared/ProvenanceBadge";
 import { Layout } from "react-grid-layout";
 
 // ---------------------------------------------------------------------------
@@ -152,60 +153,19 @@ const MOCK_PRESETS: Record<string, SavedDashboard> = {
   }
 };
 
-const MOCK_QUERY_RESULTS: Record<string, DashboardRow[]> = {
-  "r0": [{ primary_metric: 3.4, scale: "R0 Scale" }],
-  "thermal": [
-    { date: "Day 1", value: 22.4 },
-    { date: "Day 2", value: 24.1 },
-    { date: "Day 3", value: 23.8 },
-    { date: "Day 4", value: 26.5 },
-    { date: "Day 5", value: 25.2 },
-    { date: "Day 6", value: 28.0 },
-    { date: "Day 7", value: 27.4 }
-  ],
-  "submittals": [
-    { Code: "SUB-104", Vendor: "Trane HVAC", DelayDays: 8, Status: "Critical" },
-    { Code: "SUB-208", Vendor: "Cummins Power", DelayDays: 6, Status: "Warning" },
-    { Code: "SUB-312", Vendor: "Schneider Elec", DelayDays: 12, Status: "Critical" },
-    { Code: "SUB-405", Vendor: "ABB Switchgear", DelayDays: 4, Status: "Normal" }
-  ],
-  "contractor": [
-    { name: "Trane HVAC", count: 12 },
-    { name: "Cummins Power", count: 8 },
-    { name: "Schneider Elec", count: 15 },
-    { name: "ABB Switchgear", count: 5 }
-  ],
-  "logistics": [
-    { Equipment: "Chiller Unit A", Carrier: "FedEx Freight", ETA: "2026-08-15" },
-    { Equipment: "Backup Gen", Carrier: "UPS Supply", ETA: "2026-08-18" },
-    { Equipment: "Switchgear Board", Carrier: "XPO Logistics", ETA: "2026-08-21" }
-  ],
-  "ncr_status": [
-    { name: "Low Risk", value: 65 },
-    { name: "Moderate", value: 25 },
-    { name: "Critical", value: 10 }
-  ],
-  "default": [
-    { metric: "Data Center Node A", status: "Active", value: 142.5 },
-    { metric: "Data Center Node B", status: "Active", value: 98.2 }
-  ]
-};
+function normalizeLayout(layout: Widget[]): Widget[] {
+  const maxW = Math.max(1, ...layout.map((widget) => Number(widget.w) || 1));
+  const scale = maxW <= 2 ? 6 : 1;
+  return layout.map((widget) => ({
+    ...widget,
+    w: Math.min(12, Math.max(1, (Number(widget.w) || 1) * scale)),
+    h: Math.max(2, Number(widget.h) || 2),
+    x: Math.min(11, Math.max(0, (Number(widget.x) || 0) * scale)),
+  }));
+}
 
-function getDynamicMockResults(key: string): DashboardRow[] {
-  const jitter = Number((Math.random() * 0.8 - 0.4).toFixed(1));
-  if (key === "r0") {
-    const val = Number(Math.max(0.5, 3.4 + jitter).toFixed(2));
-    return [{ primary_metric: val, scale: "R0 Scale" }];
-  }
-  if (key === "thermal") {
-    const base = [22.4, 24.1, 23.8, 26.5, 25.2, 28.0, 27.4];
-    return base.map((v, i) => ({
-      date: `Day ${i + 1}`,
-      value: Number(Math.max(18.0, v + (Math.random() * 1.2 - 0.6)).toFixed(1)),
-      threshold: 28.0
-    }));
-  }
-  return MOCK_QUERY_RESULTS[key] || MOCK_QUERY_RESULTS.default;
+function normalizeDashboard(dashboard: SavedDashboard): SavedDashboard {
+  return { ...dashboard, layout: normalizeLayout(dashboard.layout || []) };
 }
 
 export default function CustomDashboardsPage() {
@@ -216,10 +176,14 @@ export default function CustomDashboardsPage() {
   
   // Dashboard state
   const [dashboards, setDashboards] = useState<SavedDashboard[]>([]);
-  const [currentDashboard, setCurrentDashboard] = useState<SavedDashboard | null>(MOCK_PRESETS.datacenter);
+  const [currentDashboard, setCurrentDashboard] = useState<SavedDashboard | null>(
+    normalizeDashboard(MOCK_PRESETS.datacenter)
+  );
   
   // Dynamic query data state
   const [widgetData, setWidgetData] = useState<Record<string, WidgetData>>({});
+  const [widgetSources, setWidgetSources] = useState<Record<string, string>>({});
+  const hasLiveWidgetRef = useRef(false);
   const [loadingData, setLoadingData] = useState<Record<string, boolean>>({});
 
   // Agent chat & prompt history state
@@ -441,29 +405,31 @@ export default function CustomDashboardsPage() {
         body: JSON.stringify({ query }),
       });
       if (resp.ok) {
-        const result = await resp.json() as { data?: DashboardRow[], source?: string };
-        if (Array.isArray(result.data) && result.data.length > 0) {
-          setWidgetData((prev) => ({ ...prev, [widgetId]: result.data! }));
-          setErrorMsg((prev) => (prev?.startsWith("Warning") ? null : prev));
-          return;
+        const result = await resp.json() as { data?: DashboardRow[], source?: string, provenance_note?: string };
+        const source = result.source || "live";
+        const rows = Array.isArray(result.data) ? result.data : [];
+        setWidgetData((prev) => ({ ...prev, [widgetId]: rows }));
+        setWidgetSources((prev) => ({ ...prev, [widgetId]: source }));
+        hasLiveWidgetRef.current = hasLiveWidgetRef.current || source === "live";
+        if (source === "submittal") {
+          setErrorMsg(null);
+        } else if (source === "live") {
+          setErrorMsg((prev) => (prev?.startsWith("Showing DEMO") ? null : prev));
+        } else if (source === "unavailable" || rows.length === 0) {
+          setErrorMsg("Upload a vendor submittal on Guardian. Custom dashboards read that PDF, not demo graph rows.");
+        } else {
+          setErrorMsg("Showing DEMO / fallback widget rows from the backend. Not the vendor submittal.");
         }
+        return;
       }
-      
-      // Dynamic live telemetry fallback
-      const q = query.toLowerCase();
-      let key = "default";
-      if (q.includes("r0")) key = "r0";
-      else if (q.includes("telemetry") || q.includes("thermal") || q.includes("temp")) key = "thermal";
-      else if (q.includes("status")) key = "ncr_status";
-      else if (q.includes("ncr") || q.includes("logistics")) key = "logistics";
-      else if (q.includes("contractor") || q.includes("count")) key = "contractor";
-      else if (q.includes("submittal")) key = "submittals";
-      
-      setWidgetData((prev) => ({ ...prev, [widgetId]: getDynamicMockResults(key) }));
-      setErrorMsg((prev) => (prev?.startsWith("Warning") ? null : prev));
+
+      setWidgetData((prev) => ({ ...prev, [widgetId]: [] }));
+      setWidgetSources((prev) => ({ ...prev, [widgetId]: "unavailable" }));
+      setErrorMsg("Dashboard query failed. Upload a vendor submittal on Guardian, then refresh.");
     } catch {
-      setWidgetData((prev) => ({ ...prev, [widgetId]: getDynamicMockResults("thermal") }));
-      setErrorMsg((prev) => (prev?.startsWith("Warning") ? null : prev));
+      setWidgetData((prev) => ({ ...prev, [widgetId]: [] }));
+      setWidgetSources((prev) => ({ ...prev, [widgetId]: "unavailable" }));
+      setErrorMsg("Dashboard query is offline. Confirm the API is running, then re-upload the vendor PDF.");
     } finally {
       setLoadingData((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -478,12 +444,13 @@ export default function CustomDashboardsPage() {
     }
   }, [currentDashboard, fetchWidgetQuery]);
 
-  // Real-Time Telemetry Stream Polling (Auto-updates graphs every 6 seconds)
+  // Re-run queries on dashboard change. Poll only live widgets, and not every 6s.
   useEffect(() => {
+    hasLiveWidgetRef.current = false;
     runAllDashboardQueries();
     const interval = setInterval(() => {
-      runAllDashboardQueries();
-    }, 6000);
+      if (hasLiveWidgetRef.current) runAllDashboardQueries();
+    }, 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDashboard?.id]);
@@ -547,7 +514,7 @@ export default function CustomDashboardsPage() {
           generatedData = {
             id: "dash-" + Date.now(),
             dashboard_name: body.dashboard_name || "AI Generated BI Dashboard",
-            layout: body.layout,
+            layout: normalizeLayout(body.layout),
             queries: body.queries,
             created_at: new Date().toISOString(),
             prompt_used: activePrompt
@@ -569,7 +536,7 @@ export default function CustomDashboardsPage() {
           name = "Equipment Logistics & NCR Monitoring";
         }
 
-        generatedData = {
+        generatedData = normalizeDashboard({
           id: "generated-" + Date.now(),
           dashboard_name: name,
           layout: [
@@ -585,7 +552,7 @@ export default function CustomDashboardsPage() {
             {
               id: "gen_w2",
               type: "PredictiveTrendChart",
-              title: "7-Day Predictive Telemetry Trend",
+              title: "Spec vs Submittal Variance",
               x: 1,
               y: 0,
               w: 1,
@@ -594,7 +561,7 @@ export default function CustomDashboardsPage() {
             {
               id: "gen_w3",
               type: "FormulaCard",
-              title: "Critical Path Delay Variance",
+              title: "Open Spec Deviations",
               x: 0,
               y: 1,
               w: 1,
@@ -603,7 +570,7 @@ export default function CustomDashboardsPage() {
             {
               id: "gen_w4",
               type: "DataGrid",
-              title: "Live Knowledge Graph Query Payload",
+              title: "Vendor Submittal Violations",
               x: 1,
               y: 1,
               w: 1,
@@ -618,7 +585,7 @@ export default function CustomDashboardsPage() {
           },
           created_at: new Date().toISOString(),
           prompt_used: activePrompt
-        };
+        });
       }
 
       // Persist newly generated dashboard to Supabase via backend API
@@ -881,7 +848,7 @@ export default function CustomDashboardsPage() {
   const handleLoadPreset = (presetKey: string) => {
     const preset = MOCK_PRESETS[presetKey];
     if (preset) {
-      setCurrentDashboard(preset);
+      setCurrentDashboard(normalizeDashboard(preset));
     }
   };
 
@@ -890,12 +857,22 @@ export default function CustomDashboardsPage() {
       {/* Global Banner (Error or Warning) */}
       {errorMsg && (
         <div className={`absolute top-2 left-4 right-4 z-50 p-3 rounded-lg text-xs font-mono flex items-center justify-between shadow-lg backdrop-blur-md transition-all ${
-          errorMsg.toLowerCase().startsWith("warning")
+          errorMsg.toLowerCase().startsWith("warning") || errorMsg.toLowerCase().startsWith("showing demo")
             ? "bg-amber-500/10 border border-amber-500/30 text-amber-400"
             : "bg-red-500/10 border border-red-500/30 text-red-400"
         }`}>
-          <span>{errorMsg.toLowerCase().startsWith("warning") || errorMsg.toLowerCase().startsWith("error") ? errorMsg : `ERROR: ${errorMsg}`}</span>
+          <span>{errorMsg.toLowerCase().startsWith("warning") || errorMsg.toLowerCase().startsWith("error") || errorMsg.toLowerCase().startsWith("showing demo") ? errorMsg : `ERROR: ${errorMsg}`}</span>
           <button onClick={() => setErrorMsg(null)} className="text-[#a3a3a3] hover:text-white ml-2">✕</button>
+        </div>
+      )}
+      {Object.values(widgetSources).some((source) => source === "demo" || source === "unavailable" || source === "degraded") && (
+        <div className="absolute bottom-3 left-4 z-40">
+          <ProvenanceBadge source="unavailable" note="Widgets are empty until a vendor submittal is analyzed" />
+        </div>
+      )}
+      {Object.values(widgetSources).some((source) => source === "submittal") && (
+        <div className="absolute bottom-3 left-4 z-40">
+          <ProvenanceBadge source="submittal" note="Widgets derived from the latest Guardian vendor submittal" />
         </div>
       )}
 
@@ -931,7 +908,7 @@ export default function CustomDashboardsPage() {
         dashboards={dashboards}
         currentDashboard={currentDashboard}
         onGenerate={handleGenerate}
-        onSelectDashboard={setCurrentDashboard}
+        onSelectDashboard={(dashboard) => setCurrentDashboard(normalizeDashboard(dashboard))}
         onDeleteDashboard={handleDeleteDashboard}
         onDuplicateDashboard={handleDuplicateDashboard}
         onExportDashboardJson={handleExportLayoutJson}

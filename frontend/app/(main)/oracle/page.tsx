@@ -34,7 +34,7 @@ export default function OracleAgent() {
       <div className="grid min-h-[720px] grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(340px,1fr)]">
         <SupplyMap selectedId={selected?.id ?? null} onSelect={selectShipment} />
         <div className="flex flex-col gap-5">
-          <SupplierTree shipmentId={selected?.id ?? null} />
+          <SupplierTree shipmentId={selected?.id ?? null} shipment={selected} />
           <AlternativesPanel shipment={selected} />
         </div>
       </div>

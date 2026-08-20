@@ -22,11 +22,12 @@ from backend.ingestion.spec_dna.chain import get_spec_dna_chain
 from backend.graph.client import neo4j_client
 from backend.graph import queries
 from backend.graph.schema import passes_constraint, get_operator_for_parameter
-from backend.r0.engine import compute_r0_from_pkg
+from backend.r0.engine import compute_violation_r0
 from backend.r0.classifier import r0_to_severity
 from backend.llm.client import has_configured_llm, invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.redis_client import redis_client
+from backend.project_state import save_guardian_result
 from backend.demo_data import get_demo_clause, demo_chain
 
 
@@ -38,6 +39,7 @@ class GuardianState(TypedDict):
     vision_violations: list
     violations: list
     spec_dna_chain: dict
+    spec_dna_chain_sources: dict
     rfi_draft: str
     r0_max: float
 
@@ -75,9 +77,11 @@ def check_against_spec(state: GuardianState) -> GuardianState:
             logger.warning(f"Guardian: clause lookup failed for {param_name}: {e}")
             result = []
 
+        used_demo_clause = False
         if not result:
             demo_clause = get_demo_clause(param_name)
             result = [demo_clause] if demo_clause else []
+            used_demo_clause = bool(demo_clause)
 
         if result:
             clause = result[0]
@@ -98,6 +102,7 @@ def check_against_spec(state: GuardianState) -> GuardianState:
                     "section": clause.get("section", ""),
                     "page": param_data.get("page", 0),
                     "deviation_type": "out_of_spec",
+                    "clause_source": "demo" if used_demo_clause else "neo4j",
                     "confidence_score": 0.92,
                     "evidence_citations": [
                         {
@@ -142,12 +147,16 @@ def check_against_spec(state: GuardianState) -> GuardianState:
 def compute_spec_dna(state: GuardianState) -> GuardianState:
     """Step 3: Build Spec-DNA lineage chain for each violation."""
     chains = {}
+    chain_sources = {}
     for v in state["violations"]:
         chain = get_spec_dna_chain(state["submittal_id"])
+        chain_source = "pkg"
         if not chain:
             chain = demo_chain(state["submittal_id"], v)
+            chain_source = "demo"
         chains[v["parameter"]] = chain
-    return {**state, "spec_dna_chain": chains}
+        chain_sources[v["parameter"]] = chain_source
+    return {**state, "spec_dna_chain": chains, "spec_dna_chain_sources": chain_sources}
 
 
 def score_r0(state: GuardianState) -> GuardianState:
@@ -184,8 +193,16 @@ def score_r0(state: GuardianState) -> GuardianState:
         logger.warning(f"Guardian: submittal write skipped: {e}")
 
     for v in state["violations"]:
-        r0 = compute_r0_from_pkg(spec_dna_id=v.get("spec_dna_id", ""))
+        breakdown = compute_violation_r0(
+            spec_dna_id=str(v.get("spec_dna_id") or ""),
+            parameter=str(v.get("parameter") or ""),
+            actual=v.get("actual"),
+            required=v.get("required"),
+            operator=v.get("constraint_type"),
+        )
+        r0 = breakdown["r0"]
         v["r0_score"] = r0
+        v["r0_breakdown"] = breakdown
         v["severity"] = r0_to_severity(r0)
         r0_max = max(r0_max, r0)
         scored.append(v)
@@ -207,6 +224,19 @@ def score_r0(state: GuardianState) -> GuardianState:
                 )
             except Exception as e:
                 logger.warning(f"Guardian: violation write skipped: {e}")
+
+    if len(scored) >= 3:
+        from math import log2
+
+        compound = round(min(10.0, r0_max + log2(len(scored)) * 0.6), 1)
+        if compound > r0_max:
+            logger.info(
+                "Guardian: compounding r0_max {} → {} from {} violations",
+                r0_max,
+                compound,
+                len(scored),
+            )
+            r0_max = compound
 
     return {**state, "violations": scored, "r0_max": r0_max}
 
@@ -275,6 +305,7 @@ async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "
     cached = redis_client.get_cache(cache_key)
     if cached:
         logger.info(f"Guardian: returning cached result for {submittal_id}")
+        save_guardian_result(cached)
         return cached
 
     # Idempotency check
@@ -297,6 +328,7 @@ async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "
         "vision_violations": [],
         "violations": [],
         "spec_dna_chain": {},
+        "spec_dna_chain_sources": {},
         "rfi_draft": "",
         "r0_max": 0.0,
     }
@@ -322,13 +354,21 @@ async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "
             ],
             "rfi_draft": state["rfi_draft"],
             "spec_dna_chain": state["spec_dna_chain"],
+            "spec_dna_chain_sources": state.get("spec_dna_chain_sources", {}),
+            "extracted_parameters": state["extracted_parameters"],
             "violation_count": len(state["violations"]),
             "status": "analyzed",
+            "degraded": any(v.get("clause_source") == "demo" for v in state["violations"]),
+            "provenance_note": (
+                "Some clauses/chains used labeled DEMO fallbacks because PKG lookup was empty."
+                if any(v.get("clause_source") == "demo" for v in state["violations"])
+                else ""
+            ),
         }
 
         # Cache result
         redis_client.set_cache(cache_key, result)
-
+        save_guardian_result(result)
         return result
 
     except Exception as e:

@@ -149,19 +149,15 @@ class ApprovalManager:
     def _get_all(self) -> list[ApprovalItem]:
         """Get all approval items."""
         items = list(self._memory_queue.values())
+        seen = {item.approval_id for item in items}
 
-        # Also check Redis
-        cursor = 0
-        while True:
-            cursor, keys = redis_client.client.scan(cursor, match="approval:APPR-*", count=100)
-            for key in keys:
-                data = redis_client.get_json(key.decode('utf-8') if isinstance(key, bytes) else key)
-                if data:
-                    item = ApprovalItem(**data)
-                    if item.approval_id not in self._memory_queue:
-                        items.append(item)
-            if cursor == 0:
-                break
+        for key in redis_client.keys("approval:APPR-*"):
+            data = redis_client.get_json(key.decode("utf-8") if isinstance(key, bytes) else key)
+            if data:
+                item = ApprovalItem(**data)
+                if item.approval_id not in seen:
+                    items.append(item)
+                    seen.add(item.approval_id)
 
         return items
 

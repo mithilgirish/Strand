@@ -57,27 +57,21 @@ class HybridRetriever:
         dense_results = self._dense_retrieve(query, k=k)
         bm25_results = self._bm25_retrieve(query, k=k)
 
-        # Merge via Reciprocal Rank Fusion
+        # Merge via Reciprocal Rank Fusion — keep RRF rank (do not re-sort by page)
         fused = self._reciprocal_rank_fusion(dense_results, bm25_results, k=k)
-        if len(fused) < k:
+        from backend.config import settings
+        if settings.DEMO_MODE and len(fused) < k:
             from backend.demo_data import demo_spec_chunks
             seen = {doc["text"][:100] for doc in fused}
             for doc in demo_spec_chunks(""):
                 key = doc["text"][:100]
                 if key not in seen:
-                    fused.append(doc)
+                    meta = dict(doc.get("metadata") or {})
+                    meta["context_source"] = "demo"
+                    fused.append({**doc, "metadata": meta})
                     seen.add(key)
                 if len(fused) >= k:
                     break
-
-        # Sort by document source and chunk index to maintain reading order for LLM
-        fused.sort(
-            key=lambda x: (
-                x.get("metadata", {}).get("document_source", ""),
-                x.get("metadata", {}).get("page_number", 0),
-                x.get("metadata", {}).get("chunk_index", 0),
-            )
-        )
 
         logger.debug(
             f"Hybrid retrieval: {len(dense_results)} dense, "
@@ -90,10 +84,13 @@ class HybridRetriever:
         if self._bm25_index and self._bm25_corpus:
             return
         try:
+            from backend.config import settings
             from backend.demo_data import demo_spec_chunks
+            if not settings.DEMO_MODE:
+                return
             self.build_bm25_index(
                 [
-                    {"text": chunk["text"], "metadata": chunk.get("metadata", {})}
+                    {"text": chunk["text"], "metadata": {**chunk.get("metadata", {}), "context_source": "demo"}}
                     for chunk in demo_spec_chunks("")
                 ]
             )

@@ -164,11 +164,11 @@ export default function DashboardCanvas({
             </h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider font-semibold bg-[#4edea3]/10 text-[#4edea3] border border-[#4edea3]/30 shadow-[0_0_12px_rgba(78,222,163,0.15)]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-              Live Telemetry Stream
+              Vendor Submittal
             </span>
           </div>
           <p className="text-xs text-[#a3a3a3] font-mono mt-1">
-            Parametric Knowledge Graph Visualizers
+            Widgets bind to the latest Guardian vendor submittal.
           </p>
         </div>
 
@@ -349,8 +349,8 @@ export default function DashboardCanvas({
                 xs: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h })),
                 xxs: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h }))
               }}
-              cols={{ lg: 2, md: 2, sm: 1, xs: 1, xxs: 1 }}
-              rowHeight={220}
+              cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }}
+              rowHeight={90}
               onLayoutChange={(layout) => {
                 if (onLayoutChange) onLayoutChange(layout);
               }}
@@ -513,7 +513,7 @@ export default function DashboardCanvas({
                       {widget.type === "FormulaCard" && (
                         <div className="py-6 font-mono text-center space-y-3">
                           <div className="text-5xl font-extrabold tracking-tight text-[#f5f5f5]" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>
-                            {val !== null ? formatCellValue(val) : "42.8"}
+                            {val !== null ? formatCellValue(val) : "—"}
                           </div>
                           <div className="flex items-center justify-center gap-2 text-xs">
                             <span className="px-2 py-0.5 rounded bg-[#4edea3]/20 text-[#4edea3] font-bold flex items-center gap-1">
@@ -530,7 +530,7 @@ export default function DashboardCanvas({
                           <div className="relative inline-flex flex-col items-center justify-center">
                             <div className="w-32 h-32 rounded-full border-[3px] border-[#4edea3]/50 flex items-center justify-center relative bg-black/40 shadow-[0_0_20px_rgba(78,222,163,0.25),inset_0_0_12px_rgba(78,222,163,0.08)]">
                               <span className="text-4xl font-extrabold text-[#4edea3]" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', textShadow: '0 0 12px rgba(78,222,163,0.40)' }}>
-                                {Number.isFinite(primaryNumber) ? primaryNumber.toFixed(1) : "3.4"}
+                                {Number.isFinite(primaryNumber) && rows.length > 0 ? primaryNumber.toFixed(1) : "—"}
                               </span>
                             </div>
                             <span className="mt-2 label-caps text-[10px] text-[#a3a3a3]">
@@ -623,12 +623,7 @@ export default function DashboardCanvas({
                       {widget.type === "BarChart" && (
                         <div className="h-52 w-full pt-2">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsBarChart data={rows.length > 0 ? rows : [
-                              { name: "Unit A", count: 24 },
-                              { name: "Unit B", count: 18 },
-                              { name: "Unit C", count: 32 },
-                              { name: "Unit D", count: 12 }
-                            ]}>
+                            <RechartsBarChart data={rows}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
                               <XAxis dataKey={Object.keys(rows[0] || {name:""})[0] || "name"} stroke="#525252" fontSize={10} />
                               <YAxis stroke="#525252" fontSize={10} />
@@ -645,11 +640,7 @@ export default function DashboardCanvas({
                           <ResponsiveContainer width="100%" height="100%">
                             <RechartsPieChart>
                               <Pie
-                                data={rows.length > 0 ? rows : [
-                                  { name: "Low Risk", value: 60 },
-                                  { name: "Moderate", value: 25 },
-                                  { name: "Critical", value: 15 }
-                                ]}
+                                data={rows}
                                 innerRadius={50}
                                 outerRadius={75}
                                 paddingAngle={5}
@@ -671,12 +662,7 @@ export default function DashboardCanvas({
                       {widget.type === "LineChart" && (
                         <div className="h-52 w-full pt-2">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsLineChart data={rows.length > 0 ? rows : [
-                              { date: "Day 1", value: 12 },
-                              { date: "Day 2", value: 18 },
-                              { date: "Day 3", value: 15 },
-                              { date: "Day 4", value: 25 }
-                            ]}>
+                            <RechartsLineChart data={rows}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
                               <XAxis dataKey={Object.keys(rows[0] || {date:""})[0]} stroke="#525252" fontSize={10} />
                               <YAxis stroke="#525252" fontSize={10} />
@@ -691,12 +677,7 @@ export default function DashboardCanvas({
                       {widget.type === "RadarChart" && (
                         <div className="h-52 w-full pt-2">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsRadarChart data={rows.length > 0 ? rows : [
-                              { subject: "Speed", A: 120, fullMark: 150 },
-                              { subject: "Power", A: 98, fullMark: 150 },
-                              { subject: "Efficiency", A: 86, fullMark: 150 },
-                              { subject: "Security", A: 99, fullMark: 150 }
-                            ]} outerRadius="80%">
+                            <RechartsRadarChart data={rows} outerRadius="80%">
                               <PolarGrid stroke="#262626" />
                               <PolarAngleAxis dataKey={Object.keys(rows[0] || {subject:""})[0]} tick={{ fill: "#a3a3a3", fontSize: 10 }} />
                               <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fill: "#525252", fontSize: 10 }} />
@@ -716,10 +697,7 @@ export default function DashboardCanvas({
                               <XAxis dataKey={Object.keys(rows[0] || {x:""})[0]} type="number" stroke="#525252" fontSize={10} name="X Axis" />
                               <YAxis dataKey={Object.keys(rows[0] || {y:""})[1] || "y"} type="number" stroke="#525252" fontSize={10} name="Y Axis" />
                               <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
-                              <Scatter name="Data" data={rows.length > 0 ? rows : [
-                                { x: 10, y: 30 }, { x: 30, y: 200 }, { x: 45, y: 100 },
-                                { x: 50, y: 400 }, { x: 70, y: 150 }, { x: 100, y: 250 }
-                              ]} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              <Scatter name="Data" data={rows} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             </RechartsScatterChart>
                           </ResponsiveContainer>
                         </div>
@@ -885,7 +863,7 @@ export default function DashboardCanvas({
                   {expandedWidget.type === "FormulaCard" && (
                     <div className="py-12 font-mono text-center space-y-6">
                       <div className="text-7xl sm:text-8xl font-extrabold tracking-tight text-[#f5f5f5]" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {val !== null ? formatCellValue(val) : "42.8"}
+                        {val !== null ? formatCellValue(val) : "—"}
                       </div>
                       <div className="flex items-center justify-center gap-3 text-base">
                         <span className="px-3 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] font-bold flex items-center gap-1.5">
@@ -901,7 +879,7 @@ export default function DashboardCanvas({
                       <div className="relative inline-flex flex-col items-center justify-center">
                         <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full border-[4px] border-[#4edea3]/50 flex items-center justify-center relative bg-black/40 shadow-[0_0_30px_rgba(78,222,163,0.30),inset_0_0_16px_rgba(78,222,163,0.12)]">
                           <span className="text-6xl font-extrabold text-[#4edea3]" style={{ fontFamily: 'var(--font-mono)', textShadow: '0 0 16px rgba(78,222,163,0.40)' }}>
-                            {Number.isFinite(primaryNumber) ? primaryNumber.toFixed(1) : "3.4"}
+                            {Number.isFinite(primaryNumber) && rows.length > 0 ? primaryNumber.toFixed(1) : "—"}
                           </span>
                         </div>
                         <span className="mt-4 label-caps text-xs text-[#a3a3a3]">
@@ -951,12 +929,7 @@ export default function DashboardCanvas({
                   {(expandedWidget.type === "PredictiveTrendChart" || expandedWidget.type === "LineChart") && (
                     <div className="h-[calc(100vh-250px)] w-full pt-4">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={rows.length > 0 ? rows : [
-                          { date: "Day 1", value: 22.4 }, { date: "Day 2", value: 24.1 },
-                          { date: "Day 3", value: 23.8 }, { date: "Day 4", value: 26.5 },
-                          { date: "Day 5", value: 25.2 }, { date: "Day 6", value: 28.0 },
-                          { date: "Day 7", value: 27.4 }
-                        ]}>
+                        <AreaChart data={rows}>
                           <defs>
                             <linearGradient id="full_chart_grad" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#4edea3" stopOpacity={0.4} />
@@ -976,10 +949,7 @@ export default function DashboardCanvas({
                   {expandedWidget.type === "BarChart" && (
                     <div className="h-[calc(100vh-250px)] w-full pt-4">
                       <ResponsiveContainer width="100%" height="100%">
-                        <RechartsBarChart data={rows.length > 0 ? rows : [
-                          { name: "Unit A", count: 24 }, { name: "Unit B", count: 18 },
-                          { name: "Unit C", count: 32 }, { name: "Unit D", count: 12 }
-                        ]}>
+                        <RechartsBarChart data={rows}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
                           <XAxis dataKey="name" stroke="#737373" fontSize={12} />
                           <YAxis stroke="#737373" fontSize={12} />
@@ -995,11 +965,7 @@ export default function DashboardCanvas({
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                           <Pie
-                            data={rows.length > 0 ? rows : [
-                              { name: "Low Risk", value: 60 },
-                              { name: "Moderate", value: 25 },
-                              { name: "Critical", value: 15 }
-                            ]}
+                            data={rows}
                             innerRadius={90}
                             outerRadius={140}
                             paddingAngle={5}
