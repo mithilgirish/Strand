@@ -13,6 +13,7 @@ import {
 import RightAgentSidebar from "@/components/custom-dashboards/RightAgentSidebar";
 import DashboardCanvas from "@/components/custom-dashboards/DashboardCanvas";
 import SaveDashboardModal from "@/components/custom-dashboards/SaveDashboardModal";
+import AddWidgetModal from "@/components/custom-dashboards/AddWidgetModal";
 import ProvenanceBadge from "@/components/shared/ProvenanceBadge";
 import { Layout } from "react-grid-layout";
 
@@ -31,38 +32,38 @@ const MOCK_PRESETS: Record<string, SavedDashboard> = {
         description: "Aggregated risk severity scale for current engineering submittals",
         x: 0,
         y: 0,
-        w: 1,
-        h: 1
-      },
-      {
-        id: "w2",
-        type: "PredictiveTrendChart",
-        title: "Predictive Thermal Forecast",
-        description: "Rack temperature metrics and 7-day predictive AI threshold",
-        x: 1,
-        y: 0,
-        w: 1,
-        h: 1
+        w: 3,
+        h: 2
       },
       {
         id: "w3",
         type: "FormulaCard",
         title: "Total Submittal Variance",
         description: "Average delay days across active data center packages",
-        x: 0,
-        y: 1,
-        w: 1,
-        h: 1
+        x: 3,
+        y: 0,
+        w: 3,
+        h: 2
+      },
+      {
+        id: "w2",
+        type: "PredictiveTrendChart",
+        title: "Predictive Thermal Forecast",
+        description: "Rack temperature metrics and 7-day predictive AI threshold",
+        x: 6,
+        y: 0,
+        w: 6,
+        h: 2
       },
       {
         id: "w4",
         type: "DataGrid",
         title: "Critical Path Shipments & NCRs",
         description: "Delayed shipments with submittal score impact",
-        x: 1,
-        y: 1,
-        w: 1,
-        h: 1
+        x: 0,
+        y: 2,
+        w: 12,
+        h: 3
       }
     ],
     queries: {
@@ -83,26 +84,26 @@ const MOCK_PRESETS: Record<string, SavedDashboard> = {
         title: "Average R0 Severity Score",
         x: 0,
         y: 0,
-        w: 1,
-        h: 1
+        w: 4,
+        h: 2
       },
       {
         id: "w_sub_2",
         type: "BarChart",
         title: "Submittals by Contractor",
-        x: 1,
+        x: 4,
         y: 0,
-        w: 1,
-        h: 1
+        w: 8,
+        h: 2
       },
       {
         id: "w_sub_3",
         type: "DataGrid",
         title: "High Delay Engineering Submittals",
         x: 0,
-        y: 1,
-        w: 2,
-        h: 1
+        y: 2,
+        w: 12,
+        h: 3
       }
     ],
     queries: {
@@ -117,31 +118,31 @@ const MOCK_PRESETS: Record<string, SavedDashboard> = {
     dashboard_name: "Equipment Logistics & NCR Tracker",
     layout: [
       {
-        id: "w_log_1",
-        type: "DonutChart",
-        title: "NCR Status Distribution",
-        x: 0,
-        y: 0,
-        w: 1,
-        h: 1
-      },
-      {
         id: "w_log_2",
         type: "FormulaCard",
         title: "Active Open NCRs",
-        x: 1,
+        x: 0,
         y: 0,
-        w: 1,
-        h: 1
+        w: 4,
+        h: 2
+      },
+      {
+        id: "w_log_1",
+        type: "DonutChart",
+        title: "NCR Status Distribution",
+        x: 4,
+        y: 0,
+        w: 8,
+        h: 2
       },
       {
         id: "w_log_3",
         type: "DataGrid",
         title: "Equipment Shipments Log",
         x: 0,
-        y: 1,
-        w: 2,
-        h: 1
+        y: 2,
+        w: 12,
+        h: 3
       }
     ],
     queries: {
@@ -154,14 +155,30 @@ const MOCK_PRESETS: Record<string, SavedDashboard> = {
 };
 
 function normalizeLayout(layout: Widget[]): Widget[] {
-  const maxW = Math.max(1, ...layout.map((widget) => Number(widget.w) || 1));
-  const scale = maxW <= 2 ? 6 : 1;
-  return layout.map((widget) => ({
-    ...widget,
-    w: Math.min(12, Math.max(1, (Number(widget.w) || 1) * scale)),
-    h: Math.max(2, Number(widget.h) || 2),
-    x: Math.min(11, Math.max(0, (Number(widget.x) || 0) * scale)),
-  }));
+  return layout.map((widget) => {
+    let w = Number(widget.w) || 6;
+    let h = Number(widget.h) || 3;
+    let x = Number(widget.x) || 0;
+    let y = Number(widget.y) || 0;
+
+    if (w <= 2) {
+      if (widget.type === "FormulaCard" || widget.type === "R0Gauge") {
+        w = 3;
+        h = 2;
+      } else {
+        w = 6;
+        h = 3;
+      }
+    }
+
+    return {
+      ...widget,
+      w: Math.min(12, Math.max(2, w)),
+      h: Math.max(2, h),
+      x: Math.min(11, Math.max(0, x)),
+      y: Math.max(0, y)
+    };
+  });
 }
 
 function normalizeDashboard(dashboard: SavedDashboard): SavedDashboard {
@@ -193,6 +210,7 @@ export default function CustomDashboardsPage() {
 
   // Modals state
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
+  const [addWidgetModalOpen, setAddWidgetModalOpen] = useState<boolean>(false);
 
   // Load saved prompt history from Supabase (fallback to localStorage)
   const fetchPromptHistory = useCallback(async () => {
@@ -796,19 +814,21 @@ export default function CustomDashboardsPage() {
     const queries = { ...currentDashboard.queries };
 
     if (!updatedWidget.id) {
-      // Create new widget
+      // Create new widget with proper default dimensions
+      const newWidgetId = "w_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+      const isSmall = updatedWidget.type === "FormulaCard" || updatedWidget.type === "R0Gauge";
       const newWidget: Widget = {
-        id: "w_new_" + Date.now(),
+        id: newWidgetId,
         type: updatedWidget.type || "FormulaCard",
         title: updatedWidget.title || "New Widget",
         description: updatedWidget.description || "",
         x: 0,
         y: Infinity, // puts it at the bottom
-        w: 1,
-        h: 1,
+        w: updatedWidget.w || (isSmall ? 3 : 6),
+        h: updatedWidget.h || (isSmall ? 2 : 3),
       };
       layout.push(newWidget);
-      queries[newWidget.id] = "";
+      queries[newWidget.id] = "MATCH (s:Submittal) RETURN s LIMIT 10";
     } else {
       // Update existing widget
       layout = layout.map((w) => (w.id === updatedWidget.id ? { ...w, ...updatedWidget } as Widget : w));
@@ -819,6 +839,62 @@ export default function CustomDashboardsPage() {
       layout,
       queries
     });
+  };
+
+  // Add widget directly from visual catalog
+  const handleAddWidgetFromCatalog = (widgetConfig: Partial<Widget>, defaultQuery?: string) => {
+    if (!currentDashboard) return;
+    const newWidgetId = "w_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+    const newW = widgetConfig.w || (widgetConfig.type === "FormulaCard" || widgetConfig.type === "R0Gauge" ? 3 : 6);
+    const newH = widgetConfig.h || 3;
+    
+    // Find next available position on canvas
+    const currentItems = currentDashboard.layout || [];
+    let maxY = 0;
+    currentItems.forEach(item => {
+      maxY = Math.max(maxY, (item.y || 0) + (item.h || 0));
+    });
+
+    const newWidget: Widget = {
+      id: newWidgetId,
+      type: widgetConfig.type || "FormulaCard",
+      title: widgetConfig.title || "Custom Widget",
+      description: widgetConfig.description || "",
+      x: 0,
+      y: maxY,
+      w: newW,
+      h: newH,
+      colorScheme: widgetConfig.colorScheme || "emerald"
+    };
+
+    const q = defaultQuery || "MATCH (s:Submittal) RETURN s.code as Code, s.title as Title LIMIT 10";
+    const updatedQueries = {
+      ...currentDashboard.queries,
+      [newWidgetId]: q
+    };
+
+    const updatedDashboard = {
+      ...currentDashboard,
+      layout: [...currentItems, newWidget],
+      queries: updatedQueries
+    };
+
+    setCurrentDashboard(updatedDashboard);
+    void fetchWidgetQuery(newWidgetId, q);
+  };
+
+  // Save updated query from Query Inspector
+  const handleSaveWidgetQuery = (widgetId: string, newQuery: string) => {
+    if (!currentDashboard) return;
+    const updatedQueries = {
+      ...currentDashboard.queries,
+      [widgetId]: newQuery
+    };
+    setCurrentDashboard({
+      ...currentDashboard,
+      queries: updatedQueries
+    });
+    void fetchWidgetQuery(widgetId, newQuery);
   };
 
   // Clear prompt history from Supabase + localStorage
@@ -853,7 +929,7 @@ export default function CustomDashboardsPage() {
   };
 
   return (
-    <div className="h-full w-full flex overflow-hidden bg-[#111111] font-sans relative">
+    <div className="h-full w-full flex overflow-hidden bg-[#0c0d10] font-sans relative">
       {/* Global Banner (Error or Warning) */}
       {errorMsg && (
         <div className={`absolute top-2 left-4 right-4 z-50 p-3 rounded-lg text-xs font-mono flex items-center justify-between shadow-lg backdrop-blur-md transition-all ${
@@ -886,13 +962,12 @@ export default function CustomDashboardsPage() {
           onRefreshData={runAllDashboardQueries}
           onOpenSaveModal={() => setSaveModalOpen(true)}
           onExportJson={() => handleExportLayoutJson()}
-          onAddWidget={() => {
-            handleSaveWidgetEdit({ type: "FormulaCard", title: "New Widget", w: 1, h: 1 });
-          }}
+          onAddWidget={() => setAddWidgetModalOpen(true)}
           onDeleteWidget={handleDeleteWidget}
           onDuplicateWidget={handleDuplicateWidget}
           onLayoutChange={handleLayoutChange}
           onUpdateWidget={handleSaveWidgetEdit}
+          onSaveQuery={handleSaveWidgetQuery}
           onLoadPreset={handleLoadPreset}
         />
       </div>
@@ -926,6 +1001,13 @@ export default function CustomDashboardsPage() {
         onClose={() => setSaveModalOpen(false)}
         onSave={handleSaveCustomLayoutModal}
         onExportJson={() => handleExportLayoutJson()}
+      />
+
+      {/* ADD WIDGET CATALOG MODAL */}
+      <AddWidgetModal
+        isOpen={addWidgetModalOpen}
+        onClose={() => setAddWidgetModalOpen(false)}
+        onAdd={handleAddWidgetFromCatalog}
       />
     </div>
   );

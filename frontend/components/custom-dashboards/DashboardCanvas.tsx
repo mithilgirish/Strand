@@ -52,9 +52,17 @@ import {
   FileCode,
   FileText,
   Code,
-  List
+  List,
+  Download,
+  Check,
+  Sparkles,
+  Database,
+  Columns3,
+  Rows3
 } from "lucide-react";
 import { Widget, SavedDashboard, WidgetData, DashboardRow } from "./types";
+import QueryInspectorModal from "./QueryInspectorModal";
+import ConfigureWidgetModal from "./ConfigureWidgetModal";
 
 interface DashboardCanvasProps {
   currentDashboard: SavedDashboard | null;
@@ -70,6 +78,7 @@ interface DashboardCanvasProps {
   onLoadPreset: (presetKey: string) => void;
   onLayoutChange?: (layout: Layout) => void;
   onUpdateWidget?: (widget: Widget) => void;
+  onSaveQuery?: (widgetId: string, query: string) => void;
 }
 
 const CHART_COLORS = ["#4edea3", "#38bdf8", "#a855f7", "#f59e0b", "#ffb3ad", "#ec4899"];
@@ -90,6 +99,29 @@ function firstValue(data: WidgetData | undefined): number | string | null {
   const val = Object.values(rows[0])[0];
   return typeof val === "number" || typeof val === "string" ? val : null;
 }
+
+function exportRowsToCsv(rows: DashboardRow[], filename: string) {
+  if (!rows || rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csvRows = [
+    headers.join(","),
+    ...rows.map(row =>
+      headers.map(h => {
+        const val = row[h];
+        const str = val === null || val === undefined ? "" : String(val);
+        return `"${str.replace(/"/g, '""')}"`;
+      }).join(",")
+    )
+  ];
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function DashboardCanvas({
   currentDashboard,
   widgetData,
@@ -103,7 +135,8 @@ export default function DashboardCanvas({
   onDuplicateWidget,
   onLoadPreset,
   onLayoutChange,
-  onUpdateWidget
+  onUpdateWidget,
+  onSaveQuery
 }: DashboardCanvasProps) {
   const { width: hookWidth, containerRef, mounted } = useContainerWidth();
   const [dynamicWidth, setDynamicWidth] = useState<number>(0);
@@ -111,8 +144,8 @@ export default function DashboardCanvas({
   const [timeRange, setTimeRange] = useState<string>("30d");
   const [expandedWidgetId, setExpandedWidgetId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<boolean>(false);
-  const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
-  const [tempWidgetConfig, setTempWidgetConfig] = useState<Partial<Widget>>({});
+  const [configuringWidget, setConfiguringWidget] = useState<Widget | null>(null);
+  const [inspectorWidget, setInspectorWidget] = useState<Widget | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -131,82 +164,152 @@ export default function DashboardCanvas({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && expandedWidgetId) {
-        setExpandedWidgetId(null);
+      if (e.key === "Escape") {
+        if (expandedWidgetId) setExpandedWidgetId(null);
+        if (inspectorWidget) setInspectorWidget(null);
+        if (configuringWidget) setConfiguringWidget(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [expandedWidgetId]);
+  }, [expandedWidgetId, inspectorWidget, configuringWidget]);
 
   const expandedWidget = currentDashboard?.layout.find((w) => w.id === expandedWidgetId) || null;
 
-  const handleOpenSettings = (widget: Widget) => {
-    setEditingWidgetId(widget.id);
-    setTempWidgetConfig({ title: widget.title, description: widget.description, type: widget.type, metricKey: widget.metricKey });
-  };
+  const handleApplyPresetLayout = (layoutMode: "2col" | "3col" | "compact") => {
+    if (!currentDashboard || !onLayoutChange) return;
+    const items = [...currentDashboard.layout];
+    let newLayout: Layout = [];
 
-  const handleSaveSettings = (widget: Widget) => {
-    if (onUpdateWidget) {
-      onUpdateWidget({ ...widget, ...tempWidgetConfig });
+    if (layoutMode === "2col") {
+      newLayout = items.map((w, idx) => ({
+        i: w.id,
+        x: (idx % 2) * 6,
+        y: Math.floor(idx / 2) * 3,
+        w: 6,
+        h: w.type === "FormulaCard" || w.type === "R0Gauge" ? 2 : 3
+      }));
+    } else if (layoutMode === "3col") {
+      newLayout = items.map((w, idx) => ({
+        i: w.id,
+        x: (idx % 3) * 4,
+        y: Math.floor(idx / 3) * 3,
+        w: 4,
+        h: w.type === "FormulaCard" || w.type === "R0Gauge" ? 2 : 3
+      }));
+    } else {
+      // Auto-Pack compact
+      let currentY = 0;
+      let currentX = 0;
+      newLayout = items.map((w) => {
+        const itemW = Math.min(12, Math.max(2, w.w || 6));
+        const itemH = Math.max(2, w.h || 3);
+        if (currentX + itemW > 12) {
+          currentX = 0;
+          currentY += itemH;
+        }
+        const res = { i: w.id, x: currentX, y: currentY, w: itemW, h: itemH };
+        currentX += itemW;
+        return res;
+      });
     }
-    setEditingWidgetId(null);
+
+    onLayoutChange(newLayout);
   };
 
   return (
-    <div className="space-y-6 bg-[#111111] min-h-full p-4 sm:p-6 rounded-xl transition-colors glass-panel">
-      {/* CANVAS HEADER BAR - Industrial Glass Specification */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262626]">
+    <div className="space-y-5 bg-[#0e1014] min-h-full p-4 sm:p-6 rounded-xl transition-colors border border-[#1f242d] shadow-2xl relative">
+      
+      {/* Specular Highlight Strip */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#4edea3]/30 to-transparent pointer-events-none" />
+
+      {/* CANVAS HEADER BAR */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#1f242d]">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold font-sans tracking-tight text-[#f5f5f5]">
-              {currentDashboard?.dashboard_name || "Real-Time Dashboard Canvas"}
+            <h1 className="text-xl font-bold font-sans tracking-tight text-[#f5f5f5]">
+              {currentDashboard?.dashboard_name || "Telemetry & Risk Canvas"}
             </h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider font-semibold bg-[#4edea3]/10 text-[#4edea3] border border-[#4edea3]/30 shadow-[0_0_12px_rgba(78,222,163,0.15)]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-              Vendor Submittal
+              Neo4j Live Thread
             </span>
           </div>
-          <p className="text-xs text-[#a3a3a3] font-mono mt-1">
-            Widgets bind to the latest Guardian vendor submittal.
+          <p className="text-xs text-[#8c93a0] font-mono mt-1">
+            Dynamic knowledge graph telemetry visualizer with submittal bindings.
           </p>
         </div>
 
         {/* Toolbar Action Controls */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+          
           {/* Preset templates menu */}
           <div className="relative group">
-            <button className="px-3 py-1.5 bg-[#171717] hover:bg-[#262626] border border-[#333333] rounded-md text-[#e5e5e5] flex items-center gap-1.5 transition-all label-caps text-[10px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.40)]">
+            <button className="px-3 py-1.5 bg-[#161920] hover:bg-[#202530] border border-[#2b313d] rounded-md text-[#e5e5e5] flex items-center gap-1.5 transition-all text-[11px]">
               <LayoutGrid className="w-3.5 h-3.5 text-[#4edea3]" />
               <span>Presets</span>
               <ChevronDown className="w-3 h-3 text-[#737373]" />
             </button>
-            <div className="absolute right-0 top-full mt-1 w-56 bg-[#171717] border border-[#333333] rounded-md shadow-2xl p-1 z-50 hidden group-hover:block glass-panel">
+            <div className="absolute right-0 top-full mt-1 w-60 bg-[#161920] border border-[#2b313d] rounded-lg shadow-2xl p-1.5 z-50 hidden group-hover:block backdrop-blur-xl">
               <button
                 onClick={() => onLoadPreset("datacenter")}
-                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#262626] rounded transition-colors font-mono"
+                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded-md transition-colors font-mono flex items-center justify-between"
               >
-                Data Center Facilities
+                <span>Data Center Telemetry</span>
+                <span className="text-[10px] text-[#4edea3]">4 widgets</span>
               </button>
               <button
                 onClick={() => onLoadPreset("submittal")}
-                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#262626] rounded transition-colors font-mono"
+                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded-md transition-colors font-mono flex items-center justify-between"
               >
-                Submittal & R0 Severity
+                <span>Submittals & R0 Score</span>
+                <span className="text-[10px] text-[#4edea3]">3 widgets</span>
               </button>
               <button
                 onClick={() => onLoadPreset("logistics")}
-                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#262626] rounded transition-colors font-mono"
+                className="w-full text-left px-3 py-2 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded-md transition-colors font-mono flex items-center justify-between"
               >
-                Equipment Logistics
+                <span>Equipment Logistics & NCRs</span>
+                <span className="text-[10px] text-[#4edea3]">3 widgets</span>
               </button>
             </div>
           </div>
 
+          {/* Quick Layout Menu */}
+          {editMode && (
+            <div className="relative group">
+              <button className="px-2.5 py-1.5 bg-[#161920] hover:bg-[#202530] border border-[#2b313d] rounded-md text-[#c5cbd6] flex items-center gap-1.5 transition-all text-[11px]">
+                <Columns3 className="w-3.5 h-3.5 text-[#38bdf8]" />
+                <span>Auto-Layout</span>
+                <ChevronDown className="w-3 h-3 text-[#737373]" />
+              </button>
+              <div className="absolute right-0 top-full mt-1 w-48 bg-[#161920] border border-[#2b313d] rounded-lg shadow-2xl p-1 z-50 hidden group-hover:block backdrop-blur-xl">
+                <button
+                  onClick={() => handleApplyPresetLayout("compact")}
+                  className="w-full text-left px-3 py-1.5 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded transition-colors font-mono"
+                >
+                  Auto-Pack Compact
+                </button>
+                <button
+                  onClick={() => handleApplyPresetLayout("2col")}
+                  className="w-full text-left px-3 py-1.5 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded transition-colors font-mono"
+                >
+                  2-Column Split
+                </button>
+                <button
+                  onClick={() => handleApplyPresetLayout("3col")}
+                  className="w-full text-left px-3 py-1.5 text-xs text-[#e5e5e5] hover:bg-[#222733] rounded transition-colors font-mono"
+                >
+                  3-Column Grid
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Refresh button */}
           <button
             onClick={onRefreshData}
-            className="p-1.5 bg-[#171717] hover:bg-[#262626] border border-[#333333] rounded-md text-[#e5e5e5] transition-all relative hover:shadow-[0_4px_12px_rgba(0,0,0,0.40)]"
+            className="p-1.5 bg-[#161920] hover:bg-[#202530] border border-[#2b313d] rounded-md text-[#e5e5e5] transition-all relative hover:border-[#4edea3]/50"
             title="Sync Data Now"
           >
             <RefreshCw className="w-4 h-4 text-[#4edea3]" />
@@ -215,7 +318,7 @@ export default function DashboardCanvas({
           {/* Export JSON */}
           <button
             onClick={onExportJson}
-            className="p-1.5 bg-[#171717] hover:bg-[#262626] border border-[#333333] rounded-md text-[#a3a3a3] hover:text-[#4edea3] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.40)]"
+            className="p-1.5 bg-[#161920] hover:bg-[#202530] border border-[#2b313d] rounded-md text-[#8c93a0] hover:text-[#4edea3] transition-all"
             title="Export Layout Config JSON"
           >
             <FileCode className="w-4 h-4" />
@@ -224,20 +327,20 @@ export default function DashboardCanvas({
           {/* Toggle Rearrange Edit Mode */}
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`px-3 py-1.5 rounded-md border transition-all flex items-center gap-1.5 label-caps text-[10px] ${
+            className={`px-3 py-1.5 rounded-md border transition-all flex items-center gap-1.5 text-[11px] ${
               editMode
-                ? "bg-[#4edea3]/20 border-[#4edea3] text-[#4edea3] font-bold"
-                : "bg-[#171717] border-[#333333] text-[#a3a3a3] hover:text-[#e5e5e5]"
+                ? "bg-[#4edea3]/15 border-[#4edea3] text-[#4edea3] font-bold shadow-[0_0_12px_rgba(78,222,163,0.2)]"
+                : "bg-[#161920] border-[#2b313d] text-[#8c93a0] hover:text-[#e5e5e5]"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>{editMode ? "Done Editing" : "Customize"}</span>
+            <span>{editMode ? "Lock Layout" : "Edit Layout"}</span>
           </button>
 
           {/* Add Custom Widget */}
           <button
             onClick={onAddWidget}
-            className="px-3 py-1.5 bg-[#171717] hover:bg-[#262626] border border-[#333333] rounded-md text-[#4edea3] flex items-center gap-1 transition-all label-caps text-[10px]"
+            className="px-3 py-1.5 bg-[#161920] hover:bg-[#202530] border border-[#4edea3]/40 rounded-md text-[#4edea3] flex items-center gap-1.5 transition-all text-[11px] font-bold shadow-[0_0_12px_rgba(78,222,163,0.1)]"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Widget</span>
@@ -246,39 +349,38 @@ export default function DashboardCanvas({
           {/* Save Dashboard Option */}
           <button
             onClick={onOpenSaveModal}
-            className="px-3.5 py-1.5 text-[#003824] font-bold rounded-md flex items-center gap-1.5 transition-all shadow-md label-caps text-[10px] hover:shadow-[0_0_12px_rgba(78,222,163,0.40)] active:shadow-[inset_0_4px_4px_rgba(0,0,0,0.40)]"
-            style={{ background: 'linear-gradient(to bottom, #6cf8bb, #4edea3)', borderTop: '1px solid rgba(255,255,255,0.30)' }}
+            className="px-3.5 py-1.5 bg-[#4edea3] hover:bg-[#3ec48e] text-[#003824] font-bold rounded-md flex items-center gap-1.5 transition-all shadow-[0_0_14px_rgba(78,222,163,0.30)] text-[11px]"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>Save Custom Layout</span>
+            <span>Save Dashboard</span>
           </button>
         </div>
       </div>
 
       {/* FILTER & QUICK SEARCH BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#171717]/60 border border-[#262626] rounded-lg font-mono text-xs glass-panel">
-        <div className="flex items-center gap-2 flex-1 max-w-md">
-          <Search className="w-4 h-4 text-[#737373]" />
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#13161c] border border-[#222733] rounded-lg font-mono text-xs">
+        <div className="flex items-center gap-2 flex-1 max-w-md bg-[#0c0d10] px-3 py-1.5 rounded-md border border-[#1f242d] focus-within:border-[#4edea3]/60 transition-all">
+          <Search className="w-3.5 h-3.5 text-[#606775]" />
           <input
             type="text"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
             placeholder="Filter widget parameters & values..."
-            className="w-full bg-transparent border-none outline-none text-[#e5e5e5] placeholder-[#525252]"
+            className="w-full bg-transparent border-none outline-none text-[#e5e5e5] placeholder-[#606775] text-xs"
           />
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-[#737373] label-caps text-[10px]">
+          <div className="flex items-center gap-1 text-[#8c93a0] text-[11px]">
             <Filter className="w-3.5 h-3.5" />
-            <span>Range:</span>
+            <span>Timeframe:</span>
           </div>
           {(["7d", "30d", "90d", "all"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setTimeRange(r)}
-              className={`px-2 py-0.5 rounded text-[11px] transition-all uppercase label-caps ${
-                timeRange === r ? "bg-[#4edea3]/20 text-[#4edea3] font-bold" : "text-[#737373] hover:text-[#e5e5e5]"
+              className={`px-2.5 py-1 rounded text-[11px] transition-all uppercase font-bold ${
+                timeRange === r ? "bg-[#4edea3] text-[#003824] shadow-sm" : "text-[#8c93a0] hover:text-[#e5e5e5]"
               }`}
             >
               {r}
@@ -289,7 +391,7 @@ export default function DashboardCanvas({
 
       {/* REAL-TIME GENERATING LAZY LOADING OVERLAY */}
       {isGenerating && (
-        <div className="p-6 rounded-lg border border-[#4edea3]/40 bg-[#171717]/90 relative overflow-hidden space-y-4 animate-in fade-in duration-300 glass-panel">
+        <div className="p-6 rounded-lg border border-[#4edea3]/40 bg-[#13161c] relative overflow-hidden space-y-4 animate-in fade-in duration-300">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#4edea3] via-[#38bdf8] to-[#a855f7] animate-pulse" />
           
           <div className="flex items-center justify-between">
@@ -298,15 +400,15 @@ export default function DashboardCanvas({
                 <Cpu className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <h3 className="text-sm font-bold label-caps text-[#f5f5f5] flex items-center gap-2">
+                <h3 className="text-sm font-bold text-[#f5f5f5] flex items-center gap-2">
                   Synthesizing Real-Time Dashboard...
                 </h3>
-                <p className="text-xs text-[#a3a3a3] font-mono">
+                <p className="text-xs text-[#8c93a0] font-mono">
                   Assembling data visualizers and binding knowledge graph query engines.
                 </p>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded bg-[#4edea3]/10 text-[#4edea3] font-mono text-xs border border-[#4edea3]/30 uppercase tracking-widest animate-pulse label-caps">
+            <span className="px-2.5 py-1 rounded bg-[#4edea3]/10 text-[#4edea3] font-mono text-xs border border-[#4edea3]/30 uppercase tracking-widest animate-pulse font-bold">
               Building Canvas
             </span>
           </div>
@@ -326,8 +428,8 @@ export default function DashboardCanvas({
                   <div className="h-3 w-3/4 bg-[#262626] rounded" />
                 </div>
                 <div className="flex items-center justify-between text-[10px] font-mono text-[#4edea3]/60">
-                  <span>● Processing Node #{i}</span>
-                  <span>Compiling Cypher AST...</span>
+                  <span>● Node #{i} AST Cypher Verified</span>
+                  <span>Compiling Visualizer...</span>
                 </div>
               </div>
             ))}
@@ -343,22 +445,59 @@ export default function DashboardCanvas({
               width={activeWidth}
               className="layout"
               layouts={{
-                lg: currentDashboard.layout.map(w => ({ i: w.id, x: w.x, y: w.y, w: w.w, h: w.h })),
-                md: currentDashboard.layout.map(w => ({ i: w.id, x: w.x, y: w.y, w: w.w, h: w.h })),
-                sm: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h })),
-                xs: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h })),
-                xxs: currentDashboard.layout.map((w, idx) => ({ i: w.id, x: 0, y: idx, w: 1, h: w.h }))
+                lg: currentDashboard.layout.map(w => ({ 
+                  i: w.id, 
+                  x: Number(w.x) || 0, 
+                  y: Number(w.y) || 0, 
+                  w: Math.min(12, Math.max(2, Number(w.w) || 6)), 
+                  h: Math.max(2, Number(w.h) || 3),
+                  minW: w.type === "FormulaCard" || w.type === "R0Gauge" ? 2 : 3,
+                  minH: 2
+                })),
+                md: currentDashboard.layout.map(w => ({ 
+                  i: w.id, 
+                  x: Number(w.x) || 0, 
+                  y: Number(w.y) || 0, 
+                  w: Math.min(12, Math.max(2, Number(w.w) || 6)), 
+                  h: Math.max(2, Number(w.h) || 3),
+                  minW: 2,
+                  minH: 2
+                })),
+                sm: currentDashboard.layout.map((w, idx) => {
+                  const isSmall = w.type === "FormulaCard" || w.type === "R0Gauge";
+                  return { 
+                    i: w.id, 
+                    x: isSmall ? (idx % 2) * 3 : 0, 
+                    y: Math.floor(idx / 2) * 3, 
+                    w: isSmall ? 3 : 6, 
+                    h: Math.max(2, Number(w.h) || 3) 
+                  };
+                }),
+                xs: currentDashboard.layout.map((w, idx) => ({ 
+                  i: w.id, 
+                  x: 0, 
+                  y: idx * 3, 
+                  w: 4, 
+                  h: Math.max(2, Number(w.h) || 3) 
+                })),
+                xxs: currentDashboard.layout.map((w, idx) => ({ 
+                  i: w.id, 
+                  x: 0, 
+                  y: idx * 3, 
+                  w: 2, 
+                  h: Math.max(2, Number(w.h) || 3) 
+                }))
               }}
               cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }}
-              rowHeight={90}
+              rowHeight={115}
               onLayoutChange={(layout) => {
                 if (onLayoutChange) onLayoutChange(layout);
               }}
               dragConfig={{ enabled: editMode, handle: ".drag-handle" }}
               resizeConfig={{ enabled: editMode }}
-              margin={[24, 24]}
+              margin={[20, 20]}
             >
-          {currentDashboard.layout.map((widget, index) => {
+          {currentDashboard.layout.map((widget) => {
             const data = widgetData[widget.id];
             const isLoading = loadingData[widget.id];
             const rows = getRows(data);
@@ -368,70 +507,94 @@ export default function DashboardCanvas({
             return (
               <div
                 key={widget.id}
-                className="relative rounded-lg glass-panel flex flex-col justify-between overflow-hidden transition-all duration-300 hover:border-[#4edea3]/40 hover:shadow-[0_4px_24px_rgba(78,222,163,0.08)]"
-                style={{ padding: "20px", width: "100%", height: "100%" }}
+                className="relative rounded-xl bg-[#13161c] border border-[#222733] flex flex-col justify-between overflow-hidden transition-all duration-200 hover:border-[#4edea3]/40 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-3.5 sm:p-4"
+                style={{ width: "100%", height: "100%" }}
               >
-                {/* Specular Milled Edge — top + left highlight per DESIGN.md */}
-                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent pointer-events-none z-10" />
-                <div className="absolute top-0 left-0 bottom-0 w-[1px] bg-gradient-to-b from-white/20 to-transparent pointer-events-none z-10" />
+                {/* Specular Milled Edge Highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none z-10" />
 
                 {/* Widget Header Bar */}
-                <div className="flex items-center justify-between pb-3 mb-4" style={{ borderBottom: '1px solid #1a1a1a', boxShadow: '0 1px 0 rgba(255,255,255,0.06)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-md bg-black/40 border border-[#262626] text-[#4edea3]">
-                      {widget.type === "R0Gauge" && <Activity className="w-4 h-4" />}
-                      {widget.type === "PredictiveTrendChart" && <TrendingUp className="w-4 h-4" />}
-                      {widget.type === "FormulaCard" && <Zap className="w-4 h-4" />}
-                      {widget.type === "DataGrid" && <TableIcon className="w-4 h-4" />}
-                      {widget.type === "BarChart" && <Layers className="w-4 h-4" />}
-                      {widget.type === "DonutChart" && <LayoutGrid className="w-4 h-4" />}
-                      {widget.type === "LineChart" && <TrendingUp className="w-4 h-4" />}
-                      {widget.type === "RadarChart" && <Maximize2 className="w-4 h-4" />}
-                      {widget.type === "ScatterChart" && <LayoutGrid className="w-4 h-4" />}
-                      {widget.type === "MarkdownCard" && <FileText className="w-4 h-4" />}
-                      {widget.type === "JSONViewer" && <Code className="w-4 h-4" />}
-                      {widget.type === "StatusList" && <List className="w-4 h-4" />}
+                <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-[#1f242d] shrink-0">
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <span className="p-1.5 rounded-lg bg-[#0c0d10] border border-[#222733] text-[#4edea3] shrink-0">
+                      {widget.type === "R0Gauge" && <Activity className="w-3.5 h-3.5" />}
+                      {widget.type === "PredictiveTrendChart" && <TrendingUp className="w-3.5 h-3.5" />}
+                      {widget.type === "FormulaCard" && <Zap className="w-3.5 h-3.5" />}
+                      {widget.type === "DataGrid" && <TableIcon className="w-3.5 h-3.5" />}
+                      {widget.type === "BarChart" && <Layers className="w-3.5 h-3.5" />}
+                      {widget.type === "DonutChart" && <LayoutGrid className="w-3.5 h-3.5" />}
+                      {widget.type === "LineChart" && <TrendingUp className="w-3.5 h-3.5" />}
+                      {widget.type === "RadarChart" && <Maximize2 className="w-3.5 h-3.5" />}
+                      {widget.type === "ScatterChart" && <LayoutGrid className="w-3.5 h-3.5" />}
+                      {widget.type === "MarkdownCard" && <FileText className="w-3.5 h-3.5" />}
+                      {widget.type === "JSONViewer" && <Code className="w-3.5 h-3.5" />}
+                      {widget.type === "StatusList" && <List className="w-3.5 h-3.5" />}
                     </span>
-                    <div>
-                      <h3 className="text-xs font-bold label-caps text-[#f5f5f5]">
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-[#f5f5f5] font-sans truncate">
                         {widget.title || widget.type}
                       </h3>
                       {widget.description && (
-                        <p className="text-[10px] text-[#a3a3a3] font-mono">{widget.description}</p>
+                        <p className="text-[10px] text-[#8c93a0] font-mono truncate">{widget.description}</p>
                       )}
                     </div>
                   </div>
 
                   {/* Widget Action Toolbar */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
+                    
+                    {/* Inspect Cypher Query */}
+                    <button
+                      onClick={() => setInspectorWidget(widget)}
+                      className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#4edea3] transition-colors"
+                      title="Inspect Cypher Query"
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Full Screen View */}
                     <button
                       onClick={() => setExpandedWidgetId(widget.id)}
-                      className="p-1 hover:bg-[#262626] rounded text-[#737373] hover:text-[#f5f5f5] transition-colors"
+                      className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#f5f5f5] transition-colors"
                       title="Full Screen View"
                     >
                       <Maximize2 className="w-3.5 h-3.5" />
                     </button>
 
+                    {/* CSV Export on Tables */}
+                    {widget.type === "DataGrid" && rows.length > 0 && (
+                      <button
+                        onClick={() => exportRowsToCsv(rows, widget.title || "grid_export")}
+                        className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#4edea3] transition-colors"
+                        title="Download CSV"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     {editMode && (
                       <>
-                        <div className="drag-handle cursor-move p-1 hover:bg-[#262626] rounded text-[#737373] hover:text-[#e5e5e5]">
+                        <div className="drag-handle cursor-move p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#4edea3]">
                           <LayoutGrid className="w-3.5 h-3.5" />
                         </div>
                         <button
                           onClick={() => onDuplicateWidget(widget)}
-                          className="p-1 hover:bg-[#262626] rounded text-[#737373] hover:text-[#f5f5f5]"
+                          className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#f5f5f5]"
+                          title="Duplicate Widget"
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleOpenSettings(widget)}
-                          className="p-1 hover:bg-[#262626] rounded text-[#737373] hover:text-[#4edea3]"
+                          onClick={() => setConfiguringWidget(widget)}
+                          className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-[#4edea3]"
+                          title="Configure Widget"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => onDeleteWidget(widget.id)}
-                          className="p-1 hover:bg-[#262626] rounded text-[#737373] hover:text-red-400"
+                          className="p-1 hover:bg-[#202530] rounded text-[#8c93a0] hover:text-red-400"
+                          title="Delete Widget"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -440,124 +603,80 @@ export default function DashboardCanvas({
                   </div>
                 </div>
 
-                {/* Local Settings Pop-Up */}
-                {editingWidgetId === widget.id && (
-                  <div className="absolute inset-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-md p-5 flex flex-col justify-center animate-in zoom-in-95 duration-200 rounded-lg">
-                    <h4 className="text-sm font-bold text-[#4edea3] mb-4 label-caps">Configure Widget</h4>
-                    <div className="space-y-3 font-mono text-xs">
-                      <div>
-                        <label className="text-[#a3a3a3] block mb-1">Title</label>
-                        <input 
-                          type="text" 
-                          value={tempWidgetConfig.title || ""} 
-                          onChange={(e) => setTempWidgetConfig({...tempWidgetConfig, title: e.target.value})} 
-                          className="w-full bg-[#0a0a0a] border border-[#333333] rounded-sm px-2.5 py-1.5 text-[#e5e5e5] focus:outline-none focus:border-[#e5e5e5] focus:shadow-[0_0_8px_rgba(229,229,229,0.25)] transition-all"
-                          style={{ boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.60)' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[#a3a3a3] block mb-1">Description</label>
-                        <input 
-                          type="text" 
-                          value={tempWidgetConfig.description || ""} 
-                          onChange={(e) => setTempWidgetConfig({...tempWidgetConfig, description: e.target.value})} 
-                          className="w-full bg-[#0a0a0a] border border-[#333333] rounded-sm px-2.5 py-1.5 text-[#e5e5e5] focus:outline-none focus:border-[#e5e5e5] focus:shadow-[0_0_8px_rgba(229,229,229,0.25)] transition-all"
-                          style={{ boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.60)' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[#a3a3a3] block mb-1">Visualization Type</label>
-                        <select 
-                          value={tempWidgetConfig.type || ""} 
-                          onChange={(e) => setTempWidgetConfig({...tempWidgetConfig, type: e.target.value as import("./types").WidgetType})}
-                          className="w-full bg-[#0a0a0a] border border-[#333333] rounded-sm px-2.5 py-1.5 text-[#e5e5e5] focus:outline-none focus:border-[#e5e5e5] focus:shadow-[0_0_8px_rgba(229,229,229,0.25)] transition-all"
-                          style={{ boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.60)' }}
-                        >
-                          <option value="FormulaCard">Formula Card</option>
-                          <option value="R0Gauge">R0 Gauge</option>
-                          <option value="DataGrid">Data Grid</option>
-                          <option value="PredictiveTrendChart">Trend Chart</option>
-                          <option value="BarChart">Bar Chart</option>
-                          <option value="DonutChart">Donut Chart</option>
-                          <option value="LineChart">Line Chart</option>
-                          <option value="RadarChart">Radar Chart</option>
-                          <option value="ScatterChart">Scatter Chart</option>
-                          <option value="MarkdownCard">Markdown</option>
-                          <option value="JSONViewer">JSON Viewer</option>
-                          <option value="StatusList">Status List</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-4 justify-end">
-                      <button onClick={() => setEditingWidgetId(null)} className="px-3 py-1.5 rounded-md border border-[#333333] text-[#a3a3a3] hover:text-[#f5f5f5] text-xs font-mono transition-all glass-panel hover:shadow-[0_4px_12px_rgba(0,0,0,0.40)]">Cancel</button>
-                      <button onClick={() => handleSaveSettings(widget)} className="px-3 py-1.5 rounded-md text-[#003824] font-bold text-xs font-mono transition-all hover:shadow-[0_0_12px_rgba(78,222,163,0.40)] active:shadow-[inset_0_4px_4px_rgba(0,0,0,0.40)]" style={{ background: 'linear-gradient(to bottom, #6cf8bb, #4edea3)', borderTop: '1px solid rgba(255,255,255,0.30)' }}>Save</button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Widget Content Render */}
-                <div className="flex-1 flex flex-col justify-center relative">
+                {/* Widget Dynamic Content Render */}
+                <div className="flex-1 min-h-0 w-full h-full flex flex-col justify-center relative overflow-hidden">
                   {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-xs font-mono text-[#737373] space-y-2">
+                    <div className="flex flex-col items-center justify-center h-full text-xs font-mono text-[#8c93a0] space-y-2">
                       <RefreshCw className="w-5 h-5 text-[#4edea3] animate-spin" />
-                      <span>Executing Graph Query...</span>
+                      <span>Traversing Graph DB...</span>
                     </div>
                   ) : data && "error" in data ? (
-                    <div className="p-4 rounded bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-xs flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>{data.error}</span>
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-xs flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block">Query Error</span>
+                        <span className="text-[10px] text-red-300">{data.error}</span>
+                      </div>
                     </div>
                   ) : (
                     <>
                       {/* FORMULA CARD */}
                       {widget.type === "FormulaCard" && (
-                        <div className="py-6 font-mono text-center space-y-3">
-                          <div className="text-5xl font-extrabold tracking-tight text-[#f5f5f5]" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>
+                        <div className="py-2 font-mono text-center flex flex-col items-center justify-center h-full space-y-1.5">
+                          <div className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[#f5f5f5] truncate max-w-full" style={{ fontFamily: 'var(--font-mono)' }}>
                             {val !== null ? formatCellValue(val) : "—"}
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-xs">
-                            <span className="px-2 py-0.5 rounded bg-[#4edea3]/20 text-[#4edea3] font-bold flex items-center gap-1">
-                              <TrendingUp className="w-3 h-3" /> +12.4%
+                          <div className="flex items-center justify-center gap-1.5 text-xs">
+                            <span className="px-2 py-0.5 rounded bg-[#4edea3]/20 text-[#4edea3] font-bold flex items-center gap-1 text-[10px]">
+                              <TrendingUp className="w-3 h-3" /> Nominal
                             </span>
-                            <span className="text-[#737373]">vs target baseline</span>
+                            <span className="text-[#8c93a0] text-[10px] hidden sm:inline">active baseline</span>
                           </div>
                         </div>
                       )}
 
                       {/* R0 SEVERITY GAUGE */}
                       {widget.type === "R0Gauge" && (
-                        <div className="py-4 font-mono text-center space-y-3">
+                        <div className="py-1 font-mono text-center flex flex-col items-center justify-center h-full space-y-1.5">
                           <div className="relative inline-flex flex-col items-center justify-center">
-                            <div className="w-32 h-32 rounded-full border-[3px] border-[#4edea3]/50 flex items-center justify-center relative bg-black/40 shadow-[0_0_20px_rgba(78,222,163,0.25),inset_0_0_12px_rgba(78,222,163,0.08)]">
-                              <span className="text-4xl font-extrabold text-[#4edea3]" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', textShadow: '0 0 12px rgba(78,222,163,0.40)' }}>
+                            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] flex items-center justify-center relative bg-black/40 ${
+                              primaryNumber > 4 ? "border-red-500/60 shadow-[0_0_14px_rgba(239,68,68,0.3)]" :
+                              primaryNumber >= 2 ? "border-amber-400/60 shadow-[0_0_14px_rgba(251,191,36,0.3)]" :
+                              "border-[#4edea3]/60 shadow-[0_0_14px_rgba(78,222,163,0.3)]"
+                            }`}>
+                              <span className={`text-2xl sm:text-3xl font-extrabold ${
+                                primaryNumber > 4 ? "text-red-400" :
+                                primaryNumber >= 2 ? "text-amber-400" :
+                                "text-[#4edea3]"
+                              }`} style={{ fontFamily: 'var(--font-mono)' }}>
                                 {Number.isFinite(primaryNumber) && rows.length > 0 ? primaryNumber.toFixed(1) : "—"}
                               </span>
                             </div>
-                            <span className="mt-2 label-caps text-[10px] text-[#a3a3a3]">
-                              R0 Risk Severity Index
+                            <span className="mt-1 text-[9px] uppercase tracking-widest text-[#8c93a0] font-bold">
+                              R0 Risk Index
                             </span>
                           </div>
-                          <div className="flex justify-center gap-4 text-[10px] font-mono">
-                            <span className="text-[#4edea3] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #4edea3 40%, transparent 70%)', boxShadow: '0 0 6px rgba(78,222,163,0.50)' }} />Normal (&lt; 2.0)</span>
-                            <span className="text-amber-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #fbbf24 40%, transparent 70%)', boxShadow: '0 0 6px rgba(251,191,36,0.50)' }} />Moderate (2 - 4)</span>
-                            <span className="text-[#ffb3ad] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #ffb3ad 40%, transparent 70%)', boxShadow: '0 0 6px rgba(255,179,173,0.50)' }} />Critical (&gt; 4)</span>
+                          <div className="flex justify-center gap-2.5 text-[9px] font-mono">
+                            <span className="text-[#4edea3]">● &lt;2.0</span>
+                            <span className="text-amber-400">● 2-4</span>
+                            <span className="text-red-400">● &gt;4.0</span>
                           </div>
                         </div>
                       )}
 
                       {/* DATA GRID */}
                       {widget.type === "DataGrid" && (
-                        <div className="overflow-x-auto max-h-[160px] overflow-y-auto font-mono text-xs custom-scrollbar">
+                        <div className="h-full w-full overflow-auto font-mono text-xs custom-scrollbar">
                           {rows.length > 0 ? (
-                            <table className="w-full text-left">
-                              <thead>
-                                <tr className="text-[#737373] label-caps text-[10px]" style={{ borderBottom: '1px solid #1a1a1a', boxShadow: '0 1px 0 rgba(255,255,255,0.06)' }}>
+                            <table className="w-full text-left text-[11px]">
+                              <thead className="sticky top-0 bg-[#13161c]">
+                                <tr className="border-b border-[#20242c] text-[#8c93a0]">
                                   {Object.keys(rows[0]).map((key) => (
-                                    <th key={key} className="pb-2 pr-4 font-bold tracking-widest">{key}</th>
+                                    <th key={key} className="pb-1.5 pr-3 font-bold uppercase tracking-wider">{key}</th>
                                   ))}
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#1a1a1a]">
+                              <tbody className="divide-y divide-[#181c24]">
                                 {rows
                                   .filter((r) =>
                                     !searchFilter ||
@@ -570,7 +689,7 @@ export default function DashboardCanvas({
                                       {Object.entries(row).map(([, cellVal], j) => {
                                         const isNumeric = typeof cellVal === 'number' || /^-?[\d.]+$/.test(String(cellVal));
                                         return (
-                                          <td key={j} className={`py-2 pr-4 truncate max-w-[180px] ${isNumeric ? 'font-mono text-[#4edea3] mono-data' : 'text-[#a3a3a3]'}`}>
+                                          <td key={j} className={`py-1.5 pr-3 truncate max-w-[140px] ${isNumeric ? 'font-mono text-[#4edea3]' : 'text-[#d8dce6]'}`}>
                                             {formatCellValue(cellVal)}
                                           </td>
                                         );
@@ -580,31 +699,31 @@ export default function DashboardCanvas({
                               </tbody>
                             </table>
                           ) : (
-                            <div className="text-center py-8 text-[#525252]">No grid records returned.</div>
+                            <div className="flex items-center justify-center h-full text-[#606775]">No grid records returned.</div>
                           )}
                         </div>
                       )}
 
                       {/* PREDICTIVE TREND CHART */}
                       {widget.type === "PredictiveTrendChart" && (
-                        <div className="h-40 w-full pt-2">
+                        <div className="h-full w-full min-h-[120px]">
                           {rows.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={rows}>
+                              <AreaChart data={rows} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                                 <defs>
                                   <linearGradient id={`grad_${widget.id}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={CHART_COLORS[index % CHART_COLORS.length]} stopOpacity={0.4} />
-                                    <stop offset="95%" stopColor={CHART_COLORS[index % CHART_COLORS.length]} stopOpacity={0} />
+                                    <stop offset="5%" stopColor="#4edea3" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="#4edea3" stopOpacity={0} />
                                   </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                                <XAxis dataKey="date" stroke="#525252" fontSize={10} />
-                                <YAxis stroke="#525252" fontSize={10} />
-                                <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1f242d" />
+                                <XAxis dataKey="date" stroke="#606775" fontSize={9} />
+                                <YAxis stroke="#606775" fontSize={9} />
+                                <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
                                 <Area
                                   type="monotone"
                                   dataKey="value"
-                                  stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                                  stroke="#4edea3"
                                   strokeWidth={2}
                                   fillOpacity={1}
                                   fill={`url(#grad_${widget.id})`}
@@ -612,7 +731,7 @@ export default function DashboardCanvas({
                               </AreaChart>
                             </ResponsiveContainer>
                           ) : (
-                            <div className="text-center py-10 text-[#525252] font-mono">
+                            <div className="flex items-center justify-center h-full text-[#606775] font-mono text-xs">
                               Insufficient time-series payload.
                             </div>
                           )}
@@ -621,13 +740,13 @@ export default function DashboardCanvas({
 
                       {/* BAR CHART */}
                       {widget.type === "BarChart" && (
-                        <div className="h-52 w-full pt-2">
+                        <div className="h-full w-full min-h-[120px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsBarChart data={rows}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                              <XAxis dataKey={Object.keys(rows[0] || {name:""})[0] || "name"} stroke="#525252" fontSize={10} />
-                              <YAxis stroke="#525252" fontSize={10} />
-                              <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
+                            <RechartsBarChart data={rows} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1f242d" />
+                              <XAxis dataKey={Object.keys(rows[0] || {name:""})[0] || "name"} stroke="#606775" fontSize={9} />
+                              <YAxis stroke="#606775" fontSize={9} />
+                              <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
                               <Bar dataKey={Object.keys(rows[0] || {count:""})[1] || "count"} fill="#4edea3" radius={[4, 4, 0, 0]} />
                             </RechartsBarChart>
                           </ResponsiveContainer>
@@ -636,14 +755,14 @@ export default function DashboardCanvas({
 
                       {/* DONUT CHART */}
                       {widget.type === "DonutChart" && (
-                        <div className="h-52 w-full pt-2 flex items-center justify-center">
+                        <div className="h-full w-full min-h-[120px] flex items-center justify-center">
                           <ResponsiveContainer width="100%" height="100%">
                             <RechartsPieChart>
                               <Pie
                                 data={rows}
-                                innerRadius={50}
-                                outerRadius={75}
-                                paddingAngle={5}
+                                innerRadius={35}
+                                outerRadius={55}
+                                paddingAngle={4}
                                 dataKey={Object.keys(rows[0] || {value:""})[1] || "value"}
                                 nameKey={Object.keys(rows[0] || {name:""})[0] || "name"}
                               >
@@ -651,8 +770,8 @@ export default function DashboardCanvas({
                                   <Cell key={`cell-${idx}`} fill={col} />
                                 ))}
                               </Pie>
-                              <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
-                              <Legend />
+                              <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
+                              <Legend wrapperStyle={{ fontSize: 9 }} />
                             </RechartsPieChart>
                           </ResponsiveContainer>
                         </div>
@@ -660,14 +779,14 @@ export default function DashboardCanvas({
 
                       {/* LINE CHART */}
                       {widget.type === "LineChart" && (
-                        <div className="h-52 w-full pt-2">
+                        <div className="h-full w-full min-h-[120px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsLineChart data={rows}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                              <XAxis dataKey={Object.keys(rows[0] || {date:""})[0]} stroke="#525252" fontSize={10} />
-                              <YAxis stroke="#525252" fontSize={10} />
-                              <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
-                              <Line type="monotone" dataKey={Object.keys(rows[0] || {value:""})[1] || "value"} stroke={CHART_COLORS[index % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[index % CHART_COLORS.length] }} />
+                            <RechartsLineChart data={rows} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1f242d" />
+                              <XAxis dataKey={Object.keys(rows[0] || {date:""})[0]} stroke="#606775" fontSize={9} />
+                              <YAxis stroke="#606775" fontSize={9} />
+                              <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
+                              <Line type="monotone" dataKey={Object.keys(rows[0] || {value:""})[1] || "value"} stroke="#38bdf8" strokeWidth={2} dot={{ r: 2.5, fill: "#38bdf8" }} />
                             </RechartsLineChart>
                           </ResponsiveContainer>
                         </div>
@@ -675,14 +794,14 @@ export default function DashboardCanvas({
 
                       {/* RADAR CHART */}
                       {widget.type === "RadarChart" && (
-                        <div className="h-52 w-full pt-2">
+                        <div className="h-full w-full min-h-[120px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsRadarChart data={rows} outerRadius="80%">
-                              <PolarGrid stroke="#262626" />
-                              <PolarAngleAxis dataKey={Object.keys(rows[0] || {subject:""})[0]} tick={{ fill: "#a3a3a3", fontSize: 10 }} />
-                              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fill: "#525252", fontSize: 10 }} />
-                              <Radar name="Metric" dataKey={Object.keys(rows[0] || {A:""})[1] || "A"} stroke={CHART_COLORS[index % CHART_COLORS.length]} fill={CHART_COLORS[index % CHART_COLORS.length]} fillOpacity={0.4} />
-                              <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
+                            <RechartsRadarChart data={rows} outerRadius="70%">
+                              <PolarGrid stroke="#1f242d" />
+                              <PolarAngleAxis dataKey={Object.keys(rows[0] || {subject:""})[0]} tick={{ fill: "#8c93a0", fontSize: 9 }} />
+                              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fill: "#606775", fontSize: 9 }} />
+                              <Radar name="Metric" dataKey={Object.keys(rows[0] || {A:""})[1] || "A"} stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
+                              <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
                             </RechartsRadarChart>
                           </ResponsiveContainer>
                         </div>
@@ -690,14 +809,14 @@ export default function DashboardCanvas({
 
                       {/* SCATTER CHART */}
                       {widget.type === "ScatterChart" && (
-                        <div className="h-52 w-full pt-2">
+                        <div className="h-full w-full min-h-[120px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <RechartsScatterChart>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                              <XAxis dataKey={Object.keys(rows[0] || {x:""})[0]} type="number" stroke="#525252" fontSize={10} name="X Axis" />
-                              <YAxis dataKey={Object.keys(rows[0] || {y:""})[1] || "y"} type="number" stroke="#525252" fontSize={10} name="Y Axis" />
-                              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 6 }} />
-                              <Scatter name="Data" data={rows} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            <RechartsScatterChart margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1f242d" />
+                              <XAxis dataKey={Object.keys(rows[0] || {x:""})[0]} type="number" stroke="#606775" fontSize={9} name="X Axis" />
+                              <YAxis dataKey={Object.keys(rows[0] || {y:""})[1] || "y"} type="number" stroke="#606775" fontSize={9} name="Y Axis" />
+                              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8, fontSize: 10 }} />
+                              <Scatter name="Data" data={rows} fill="#f59e0b" />
                             </RechartsScatterChart>
                           </ResponsiveContainer>
                         </div>
@@ -705,48 +824,46 @@ export default function DashboardCanvas({
 
                       {/* MARKDOWN / TEXT CARD */}
                       {widget.type === "MarkdownCard" && (
-                        <div className="overflow-y-auto max-h-[260px] p-2 text-sm text-[#d4d4d4] font-sans leading-relaxed custom-scrollbar whitespace-pre-wrap">
+                        <div className="overflow-y-auto h-full p-2 text-xs text-[#d8dce6] font-sans leading-relaxed custom-scrollbar whitespace-pre-wrap">
                           {rows.length > 0 && typeof Object.values(rows[0])[0] === 'string'
                             ? String(Object.values(rows[0])[0])
-                            : "No text data provided. Add a query that returns a text string to display rich text notes here."}
+                            : "No markdown notes configured."}
                         </div>
                       )}
 
                       {/* JSON VIEWER */}
                       {widget.type === "JSONViewer" && (
-                        <div className="overflow-y-auto max-h-[260px] p-3 bg-[#111] rounded border border-[#262626] font-mono text-[10px] text-[#a3a3a3] custom-scrollbar">
+                        <div className="overflow-y-auto h-full p-3 bg-[#08090b] rounded border border-[#1f242d] font-mono text-[10px] text-[#4edea3] custom-scrollbar">
                           <pre>{JSON.stringify(rows, null, 2)}</pre>
                         </div>
                       )}
 
                       {/* STATUS LIST */}
                       {widget.type === "StatusList" && (
-                        <div className="overflow-y-auto max-h-[260px] custom-scrollbar font-mono text-xs">
+                        <div className="overflow-y-auto h-full custom-scrollbar font-mono text-xs space-y-1.5">
                           {rows.length > 0 ? (
-                            <ul className="space-y-2">
-                              {rows.map((r, i) => {
-                                const vals = Object.values(r);
-                                const label = formatCellValue(vals[0]);
-                                const status = vals.length > 1 ? String(vals[1]).toLowerCase() : 'unknown';
-                                let statusColor = "bg-[#262626] text-[#a3a3a3]";
-                                if (status.includes('ok') || status.includes('active') || status.includes('normal')) statusColor = "bg-[#4edea3]/20 text-[#4edea3]";
-                                else if (status.includes('warn') || status.includes('moderate')) statusColor = "bg-amber-400/20 text-amber-400";
-                                else if (status.includes('crit') || status.includes('err') || status.includes('fail')) statusColor = "bg-[#ffb3ad]/20 text-[#ffb3ad]";
+                            rows.map((r, i) => {
+                              const vals = Object.values(r);
+                              const label = formatCellValue(vals[0]);
+                              const status = vals.length > 1 ? String(vals[1]).toLowerCase() : 'unknown';
+                              let statusColor = "bg-[#202530] text-[#8c93a0]";
+                              if (status.includes('ok') || status.includes('active') || status.includes('normal')) statusColor = "bg-[#4edea3]/20 text-[#4edea3]";
+                              else if (status.includes('warn') || status.includes('moderate')) statusColor = "bg-amber-400/20 text-amber-400";
+                              else if (status.includes('crit') || status.includes('err') || status.includes('fail')) statusColor = "bg-red-400/20 text-red-400";
 
-                                return (
-                                  <li key={i} className="flex items-center justify-between p-2 rounded bg-black/40 border border-[#262626]">
-                                    <span className="text-[#e5e5e5] truncate pr-4">{label}</span>
-                                    {vals.length > 1 && (
-                                      <span className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold ${statusColor}`}>
-                                        {formatCellValue(vals[1])}
-                                      </span>
-                                    )}
-                                  </li>
-                                );
-                              })}
-                            </ul>
+                              return (
+                                <div key={i} className="flex items-center justify-between p-2 rounded bg-[#0c0d10] border border-[#1f242d]">
+                                  <span className="text-[#e5e5e5] truncate pr-2">{label}</span>
+                                  {vals.length > 1 && (
+                                    <span className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold shrink-0 ${statusColor}`}>
+                                      {formatCellValue(vals[1])}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })
                           ) : (
-                            <div className="text-center py-8 text-[#525252]">No list items returned.</div>
+                            <div className="flex items-center justify-center h-full text-[#606775]">No list items returned.</div>
                           )}
                         </div>
                       )}
@@ -761,39 +878,43 @@ export default function DashboardCanvas({
         </div>
       ) : (
         /* Empty State */
-        <div className="flex flex-col items-center justify-center rounded-lg h-[450px] text-center p-8 space-y-5 glass-panel relative overflow-hidden">
-          {/* Specular edges on empty state */}
-          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
-          <div className="absolute top-0 left-0 bottom-0 w-[1px] bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
-          <div className="p-4 rounded-full bg-[#171717] border border-[#262626] text-[#4edea3]" style={{ boxShadow: '0 0 16px rgba(78,222,163,0.12)' }}>
+        <div className="flex flex-col items-center justify-center rounded-xl h-[420px] text-center p-8 space-y-4 bg-[#13161c] border border-[#222733] relative overflow-hidden">
+          <div className="p-4 rounded-full bg-[#1a1d24] border border-[#2a2f3a] text-[#4edea3] shadow-[0_0_20px_rgba(78,222,163,0.15)]">
             <LayoutGrid className="w-8 h-8" />
           </div>
           <div>
-            <h3 className="text-lg font-bold label-caps text-[#f5f5f5]">
-              Real-Time Dashboard Uninitialized
+            <h3 className="text-base font-bold text-[#f5f5f5] font-sans">
+              Custom Dashboard Canvas Uninitialized
             </h3>
-            <p className="text-xs text-[#737373] max-w-md font-mono mt-2 leading-relaxed">
-              Use the AI Agent Chat sidebar on the right to prompt and synthesize real-time data center engineering dashboards.
+            <p className="text-xs text-[#8c93a0] max-w-md font-mono mt-1 leading-relaxed">
+              Use the AI Agent Chat sidebar on the right or choose a preset to assemble data visualizers.
             </p>
           </div>
-          <button
-            onClick={() => onLoadPreset("datacenter")}
-            className="px-4 py-2 rounded-md text-xs font-mono text-[#003824] font-bold transition-all flex items-center gap-2 label-caps hover:shadow-[0_0_12px_rgba(78,222,163,0.40)] active:shadow-[inset_0_4px_4px_rgba(0,0,0,0.40)]"
-            style={{ background: 'linear-gradient(to bottom, #6cf8bb, #4edea3)', borderTop: '1px solid rgba(255,255,255,0.30)' }}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span>Load Data Center Preset</span>
-          </button>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={() => onLoadPreset("datacenter")}
+              className="px-4 py-2 bg-[#4edea3] hover:bg-[#3ec48e] text-[#003824] font-bold rounded-md text-xs font-mono transition-all shadow-[0_0_12px_rgba(78,222,163,0.30)] cursor-pointer"
+            >
+              Load Data Center Preset
+            </button>
+            <button
+              onClick={onAddWidget}
+              className="px-4 py-2 bg-[#1a1d24] hover:bg-[#222733] border border-[#2b313d] text-[#e5e5e5] rounded-md text-xs font-mono transition-all cursor-pointer"
+            >
+              Add Custom Widget
+            </button>
+          </div>
         </div>
       )}
 
       {/* FULL SCREEN WIDGET OVERLAY MODAL */}
       {expandedWidget && (
-        <div className="fixed inset-0 z-[9999] bg-[#0a0a0a]/95 backdrop-blur-2xl p-4 sm:p-8 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[9999] bg-[#08090b]/95 backdrop-blur-2xl p-4 sm:p-8 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-200">
+          
           {/* Modal Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-[#262626] mb-4">
+          <div className="flex items-center justify-between pb-4 border-b border-[#22262f] mb-4">
             <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-black/60 border border-[#4edea3]/40 text-[#4edea3]">
+              <span className="p-2 rounded-lg bg-[#111317] border border-[#4edea3]/40 text-[#4edea3]">
                 {expandedWidget.type === "R0Gauge" && <Activity className="w-5 h-5" />}
                 {expandedWidget.type === "PredictiveTrendChart" && <TrendingUp className="w-5 h-5" />}
                 {expandedWidget.type === "FormulaCard" && <Zap className="w-5 h-5" />}
@@ -808,22 +929,22 @@ export default function DashboardCanvas({
                 {expandedWidget.type === "StatusList" && <List className="w-5 h-5" />}
               </span>
               <div>
-                <h2 className="text-lg font-bold text-[#f5f5f5] label-caps">
+                <h2 className="text-base font-bold text-[#f5f5f5] font-sans">
                   {expandedWidget.title || expandedWidget.type}
                 </h2>
                 {expandedWidget.description && (
-                  <p className="text-xs text-[#a3a3a3] font-mono">{expandedWidget.description}</p>
+                  <p className="text-xs text-[#8c93a0] font-mono">{expandedWidget.description}</p>
                 )}
               </div>
             </div>
 
             <div className="flex items-center gap-3 font-mono">
               <span className="px-3 py-1 rounded bg-[#4edea3]/10 text-[#4edea3] border border-[#4edea3]/30 uppercase tracking-widest text-[10px] font-bold hidden sm:inline-block">
-                Full Screen Mode (ESC to exit)
+                Full Screen View (ESC to exit)
               </span>
               <button
                 onClick={() => setExpandedWidgetId(null)}
-                className="px-3 py-1.5 bg-[#171717] hover:bg-[#262626] border border-[#333333] rounded-lg text-white hover:text-[#4edea3] transition-all text-xs flex items-center gap-2"
+                className="px-3 py-1.5 bg-[#161920] hover:bg-[#222733] border border-[#2b313d] rounded-md text-white hover:text-[#4edea3] transition-all text-xs flex items-center gap-2"
               >
                 <Minimize2 className="w-4 h-4" />
                 <span>Exit Full Screen</span>
@@ -832,7 +953,7 @@ export default function DashboardCanvas({
           </div>
 
           {/* Expanded Visualization Content */}
-          <div className="flex-1 bg-[#111111] border border-[#262626] rounded-xl p-6 overflow-hidden flex flex-col justify-center relative glass-panel">
+          <div className="flex-1 bg-[#111317] border border-[#22262f] rounded-xl p-6 overflow-hidden flex flex-col justify-center relative">
             {(() => {
               const data = widgetData[expandedWidget.id];
               const isLoading = loadingData[expandedWidget.id];
@@ -842,7 +963,7 @@ export default function DashboardCanvas({
 
               if (isLoading) {
                 return (
-                  <div className="flex flex-col items-center justify-center py-20 text-sm font-mono text-[#737373] space-y-3">
+                  <div className="flex flex-col items-center justify-center py-20 text-sm font-mono text-[#8c93a0] space-y-3">
                     <RefreshCw className="w-8 h-8 text-[#4edea3] animate-spin" />
                     <span>Executing Graph Query in Full Screen...</span>
                   </div>
@@ -851,7 +972,7 @@ export default function DashboardCanvas({
 
               if (data && "error" in data) {
                 return (
-                  <div className="p-6 rounded bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-sm flex items-center gap-3">
+                  <div className="p-6 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-sm flex items-center gap-3">
                     <AlertTriangle className="w-6 h-6 shrink-0" />
                     <span>{data.error}</span>
                   </div>
@@ -867,9 +988,9 @@ export default function DashboardCanvas({
                       </div>
                       <div className="flex items-center justify-center gap-3 text-base">
                         <span className="px-3 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] font-bold flex items-center gap-1.5">
-                          <TrendingUp className="w-4 h-4" /> +12.4%
+                          <TrendingUp className="w-4 h-4" /> Baseline Verified
                         </span>
-                        <span className="text-[#737373]">vs target baseline</span>
+                        <span className="text-[#8c93a0]">Submittal Telemetry</span>
                       </div>
                     </div>
                   )}
@@ -877,41 +998,41 @@ export default function DashboardCanvas({
                   {expandedWidget.type === "R0Gauge" && (
                     <div className="py-8 font-mono text-center space-y-6">
                       <div className="relative inline-flex flex-col items-center justify-center">
-                        <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full border-[4px] border-[#4edea3]/50 flex items-center justify-center relative bg-black/40 shadow-[0_0_30px_rgba(78,222,163,0.30),inset_0_0_16px_rgba(78,222,163,0.12)]">
-                          <span className="text-6xl font-extrabold text-[#4edea3]" style={{ fontFamily: 'var(--font-mono)', textShadow: '0 0 16px rgba(78,222,163,0.40)' }}>
+                        <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full border-[4px] border-[#4edea3]/50 flex items-center justify-center relative bg-black/40 shadow-[0_0_30px_rgba(78,222,163,0.30)]">
+                          <span className="text-6xl font-extrabold text-[#4edea3]" style={{ fontFamily: 'var(--font-mono)' }}>
                             {Number.isFinite(primaryNumber) && rows.length > 0 ? primaryNumber.toFixed(1) : "—"}
                           </span>
                         </div>
-                        <span className="mt-4 label-caps text-xs text-[#a3a3a3]">
+                        <span className="mt-4 text-xs font-bold text-[#8c93a0] uppercase tracking-wider">
                           R0 Risk Severity Index
                         </span>
                       </div>
                       <div className="flex justify-center gap-6 text-xs font-mono">
-                        <span className="text-[#4edea3] flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #4edea3 40%, transparent 70%)', boxShadow: '0 0 6px rgba(78,222,163,0.50)' }} />Normal (&lt; 2.0)</span>
-                        <span className="text-amber-400 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #fbbf24 40%, transparent 70%)', boxShadow: '0 0 6px rgba(251,191,36,0.50)' }} />Moderate (2 - 4)</span>
-                        <span className="text-[#ffb3ad] flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: 'radial-gradient(circle, #ffb3ad 40%, transparent 70%)', boxShadow: '0 0 6px rgba(255,179,173,0.50)' }} />Critical (&gt; 4)</span>
+                        <span className="text-[#4edea3]">● Nominal (&lt;2.0)</span>
+                        <span className="text-amber-400">● Moderate (2-4)</span>
+                        <span className="text-red-400">● Critical (&gt;4.0)</span>
                       </div>
                     </div>
                   )}
 
                   {expandedWidget.type === "DataGrid" && (
-                    <div className="overflow-x-auto max-h-[calc(100vh-250px)] overflow-y-auto font-mono text-sm custom-scrollbar">
+                    <div className="overflow-auto max-h-[calc(100vh-220px)] font-mono text-sm custom-scrollbar">
                       {rows.length > 0 ? (
                         <table className="w-full text-left">
-                          <thead>
-                            <tr className="text-[#737373] label-caps text-xs" style={{ borderBottom: '1px solid #262626' }}>
+                          <thead className="sticky top-0 bg-[#111317]">
+                            <tr className="text-[#8c93a0] border-b border-[#22262f] text-xs">
                               {Object.keys(rows[0]).map((key) => (
-                                <th key={key} className="pb-3 pr-6 font-bold tracking-widest">{key}</th>
+                                <th key={key} className="pb-3 pr-6 font-bold uppercase tracking-wider">{key}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-[#1a1a1a]">
+                          <tbody className="divide-y divide-[#1c2028]">
                             {rows.map((row, i) => (
                               <tr key={i} className="hover:bg-white/5 transition-colors">
                                 {Object.entries(row).map(([, cellVal], j) => {
                                   const isNumeric = typeof cellVal === 'number' || /^-?[\d.]+$/.test(String(cellVal));
                                   return (
-                                    <td key={j} className={`py-3 pr-6 truncate ${isNumeric ? 'font-mono text-[#4edea3] mono-data' : 'text-[#e5e5e5]'}`}>
+                                    <td key={j} className={`py-3 pr-6 truncate ${isNumeric ? 'font-mono text-[#4edea3]' : 'text-[#e5e5e5]'}`}>
                                       {formatCellValue(cellVal)}
                                     </td>
                                   );
@@ -921,13 +1042,13 @@ export default function DashboardCanvas({
                           </tbody>
                         </table>
                       ) : (
-                        <div className="text-center py-16 text-[#737373]">No grid records returned.</div>
+                        <div className="text-center py-16 text-[#606775]">No grid records returned.</div>
                       )}
                     </div>
                   )}
 
                   {(expandedWidget.type === "PredictiveTrendChart" || expandedWidget.type === "LineChart") && (
-                    <div className="h-[calc(100vh-250px)] w-full pt-4">
+                    <div className="h-[calc(100vh-240px)] w-full pt-4">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={rows}>
                           <defs>
@@ -936,10 +1057,10 @@ export default function DashboardCanvas({
                               <stop offset="95%" stopColor="#4edea3" stopOpacity={0} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                          <XAxis dataKey="date" stroke="#737373" fontSize={12} />
-                          <YAxis stroke="#737373" fontSize={12} />
-                          <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 8 }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#22262f" />
+                          <XAxis dataKey="date" stroke="#8c93a0" fontSize={12} />
+                          <YAxis stroke="#8c93a0" fontSize={12} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8 }} />
                           <Area type="monotone" dataKey="value" stroke="#4edea3" strokeWidth={3} fillOpacity={1} fill="url(#full_chart_grad)" />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -947,13 +1068,13 @@ export default function DashboardCanvas({
                   )}
 
                   {expandedWidget.type === "BarChart" && (
-                    <div className="h-[calc(100vh-250px)] w-full pt-4">
+                    <div className="h-[calc(100vh-240px)] w-full pt-4">
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsBarChart data={rows}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                          <XAxis dataKey="name" stroke="#737373" fontSize={12} />
-                          <YAxis stroke="#737373" fontSize={12} />
-                          <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 8 }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#22262f" />
+                          <XAxis dataKey="name" stroke="#8c93a0" fontSize={12} />
+                          <YAxis stroke="#8c93a0" fontSize={12} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8 }} />
                           <Bar dataKey="count" fill="#4edea3" radius={[6, 6, 0, 0]} />
                         </RechartsBarChart>
                       </ResponsiveContainer>
@@ -961,7 +1082,7 @@ export default function DashboardCanvas({
                   )}
 
                   {expandedWidget.type === "DonutChart" && (
-                    <div className="h-[calc(100vh-250px)] w-full pt-4 flex items-center justify-center">
+                    <div className="h-[calc(100vh-240px)] w-full pt-4 flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                           <Pie
@@ -975,7 +1096,7 @@ export default function DashboardCanvas({
                               <Cell key={`full-cell-${idx}`} fill={col} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: 8 }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#0c0d10", border: "1px solid #262a33", borderRadius: 8 }} />
                           <Legend wrapperStyle={{ fontSize: 14 }} />
                         </RechartsPieChart>
                       </ResponsiveContainer>
@@ -983,13 +1104,13 @@ export default function DashboardCanvas({
                   )}
 
                   {expandedWidget.type === "JSONViewer" && (
-                    <div className="overflow-y-auto max-h-[calc(100vh-250px)] p-4 bg-[#0a0a0a] rounded-lg border border-[#262626] font-mono text-xs text-[#4edea3] custom-scrollbar">
+                    <div className="overflow-y-auto max-h-[calc(100vh-240px)] p-4 bg-[#08090b] rounded-lg border border-[#22262f] font-mono text-xs text-[#4edea3] custom-scrollbar">
                       <pre>{JSON.stringify(rows, null, 2)}</pre>
                     </div>
                   )}
 
                   {expandedWidget.type === "MarkdownCard" && (
-                    <div className="overflow-y-auto max-h-[calc(100vh-250px)] p-4 text-base text-[#e5e5e5] font-sans leading-relaxed custom-scrollbar whitespace-pre-wrap">
+                    <div className="overflow-y-auto max-h-[calc(100vh-240px)] p-4 text-base text-[#e5e5e5] font-sans leading-relaxed custom-scrollbar whitespace-pre-wrap">
                       {rows.length > 0 && typeof Object.values(rows[0])[0] === 'string'
                         ? String(Object.values(rows[0])[0])
                         : "No text payload provided for full screen markdown view."}
@@ -997,20 +1118,20 @@ export default function DashboardCanvas({
                   )}
 
                   {expandedWidget.type === "StatusList" && (
-                    <div className="overflow-y-auto max-h-[calc(100vh-250px)] custom-scrollbar font-mono text-sm space-y-3">
+                    <div className="overflow-y-auto max-h-[calc(100vh-240px)] custom-scrollbar font-mono text-sm space-y-3">
                       {rows.length > 0 ? (
                         <ul className="space-y-3">
                           {rows.map((r, i) => {
                             const vals = Object.values(r);
                             const label = formatCellValue(vals[0]);
                             const status = vals.length > 1 ? String(vals[1]).toLowerCase() : 'unknown';
-                            let statusColor = "bg-[#262626] text-[#a3a3a3]";
+                            let statusColor = "bg-[#202530] text-[#8c93a0]";
                             if (status.includes('ok') || status.includes('active') || status.includes('normal')) statusColor = "bg-[#4edea3]/20 text-[#4edea3]";
                             else if (status.includes('warn') || status.includes('moderate')) statusColor = "bg-amber-400/20 text-amber-400";
-                            else if (status.includes('crit') || status.includes('err') || status.includes('fail')) statusColor = "bg-[#ffb3ad]/20 text-[#ffb3ad]";
+                            else if (status.includes('crit') || status.includes('err') || status.includes('fail')) statusColor = "bg-red-400/20 text-red-400";
 
                             return (
-                              <li key={i} className="flex items-center justify-between p-3.5 rounded-lg bg-black/40 border border-[#262626]">
+                              <li key={i} className="flex items-center justify-between p-3.5 rounded-lg bg-[#0c0d10] border border-[#22262f]">
                                 <span className="text-[#e5e5e5] font-bold">{label}</span>
                                 {vals.length > 1 && (
                                   <span className={`px-3 py-1 rounded text-xs uppercase tracking-wider font-bold ${statusColor}`}>
@@ -1022,14 +1143,8 @@ export default function DashboardCanvas({
                           })}
                         </ul>
                       ) : (
-                        <div className="text-center py-16 text-[#737373]">No list items returned.</div>
+                        <div className="text-center py-16 text-[#606775]">No list items returned.</div>
                       )}
-                    </div>
-                  )}
-
-                  {!["FormulaCard", "R0Gauge", "DataGrid", "PredictiveTrendChart", "LineChart", "BarChart", "DonutChart", "JSONViewer", "MarkdownCard", "StatusList"].includes(expandedWidget.type) && (
-                    <div className="h-[calc(100vh-250px)] w-full flex items-center justify-center text-sm font-mono text-[#737373]">
-                      Expanded view mode for {expandedWidget.type}
                     </div>
                   )}
                 </div>
@@ -1038,6 +1153,32 @@ export default function DashboardCanvas({
           </div>
         </div>
       )}
+
+      {/* QUERY INSPECTOR MODAL */}
+      <QueryInspectorModal
+        isOpen={Boolean(inspectorWidget)}
+        widget={inspectorWidget}
+        currentQuery={inspectorWidget ? (currentDashboard?.queries?.[inspectorWidget.id] || "") : ""}
+        onClose={() => setInspectorWidget(null)}
+        onSaveQuery={(widgetId, newQuery) => {
+          if (onSaveQuery) {
+            onSaveQuery(widgetId, newQuery);
+          }
+        }}
+      />
+
+      {/* CONFIGURE WIDGET MODAL */}
+      <ConfigureWidgetModal
+        isOpen={Boolean(configuringWidget)}
+        widget={configuringWidget}
+        onClose={() => setConfiguringWidget(null)}
+        onSave={(updated) => {
+          if (onUpdateWidget) {
+            onUpdateWidget(updated);
+          }
+        }}
+      />
+
     </div>
   );
 }
