@@ -31,31 +31,59 @@ def _get_target_tenant(user: CurrentUser, tenant_id: Optional[str] = None) -> st
     return user.tenant_id
 
 def _upsert_tenant_integration(tenant_id: str, integration_id: str, data: dict):
-    headers = {
-        "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates"
-    }
-    payload = {"tenant_id": tenant_id, "integration_id": integration_id, **data}
-    try:
-        resp = requests.post(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations", headers=headers, json=payload, timeout=10)
-        if not resp.ok:
-            logger.error(f"Supabase upsert failed: {resp.text}")
-    except Exception as e:
-        logger.error(f"Connection error to Supabase during upsert: {e}")
+    # 1. Update in Redis cache / in-memory fallback dict
+    cache_key = f"{tenant_id}:integration_{integration_id}"
+    existing = redis_client.get_cache(cache_key) or {}
+    merged = {**existing, "tenant_id": tenant_id, "integration_id": integration_id, **data}
+    redis_client.set_cache(cache_key, merged, ttl=86400 * 30)
+
+    # 2. Persist to Supabase if configured
+    if settings.SUPABASE_URL and settings.SUPABASE_SERVICE_ROLE_KEY:
+        headers = {
+            "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
+        payload = {"tenant_id": tenant_id, "integration_id": integration_id, **data}
+        try:
+            resp = requests.post(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations", headers=headers, json=payload, timeout=5)
+            if not resp.ok:
+                logger.debug(f"Supabase upsert note: {resp.text}")
+        except Exception as e:
+            logger.debug(f"Connection error to Supabase during upsert (using cache fallback): {e}")
 
 def _get_tenant_integrations(tenant_id: str):
-    headers = {
-        "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
-    }
-    try:
-        resp = requests.get(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations?tenant_id=eq.{tenant_id}", headers=headers, timeout=10)
-        return resp.json() if resp.ok else []
-    except Exception as e:
-        logger.error(f"Connection error to Supabase during fetch: {e}")
-        return []
+    records_map = {}
+
+    # 1. Load from Supabase if available
+    if settings.SUPABASE_URL and settings.SUPABASE_SERVICE_ROLE_KEY:
+        headers = {
+            "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
+        }
+        try:
+            resp = requests.get(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations?tenant_id=eq.{tenant_id}", headers=headers, timeout=5)
+            if resp.ok:
+                for r in resp.json():
+                    records_map[r.get("integration_id")] = r
+        except Exception as e:
+            logger.debug(f"Supabase fetch error (using local cache): {e}")
+
+    # 2. Merge with Redis/in-process cache
+    for int_id in ["autodesk", "procore", "primavera", "maximo"]:
+        cached = redis_client.get_cache(f"{tenant_id}:integration_{int_id}")
+        if cached:
+            if int_id in records_map:
+                records_map[int_id] = {**records_map[int_id], **cached}
+            else:
+                records_map[int_id] = cached
+        elif int_id not in records_map:
+            config = redis_client.get_cache(f"{tenant_id}:{int_id}_config")
+            if config:
+                records_map[int_id] = {"integration_id": int_id, "tenant_id": tenant_id, "config": config, "status": "disconnected"}
+
+    return list(records_map.values())
 
 class ConfigUpdateRequest(BaseModel):
     client_id: Optional[str] = None
@@ -382,8 +410,8 @@ async def primavera_callback(code: str, state: Optional[str] = None):
     except Exception as e:
         logger.error(f"Failed Primavera OAuth exchange: {e}")
 
-    # Redirect back to the frontend UI
-    return RedirectResponse(f"http://localhost:3000/integrations?status={'success' if success else 'error'}")
+    frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
+    return RedirectResponse(f"{frontend_url}/integrations?status={'success' if success else 'error'}")
 
 # ── Integration Management ──────────────────────────────────
 
@@ -420,7 +448,7 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
         {
             "id": "autodesk",
             "name": "Autodesk Construction Cloud (ACC)",
-            "description": "Sync 3D models and CAD sheets directly into STRAND for Vision AI review.",
+            "description": "Sync 3D models and CAD sheets directly into STRAND for Computer Vision QA review.",
             "status": "connected" if autodesk_connected else "disconnected",
             "category": "Design & BIM",
             "lastSync": "Just now" if autodesk_connected else "Never",

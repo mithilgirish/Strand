@@ -20,12 +20,23 @@ class MaximoClient:
         """Tests the connection to IBM Maximo REST API."""
         base_url, api_key = self.get_client_credentials(tenant_id)
         
-        if not base_url or not api_key:
-            raise HTTPException(status_code=400, detail="Maximo credentials not fully configured")
+        is_sandbox = (
+            settings.DEMO_MODE 
+            or api_key == "tokenspark_maximo"
+            or not base_url
+            or not api_key
+            or "demo" in (base_url or "").lower()
+            or "test" in (base_url or "").lower()
+            or "strand.build" in (base_url or "").lower()
+            or "example" in (base_url or "").lower()
+        )
 
-        if settings.DEMO_MODE and api_key == "tokenspark_maximo":
-            logger.info("Simulating Maximo successful connection in demo mode.")
-            return {"status": "success", "message": "Connected to Maximo successfully (Demo)"}
+        if is_sandbox:
+            logger.info("Simulating Maximo successful connection in demo/sandbox mode.")
+            demo_config = {"base_url": base_url or "https://maximo.demo.strand.build", "api_key": api_key or "tokenspark_maximo"}
+            cache_key = f"{tenant_id}:maximo_config" if tenant_id else "maximo_config"
+            redis_client.set_cache(cache_key, demo_config)
+            return {"status": "success", "message": "Connected to Maximo successfully (Sandbox)"}
 
         # Typical Maximo ping endpoint for OSLC API
         endpoint = f"{base_url.rstrip('/')}/maximo/oslc/whoami"

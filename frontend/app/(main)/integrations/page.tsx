@@ -22,6 +22,7 @@ interface IntegrationConfig {
   client_id?: string;
   base_url?: string;
   username?: string;
+  api_key?: string;
 }
 
 function IntegrationsHubContent() {
@@ -310,6 +311,47 @@ function IntegrationsHubContent() {
     }
   };
 
+  const handleConnectDirect = async (e: React.FormEvent, integrationId: string) => {
+    e.preventDefault();
+    setLoading(true);
+    setSaveMessage("");
+    setErrorMessage("");
+
+    try {
+      const configRes = await fetch(`/api/integrations/${integrationId}/config?tenant_id=${selectedTenant}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(configForm)
+      });
+
+      if (!configRes.ok) {
+        setErrorMessage("Failed to save credentials first.");
+        setLoading(false);
+        return;
+      }
+
+      const connectRes = await fetch(`/api/integrations/${integrationId}/connect?tenant_id=${selectedTenant}`, {
+        method: "POST"
+      });
+
+      if (connectRes.ok) {
+        setSaveMessage(`Successfully connected ${integrationId}!`);
+        setConfiguringIntegration(null);
+        setIntegrations(prev =>
+          prev.map(i => i.id === integrationId ? { ...i, status: "connected", lastSync: "Just now", configured: true } : i)
+        );
+        fetchStatus();
+      } else {
+        const errorData = await connectRes.json();
+        setErrorMessage(errorData.detail || "Failed to establish connection.");
+      }
+    } catch {
+      setErrorMessage("Error establishing connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFetchData = async (integrationId: string) => {
     setIsFetchingData(integrationId);
     try {
@@ -358,10 +400,10 @@ function IntegrationsHubContent() {
         setConfigForm({
           client_id: configs[id]?.client_id || "",
           client_secret: "",
-          base_url: configs[id]?.base_url || "",
-          username: configs[id]?.username || "",
+          base_url: configs[id]?.base_url || (id === "primavera" ? "https://primavera.demo.strand.build" : id === "maximo" ? "https://maximo.demo.strand.build" : ""),
+          username: configs[id]?.username || (id === "primavera" ? "admin@strand-demo.com" : ""),
           password: "",
-          api_key: ""
+          api_key: id === "maximo" ? (configs[id]?.api_key || "tokenspark_maximo") : ""
         });
         return;
       }
@@ -388,14 +430,18 @@ function IntegrationsHubContent() {
           const res = await fetch(`/api/integrations/${id}/connect?tenant_id=${selectedTenant}`, { method: "POST" });
           if (res.ok) {
             setIntegrations(prev =>
-              prev.map(i => i.id === id ? { ...i, status: "connected", lastSync: "Just now" } : i)
+              prev.map(i => i.id === id ? { ...i, status: "connected", lastSync: "Just now", configured: true } : i)
             );
+            setSaveMessage(`Successfully connected ${integration.name}!`);
+            setTimeout(() => setSaveMessage(""), 3000);
+            fetchStatus();
           } else {
-              const data = await res.json();
-              setErrorMessage(data.detail || "Connection failed.");
+            const data = await res.json();
+            setErrorMessage(data.detail || "Connection failed.");
           }
         } catch (err) {
           console.error("Failed to connect:", err);
+          setErrorMessage("Failed to connect.");
         }
       }
     }
@@ -638,7 +684,7 @@ function IntegrationsHubContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleConnection(integrations.find(i => i.id === "maximo")!)}
+                    onClick={(e) => handleConnectDirect(e, "maximo")}
                     disabled={loading || (userRole !== "tenant_admin" && userRole !== "super_admin" && userRole !== "super-admin")}
                     className="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-on-primary hover:bg-primary/95 disabled:bg-primary/70 rounded-md text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
