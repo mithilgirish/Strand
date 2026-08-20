@@ -90,7 +90,7 @@ export default function AlternativesPanel({ shipment }: { shipment: OracleShipme
       {protocolId && <div className="mb-3 flex items-center gap-2 border border-green-500/20 bg-green-500/10 p-3 text-xs text-green-300"><CheckCircle2 className="h-4 w-4" />Protocol {protocolId} is pending approval.</div>}
       <div className="space-y-3">
         {shipment?.status === "red" && alternatives.map((alternative, index) => (
-          <article key={alternative.supplier_id} className="border border-white/10 bg-white/[0.025] p-3">
+          <article key={`${alternative.supplier_id || "alt"}-${index}`} className="border border-white/10 bg-white/[0.025] p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0"><div className="flex items-center gap-2"><h4 className="truncate text-sm font-bold text-on-surface">{alternative.name}</h4>{index === 0 && <span className="bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">Best fit</span>}</div><p className="mt-1 flex items-center gap-1 text-[11px] text-on-surface-variant"><MapPin className="h-3 w-3" />{formatLocation(alternative.city, alternative.country)}</p></div>
               <div className="text-right"><p className="font-mono text-lg font-bold text-on-surface">{alternative.match_score}%</p><p className="text-[9px] uppercase text-on-surface-variant">Match</p></div>

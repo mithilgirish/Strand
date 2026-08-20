@@ -45,7 +45,9 @@ function SupplierNode({ node }: { node: SupplierNodeData }) {
       </button>
       {hasChildren && expanded && (
         <div className="ml-6 border-l border-white/10 pl-2">
-          {node.children.map((child) => <SupplierNode key={child.supplier_id} node={child} />)}
+          {node.children.map((child, index) => (
+            <SupplierNode key={`${child.supplier_id || child.name || "node"}-${child.tier}-${index}`} node={child} />
+          ))}
         </div>
       )}
     </div>

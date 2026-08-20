@@ -45,13 +45,14 @@ def agent_statuses(services: dict | None = None) -> dict[str, dict]:
     redis_ok = _ok(services.get("redis", {}))
     llm_ok = bool(services.get("llm", {}).get("configured"))
     scheduler_ok = True  # CSV + NetworkX is local
+    demo = bool(settings.DEMO_MODE)
     return {
-        "guardian": {"status": "active" if graph_ok or settings.DEMO_MODE else "degraded"},
+        "guardian": {"status": "active" if graph_ok or demo else "degraded"},
         "scheduler": {"status": "active" if scheduler_ok else "degraded"},
-        "oracle": {"status": "active" if graph_ok or settings.DEMO_MODE else "degraded"},
-        "inspector": {"status": "active" if graph_ok or redis_ok else "degraded"},
-        "brain": {"status": "active" if (chroma_ok or settings.DEMO_MODE) and llm_ok else "degraded"},
-        "judge": {"status": "active" if graph_ok or settings.DEMO_MODE else "degraded"},
+        "oracle": {"status": "active" if graph_ok or demo else "degraded"},
+        "inspector": {"status": "active" if graph_ok or redis_ok or demo else "degraded"},
+        "brain": {"status": "active" if (chroma_ok or demo) and (llm_ok or demo) else "degraded"},
+        "judge": {"status": "active" if graph_ok or demo else "degraded"},
     }
 
 
@@ -62,7 +63,7 @@ async def get_health():
     service_ok = all(_ok(services[name]) for name in ("neo4j", "chroma", "redis"))
     overall = "ok" if service_ok else "degraded"
     return {
-        "status": "ok",
+        "status": "healthy",
         "readiness": overall,
         "liveness": "healthy",
         "demo_mode": settings.DEMO_MODE,

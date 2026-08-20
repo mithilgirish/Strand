@@ -145,9 +145,16 @@ class InspectorRouteWiringTests(unittest.TestCase):
 class HealthAndCompatibilityRouteTests(unittest.TestCase):
     def test_root_health_has_all_agent_status_objects(self):
         async def run_request():
-            transport = httpx.ASGITransport(app=app)
-            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-                return await client.get("/health")
+            with patch("backend.routers.health.probe_services", return_value={
+                "neo4j": {"status": "ok"},
+                "chroma": {"status": "ok"},
+                "redis": {"status": "ok"},
+                "llm": {"configured": True, "provider": "gemini"},
+                "demo_mode": False,
+            }):
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                    return await client.get("/health")
 
         response = asyncio.run(run_request())
         self.assertEqual(response.status_code, 200, response.text)

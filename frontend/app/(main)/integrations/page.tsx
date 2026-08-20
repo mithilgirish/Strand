@@ -91,6 +91,7 @@ function IntegrationsHubContent() {
   
   const searchParams = useSearchParams();
   const router = useRouter();
+  const autodeskWebhookUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/integrations/autodesk/webhook`;
 
   useEffect(() => {
     const getRole = async () => {
@@ -770,12 +771,12 @@ function IntegrationsHubContent() {
             <div className="flex items-center gap-3 min-w-0">
               <span className="font-mono text-[10px] font-bold px-2 py-0.5 bg-primary/10 border border-outline/30 rounded text-primary label-caps shrink-0">POST</span>
               <span className="text-xs font-mono text-on-surface break-all select-all mono-data whitespace-pre-wrap">
-                https://api.strand.build/api/v1/integrations/autodesk/webhook
+                {autodeskWebhookUrl}
               </span>
             </div>
             <button 
               onClick={() => {
-                navigator.clipboard.writeText("https://api.strand.build/api/v1/integrations/autodesk/webhook");
+                navigator.clipboard.writeText(autodeskWebhookUrl);
                 setSaveMessage("Webhook URL copied to clipboard!");
                 setTimeout(() => setSaveMessage(""), 3000);
               }}

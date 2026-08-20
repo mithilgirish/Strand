@@ -51,6 +51,13 @@ def _merged_catalog() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, An
     return suppliers, shipments
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _normalise_shipment(
     shipment: dict[str, Any],
     suppliers_by_id: dict[str, dict[str, Any]],
@@ -61,9 +68,9 @@ def _normalise_shipment(
         "equipment_tag": shipment.get("equipment_tag", ""),
         "supplier_id": shipment.get("supplier_id") or shipment.get("origin_supplier", ""),
         "supplier_name": shipment.get("supplier_name") or supplier.get("name", "Unknown supplier"),
-        "supplier_tier": int(shipment.get("supplier_tier") or supplier.get("tier", 1)),
+        "supplier_tier": _safe_int(shipment.get("supplier_tier") or supplier.get("tier", 1), 1),
         "supplier_risk_score": float(supplier.get("risk_score", 0.5)),
-        "delay_days": int(shipment.get("delay_days", 0)),
+        "delay_days": _safe_int(shipment.get("delay_days", 0), 0),
         "risk_flag": bool(shipment.get("risk_flag", False)),
         "current_status": shipment.get("current_status", "on_track"),
         "lat": float(shipment.get("lat") or supplier.get("lat", 0)),
@@ -235,7 +242,7 @@ def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
         root_supplier = {
             "id": origin_id or shipment_id,
             "name": (live or {}).get("supplier_name") or (raw or {}).get("supplier_name") or origin_id or "Unknown supplier",
-            "tier": int((live or {}).get("supplier_tier") or 1),
+            "tier": _safe_int((live or {}).get("supplier_tier") or 1, 1),
             "risk_score": float((live or {}).get("supplier_risk_score") or 0.5),
             "on_time_rate": 0.8,
             "country": "",
@@ -243,8 +250,8 @@ def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
         }
 
     suppliers = list(suppliers_by_id.values())
-    tier_2 = [supplier for supplier in suppliers if int(supplier.get("tier", 0)) == 2]
-    tier_3 = [supplier for supplier in suppliers if int(supplier.get("tier", 0)) == 3]
+    tier_2 = [supplier for supplier in suppliers if _safe_int(supplier.get("tier", 0)) == 2]
+    tier_3 = [supplier for supplier in suppliers if _safe_int(supplier.get("tier", 0)) == 3]
     tier_2_start = _stable_offset(shipment_id, len(tier_2)) if tier_2 else 0
     selected_tier_2 = [tier_2[(tier_2_start + index) % len(tier_2)] for index in range(min(2, len(tier_2)))]
 
@@ -285,7 +292,7 @@ def _alternative_from_supplier(
         "supplier_id": supplier.get("supplier_id") or supplier.get("id", ""),
         "name": supplier.get("name") or supplier.get("supplier_name") or supplier.get("id", "Unknown supplier"),
         "equipment_tag": supplier.get("equipment_tag") or equipment_tag,
-        "tier": int(supplier.get("tier", 1) or 1),
+        "tier": _safe_int(supplier.get("tier", 1) or 1, 1),
         "risk_score": round(risk, 2),
         "on_time_rate": round(on_time, 2),
         "match_score": round(float(match_score), 1) if match_score is not None else round((1 - risk) * 55 + on_time * 45, 1),
@@ -316,7 +323,7 @@ def find_alternative_suppliers(
     suppliers = [
         supplier
         for supplier in _load_data().get("suppliers", [])
-        if supplier["id"] != failing_supplier_id and int(supplier.get("tier", 0)) == 1
+        if supplier["id"] != failing_supplier_id and _safe_int(supplier.get("tier", 0)) == 1
     ]
     suppliers.sort(
         key=lambda supplier: (

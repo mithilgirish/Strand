@@ -20,6 +20,7 @@ backend/mock_ncr_db.json
 # Node.js
 node_modules/
 dist/
+!mobile/local_modules/**
 build/
 npm-debug.log
 yarn-error.log
