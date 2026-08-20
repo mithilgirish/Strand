@@ -15,6 +15,7 @@ interface ProjectSummary {
   openNCRs: number;
   atRiskShipments: number;
   criticalR0Max: number;
+  demoMode?: boolean;
 }
 
 interface SchedulerAlert {
@@ -31,12 +32,12 @@ export default function RiskCockpit() {
   const [violations, setViolations] = useState<GuardianViolation[]>([]);
   const [topAlert, setTopAlert] = useState<SchedulerAlert | null>(null);
   const [loading, setLoading] = useState(true);
-  const [agents, setAgents] = useState<{ name: string; status: 'active' | 'idle' }[]>([
-    { name: 'Guardian', status: 'active' },
-    { name: 'Scheduler', status: 'active' },
-    { name: 'Oracle', status: 'active' },
-    { name: 'Inspector', status: 'active' },
-    { name: 'Brain', status: 'active' },
+  const [agents, setAgents] = useState<{ name: string; status: 'active' | 'idle' | 'degraded' }[]>([
+    { name: 'Guardian', status: 'idle' },
+    { name: 'Scheduler', status: 'idle' },
+    { name: 'Oracle', status: 'idle' },
+    { name: 'Inspector', status: 'idle' },
+    { name: 'Brain', status: 'idle' },
   ]);
 
   useEffect(() => {
@@ -57,21 +58,24 @@ export default function RiskCockpit() {
         if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
           const raw = await summaryRes.value.json();
           summaryData = {
-            immunityScore: raw.immunity_score ?? 67.5,
-            violationsToday: raw.violations_today ?? 2,
-            openNCRs: raw.open_ncrs ?? 5,
-            atRiskShipments: raw.at_risk_shipments ?? 3,
-            criticalR0Max: raw.critical_r0_max ?? 4.2,
+            immunityScore: raw.immunity_score ?? 0,
+            violationsToday: raw.violations_today ?? 0,
+            openNCRs: raw.open_ncrs ?? 0,
+            atRiskShipments: raw.at_risk_shipments ?? 0,
+            criticalR0Max: raw.critical_r0_max ?? 0,
+            demoMode: Boolean(raw.demo_mode),
           };
 
           // Update agent statuses from API
           if (raw.agents) {
+            const asStatus = (value: string) =>
+              value === 'active' ? 'active' : value === 'degraded' ? 'degraded' : 'idle';
             setAgents([
-              { name: 'Guardian', status: raw.agents.guardian === 'active' ? 'active' : 'idle' },
-              { name: 'Scheduler', status: raw.agents.scheduler === 'active' ? 'active' : 'idle' },
-              { name: 'Oracle', status: raw.agents.oracle === 'active' ? 'active' : 'idle' },
-              { name: 'Inspector', status: raw.agents.inspector === 'active' ? 'active' : 'idle' },
-              { name: 'Brain', status: raw.agents.brain === 'active' ? 'active' : 'idle' },
+              { name: 'Guardian', status: asStatus(raw.agents.guardian) },
+              { name: 'Scheduler', status: asStatus(raw.agents.scheduler) },
+              { name: 'Oracle', status: asStatus(raw.agents.oracle) },
+              { name: 'Inspector', status: asStatus(raw.agents.inspector) },
+              { name: 'Brain', status: asStatus(raw.agents.brain) },
             ]);
           }
         }
@@ -132,7 +136,7 @@ export default function RiskCockpit() {
         {loading && (
           <div className="flex items-center gap-2 text-primary text-sm font-bold bg-primary/10 px-3 py-1.5 rounded-md border border-primary/20">
             <Loader2 className="w-4 h-4 animate-spin" />
-            SYNCING LIVE DATA
+            SYNCING DATA
           </div>
         )}
       </div>
@@ -221,7 +225,7 @@ export default function RiskCockpit() {
             </h4>
             <p className="text-sm text-on-surface-variant font-sans mt-2 mb-5 pl-3 leading-relaxed">
               Delay probability estimated at <span className="text-on-surface font-semibold font-mono">
-                {topAlert ? `${topAlert.delayProbability}%` : '85%'}
+                {topAlert ? `${topAlert.delayProbability}%` : '--'}
               </span> {topAlert?.discipline ? `in ${topAlert.discipline} discipline.` : 'with no current live risk task selected.'} Downstream cascading risk detected when live Scheduler data is available.
             </p>
             

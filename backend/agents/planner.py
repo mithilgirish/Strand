@@ -11,8 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Optional
-from uuid import uuid4
-
 from loguru import logger  # type: ignore
 
 from backend.llm.client import invoke_structured, invoke_raw
@@ -197,8 +195,13 @@ async def _execute_agent(agent_name: str, runner, query: str) -> dict:
     for attempt in range(max_retries + 1):
         try:
             if agent_name == "guardian":
-                # Guardian needs submittal_id and document_path
-                return await runner(submittal_id=f"QRY-{uuid4().hex[:6]}", document_path="")
+                # Planner chat has no PDF — do not run Guardian on an empty path.
+                result = await run_brain(question=query)
+                if isinstance(result, dict):
+                    result["provenance_note"] = "Planner skipped Guardian (no submittal PDF). Routed to Brain."
+                    result["degraded"] = True
+                    result["routed_from"] = "guardian"
+                return result
             elif agent_name == "scheduler":
                 return await runner()
             elif agent_name == "oracle":

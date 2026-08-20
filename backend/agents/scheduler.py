@@ -96,9 +96,9 @@ def compute_task_r0(state: SchedulerState) -> SchedulerState:
 
     for task in state["at_risk_tasks"]:
         task_id = task["task_id"]
-        propagation_r0 = compute_r0_from_task_graph(task_id, G, state["critical_path"])
-        probability_floor = task.get("delay_probability", 0) * 3
-        r0 = round(min(10.0, max(propagation_r0, probability_floor)), 1)
+        if task_id in G:
+            G.nodes[task_id]["delay_probability"] = float(task.get("delay_probability") or 0)
+        r0 = compute_r0_from_task_graph(task_id, G, state["critical_path"])
         r0_scores[task_id] = r0
         task["r0_score"] = r0
         task["severity"] = r0_to_severity(r0)
@@ -188,15 +188,34 @@ def _estimate_delay_days(task_data: dict) -> int:
 # ── Agent runner ─────────────────────────────────────────────────────
 async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional[str] = None) -> dict:
     """Run the full Scheduler pipeline."""
+    from backend.project_state import load_latest, overlay_scheduler
+
+    if schedule_data is None and csv_path is None and load_latest():
+        return overlay_scheduler(
+            {
+                "at_risk_tasks": [],
+                "critical_path": [],
+                "mitigations": [],
+                "r0_scores": {},
+                "total_tasks": 0,
+                "at_risk_count": 0,
+                "source": "submittal",
+                "degraded": False,
+                "provenance_note": "",
+            }
+        )
+
+    source = "uploaded_schedule"
     if schedule_data is None and csv_path:
         schedule_data = parse_schedule_csv(csv_path)
+        source = "uploaded_csv"
     elif schedule_data is None:
-        # Load default schedule
         default_csv = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "data", "project_schedule_100tasks.csv",
         )
         schedule_data = parse_schedule_csv(default_csv)
+        source = "project_schedule_csv"
 
     state: SchedulerState = {
         "schedule_data": schedule_data,
@@ -217,14 +236,18 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
         reverse=True,
     )
 
-    return {
+    result = {
         "at_risk_tasks": state["at_risk_tasks"],
         "critical_path": state["critical_path"],
         "mitigations": state["mitigation_suggestions"],
         "r0_scores": state["r0_scores"],
         "total_tasks": len(schedule_data),
         "at_risk_count": len(state["at_risk_tasks"]),
+        "source": source,
+        "degraded": source == "project_schedule_csv",
+        "provenance_note": "Using checked-in project_schedule_100tasks.csv" if source == "project_schedule_csv" else "",
     }
+    return overlay_scheduler(result)
 
 
 class SchedulerGraph:

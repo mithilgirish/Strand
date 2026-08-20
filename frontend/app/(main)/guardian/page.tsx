@@ -7,20 +7,18 @@ import ViolationList from '@/components/guardian/ViolationList';
 import RfiPreview from '@/components/guardian/RfiPreview';
 import { ShieldAlert, Loader2 } from 'lucide-react';
 import type { GuardianViolation } from '@/components/guardian/types';
-
-interface GuardianResult {
-  submittal_id: string;
-  violations: GuardianViolation[];
-  r0_max: number;
-  rfi_draft: string;
-  spec_dna_chain: Record<string, Array<Record<string, unknown>>>;
-  violation_count: number;
-  status: string;
-}
+import {
+  clearGuardianSession,
+  getGuardianSession,
+  setGuardianSession,
+  type GuardianResult,
+} from '@/lib/guardianSession';
 
 function GuardianAgentContent() {
-  const [analysis, setAnalysis] = useState<GuardianResult | null>(null);
-  const [selectedViolation, setSelectedViolation] = useState<GuardianViolation | null>(null);
+  const remembered = getGuardianSession();
+  const [analysis, setAnalysis] = useState<GuardianResult | null>(remembered.analysis);
+  const [selectedViolation, setSelectedViolation] = useState<GuardianViolation | null>(remembered.selectedViolation);
+  const [fileName, setFileName] = useState(remembered.fileName);
   const [error, setError] = useState('');
   const [loadingReference, setLoadingReference] = useState(false);
 
@@ -53,6 +51,9 @@ function GuardianAgentContent() {
         });
 
         if (!matches.length) {
+          if (getGuardianSession().analysis) {
+            return;
+          }
           setAnalysis(null);
           setSelectedViolation(null);
           setError(`No live Guardian analysis found for "${ref}". Upload the source PDF to run the real agent.`);
@@ -71,6 +72,18 @@ function GuardianAgentContent() {
           spec_dna_chain: {},
         });
         setSelectedViolation(matches[0]);
+        setGuardianSession({
+          analysis: {
+            submittal_id: matches[0].submittal_id || ref,
+            violation_count: matches.length,
+            status: "analyzed",
+            r0_max: Math.max(...matches.map((violation) => Number(violation.r0_score || 0))),
+            violations: matches,
+            rfi_draft: typeof rfiPayload.rfi_draft === "string" ? rfiPayload.rfi_draft : "",
+            spec_dna_chain: {},
+          },
+          selectedViolation: matches[0],
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Guardian lookup failed.');
       } finally {
@@ -86,16 +99,8 @@ function GuardianAgentContent() {
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const formData = new FormData();
-      const lowerName = file.name.toLowerCase();
       formData.append('file', file);
-      formData.append(
-        'submittal_id',
-        lowerName.includes('ups')
-          ? 'DEMO-UPS-01'
-          : lowerName.includes('generator')
-            ? 'DEMO-GEN-01'
-            : 'DEMO-CT-01'
-      );
+      formData.append('submittal_id', `SUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
 
       const response = await fetch(`${apiBase}/api/v1/guardian/analyze`, {
         method: 'POST',
@@ -107,13 +112,33 @@ function GuardianAgentContent() {
         throw new Error(body.detail || `Guardian request failed: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as GuardianResult;
+      const firstViolation = result.violations?.[0] || null;
       setAnalysis(result);
-      setSelectedViolation(result.violations?.[0] || null);
+      setSelectedViolation(firstViolation);
+      setFileName(file.name);
+      setGuardianSession({
+        analysis: result,
+        selectedViolation: firstViolation,
+        fileName: file.name,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Guardian analysis failed.');
       throw err;
     }
+  };
+
+  const handleSelectViolation = (violation: GuardianViolation) => {
+    setSelectedViolation(violation);
+    setGuardianSession({ selectedViolation: violation });
+  };
+
+  const handleNewScan = () => {
+    setAnalysis(null);
+    setSelectedViolation(null);
+    setFileName('');
+    setError('');
+    clearGuardianSession();
   };
 
   return (
@@ -146,11 +171,13 @@ function GuardianAgentContent() {
                   </div>
                   <div>
                     <h3 className="font-bold text-on-surface">Analysis Complete</h3>
-                    <p className="text-xs text-on-surface-variant">{analysis.submittal_id}</p>
+                    <p className="text-xs text-on-surface-variant">
+                      {fileName ? `${fileName} · ` : ""}{analysis.submittal_id}
+                    </p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => { setAnalysis(null); setSelectedViolation(null); setError(''); }}
+                  onClick={handleNewScan}
                   className="px-3 py-1.5 text-xs font-bold rounded bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest transition-colors"
                 >
                   New Scan
@@ -160,7 +187,7 @@ function GuardianAgentContent() {
               <ViolationList
                 violations={analysis.violations}
                 specDnaChain={analysis.spec_dna_chain}
-                onSelectViolation={setSelectedViolation}
+                onSelectViolation={handleSelectViolation}
               />
             </div>
           )}

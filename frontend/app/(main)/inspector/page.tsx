@@ -13,6 +13,7 @@ interface NcrRecord {
   mitigation: string;
   raised_by: string;
   timestamp: string;
+  is_demo?: boolean;
 }
 
 export default function InspectorAgent() {
@@ -33,15 +34,20 @@ export default function InspectorAgent() {
         throw new Error('Failed to retrieve NCR records');
       }
       const data = await response.json();
-      setNcrs(data);
-      setSelectedNcr((current) => current || data[0] || null);
+      const rows = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.ncrs)
+          ? data.ncrs
+          : [];
+      setNcrs(rows);
+      setSelectedNcr((current) => current || rows[0] || null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'API Server unreachable. Please ensure the backend is running.';
       setError(message);
       // Fallback seeds for visual presentation if server is offline
       const seedData: NcrRecord[] = [
         {
-          ncr_id: "NCR-2841",
+          ncr_id: "DEMO-NCR-2841",
           equipment_tag: "GEN-01",
           step_id: "IST-002",
           transcript: "Fuel consumption reads 285 litres per hour against spec 260",
@@ -49,10 +55,11 @@ export default function InspectorAgent() {
           severity: "Critical",
           mitigation: "Verify governor settings or replace fuel injector unit.",
           raised_by: "field_engineer",
-          timestamp: "2026-07-02T02:00:00Z"
+          timestamp: "2026-07-02T02:00:00Z",
+          is_demo: true
         },
         {
-          ncr_id: "NCR-1942",
+          ncr_id: "DEMO-NCR-1942",
           equipment_tag: "CT-01",
           step_id: "IST-005",
           transcript: "Ambient operating temperature is 45°C which is below the TIA-942 spec of 50°C",
@@ -60,7 +67,8 @@ export default function InspectorAgent() {
           severity: "Major",
           mitigation: "Escalate to engineering lead for temperature tolerance override.",
           raised_by: "field_engineer",
-          timestamp: "2026-07-02T02:15:00Z"
+          timestamp: "2026-07-02T02:15:00Z",
+          is_demo: true
         }
       ];
       setNcrs(seedData);
@@ -127,7 +135,7 @@ export default function InspectorAgent() {
         <div className="flex items-center gap-3 p-4 rounded-xl bg-[rgba(245,158,11,0.05)] border border-[#F59E0B] text-[#F59E0B] text-xs">
           <AlertTriangle className="w-5 h-5 flex-shrink-0" />
           <div>
-            <span className="font-bold">Database Node Offline:</span> {error} (Displaying offline-cached simulation database).
+            <span className="font-bold">DEMO DATA:</span> {error} (Displaying labeled offline seed NCRs — not live Inspector records).
           </div>
         </div>
       )}
@@ -211,7 +219,12 @@ export default function InspectorAgent() {
                       onClick={() => setSelectedNcr(ncr)}
                       className={`cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors ${selectedNcr?.ncr_id === ncr.ncr_id ? 'bg-[rgba(255,255,255,0.03)]' : ''}`}
                     >
-                      <td className="p-3 font-bold text-sm text-on-surface mono-data">{ncr.ncr_id}</td>
+                      <td className="p-3 font-bold text-sm text-on-surface mono-data">
+                        {ncr.ncr_id}
+                        {ncr.is_demo ? (
+                          <span className="ml-2 rounded border border-amber-400/50 bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-200">DEMO</span>
+                        ) : null}
+                      </td>
                       <td className="p-3 text-sm font-semibold text-on-surface">{ncr.equipment_tag}</td>
                       <td className="p-3 text-xs">
                         <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${

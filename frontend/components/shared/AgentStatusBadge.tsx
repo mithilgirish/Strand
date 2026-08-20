@@ -4,13 +4,14 @@ import React from 'react';
 
 interface AgentStatusBadgeProps {
   name: string;
-  status: 'active' | 'processing' | 'idle';
+  status: 'active' | 'processing' | 'idle' | 'degraded';
 }
 
 export default function AgentStatusBadge({ name, status }: AgentStatusBadgeProps) {
   const getStatusColor = () => {
     if (status === 'active') return 'bg-secondary shadow-[0_0_8px_rgba(78,222,163,0.5)]';
     if (status === 'processing') return 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)] animate-pulse';
+    if (status === 'degraded') return 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]';
     return 'bg-outline'; // idle
   };
 

@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 from uuid import uuid4
+import tempfile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -9,7 +10,7 @@ from backend.deps import CurrentUser, get_optional_current_user, limiter
 from backend.redis_client import redis_client
 
 router = APIRouter()
-UPLOAD_DIR = Path("/tmp/strand_uploads")
+UPLOAD_DIR = Path(tempfile.gettempdir()) / "strand_uploads"
 
 
 def _tenant_cache_part(tenant_id: str = "default") -> str:
@@ -133,10 +134,10 @@ async def approve_rfi(
     approval = {
         "violation_id": violation_id,
         "tenant_id": resolved_tenant_id,
-        "status": "approved_sent",
+        "status": "queued",
         "approved_at": datetime.now(timezone.utc).isoformat(),
         "delivery_channel": "System Outbox",
-        "message": "RFI approved and queued for sending.",
+        "message": "RFI approved and queued for sending. Delivery has not been confirmed.",
     }
     redis_client.set_cache(f"rfi_approval:{_tenant_cache_part(resolved_tenant_id)}:{violation_id}", approval)
     return approval

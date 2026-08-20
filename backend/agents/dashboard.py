@@ -54,8 +54,8 @@ def _fallback_dashboard_config(user_prompt: str) -> dict:
     return {
         "dashboard_name": name.title(),
         "layout": [
-            {"id": "widget_r0", "type": "R0Gauge", "title": "Maximum R0", "x": 0, "y": 0, "w": 4, "h": 2},
-            {"id": "widget_shipments", "type": "DataGrid", "title": "Critical Shipments", "x": 4, "y": 0, "w": 8, "h": 3},
+            {"id": "widget_r0", "type": "R0Gauge", "title": "Maximum R0", "x": 0, "y": 0, "w": 6, "h": 3},
+            {"id": "widget_shipments", "type": "DataGrid", "title": "Critical Shipments", "x": 6, "y": 0, "w": 6, "h": 3},
         ],
         "queries": {
             "widget_r0": "MATCH (s:VendorSubmittal {tenant_id: $tenant_id}) RETURN max(s.r0_score) as value",

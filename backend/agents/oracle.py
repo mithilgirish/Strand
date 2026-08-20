@@ -14,12 +14,41 @@ from backend.graph.client import neo4j_client
 from backend.redis_client import redis_client
 
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "supplier_graph_data.json"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DATA_PATH = DATA_DIR / "supplier_graph_data.json"
+EXTRA_GRAPH_PATHS = [
+    DATA_DIR / "test_scenarios" / "clean" / "supplier_graph_clean.json",
+    DATA_DIR / "test_scenarios" / "messy" / "supplier_graph_messy.json",
+    DATA_DIR / "test_scenarios" / "edge_cases" / "supplier_graph_edge_cases.json",
+]
 
 
 def _load_data() -> dict[str, list[dict[str, Any]]]:
     with DATA_PATH.open(encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _merged_catalog() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Merge all checked-in supplier graphs so Aura-seeded SHIP-C* ids still resolve."""
+    suppliers: dict[str, dict[str, Any]] = {}
+    shipments: dict[str, dict[str, Any]] = {}
+    for path in [DATA_PATH, *EXTRA_GRAPH_PATHS]:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.debug(f"Oracle catalog skip {path.name}: {exc}")
+            continue
+        for supplier in payload.get("suppliers", []):
+            supplier_id = supplier.get("id") or supplier.get("supplier_id")
+            if supplier_id:
+                suppliers[supplier_id] = supplier
+        for shipment in payload.get("shipments", []):
+            shipment_id = shipment.get("id") or shipment.get("shipment_id")
+            if shipment_id:
+                shipments[shipment_id] = shipment
+    return suppliers, shipments
 
 
 def _normalise_shipment(
@@ -53,15 +82,25 @@ def _fallback_shipments() -> list[dict[str, Any]]:
 
 def get_all_shipments() -> list[dict[str, Any]]:
     """Return graph shipments, or the checked-in deterministic demo dataset."""
+    _rows, _source = get_all_shipments_with_source()
+    return _rows
+
+
+def get_all_shipments_with_source() -> tuple[list[dict[str, Any]], str]:
+    from backend.project_state import shipments_from_submittal
+
+    submittal_rows = shipments_from_submittal()
+    if submittal_rows:
+        return submittal_rows, "submittal"
     if settings.DEMO_MODE:
-        return _fallback_shipments()
+        return _fallback_shipments(), "demo_json"
     try:
         results = neo4j_client.execute_query(queries.GET_ALL_SHIPMENTS)
         if results:
-            return [_normalise_shipment(shipment, {}) for shipment in results]
+            return [_normalise_shipment(shipment, {}) for shipment in results], "neo4j"
     except Exception as exc:
         logger.debug(f"Oracle graph unavailable, using local shipments: {exc}")
-    return _fallback_shipments()
+    return _fallback_shipments(), "demo_json"
 
 
 def get_at_risk_shipments() -> list[dict[str, Any]]:
@@ -109,13 +148,14 @@ def get_geospatial_shipments(project_id: str = "default") -> dict[str, Any]:
 
 
 def _supplier_node(supplier: dict[str, Any]) -> dict[str, Any]:
-    risk = float(supplier.get("risk_score", 0.5))
+    risk = float(supplier.get("risk_score", 0.5) or 0.5)
+    supplier_id = supplier.get("id") or supplier.get("supplier_id") or "UNKNOWN"
     return {
-        "supplier_id": supplier["id"],
-        "name": supplier.get("name", supplier["id"]),
-        "tier": int(supplier.get("tier", 1)),
+        "supplier_id": supplier_id,
+        "name": supplier.get("name") or supplier.get("supplier_name") or supplier_id,
+        "tier": int(supplier.get("tier", 1) or 1),
         "risk_score": round(risk, 2),
-        "on_time_rate": round(float(supplier.get("on_time_rate", 0.8)), 2),
+        "on_time_rate": round(float(supplier.get("on_time_rate", 0.8) or 0.8), 2),
         "country": supplier.get("country", ""),
         "city": supplier.get("city", ""),
         "status": "critical" if risk >= 0.7 else "warning" if risk >= 0.4 else "healthy",
@@ -131,31 +171,89 @@ def _stable_offset(value: str, size: int) -> int:
 
 
 def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
-    """Return a deterministic Tier 1/2/3 tree for a shipment."""
-    data = _load_data()
-    suppliers = data.get("suppliers", [])
-    suppliers_by_id = {supplier["id"]: supplier for supplier in suppliers}
-    shipment = next(
-        (item for item in data.get("shipments", []) if (item.get("id") or item.get("shipment_id")) == shipment_id),
-        None,
-    )
-    if shipment is None:
+    """Return a deterministic Tier 1/2/3 tree for a shipment.
+
+    Lookup uses the same shipment source as the map (Neo4j or JSON), then
+    fills supplier tiers from the merged local catalogs so SHIP-C* ids resolve.
+    """
+    suppliers_by_id, json_shipments = _merged_catalog()
+    live = next((row for row in get_all_shipments() if row.get("shipment_id") == shipment_id), None)
+    if live and live.get("source") == "submittal":
+        from backend.project_state import load_latest
+
+        latest = load_latest() or {}
+        children = []
+        for violation in latest.get("violations") or []:
+            children.append(
+                {
+                    "id": str(violation.get("id") or violation.get("parameter") or "violation"),
+                    "name": (
+                        f"{violation.get('parameter')}: {violation.get('actual')}"
+                        f"{violation.get('unit') or ''} vs {violation.get('required')}"
+                        f"{violation.get('unit') or ''}"
+                    ),
+                    "tier": 2,
+                    "risk_score": float(violation.get("r0_score") or live.get("supplier_risk_score") or 0),
+                    "on_time_rate": 0.0,
+                    "country": "",
+                    "city": "",
+                    "status": "critical" if str(violation.get("severity", "")).lower() in {"critical", "systemic"} else "warning",
+                    "children": [],
+                }
+            )
+        return {
+            "shipment_id": shipment_id,
+            "equipment_tag": live.get("equipment_tag") or "",
+            "root": {
+                "id": live.get("supplier_id") or shipment_id,
+                "name": live.get("supplier_name") or "Vendor (submittal)",
+                "tier": 1,
+                "risk_score": float(live.get("supplier_risk_score") or 0),
+                "on_time_rate": 0.4 if live.get("risk_flag") else 0.9,
+                "country": "",
+                "city": live.get("origin_port") or "",
+                "status": "critical" if live.get("risk_flag") else "healthy",
+                "children": children,
+            },
+        }
+
+    raw = json_shipments.get(shipment_id)
+    if live is None and raw is None:
         return {}
 
-    root_supplier = suppliers_by_id.get(shipment.get("origin_supplier", ""))
+    origin_id = ""
+    equipment_tag = ""
+    if live:
+        origin_id = live.get("supplier_id") or ""
+        equipment_tag = live.get("equipment_tag") or ""
+    if raw:
+        origin_id = origin_id or raw.get("origin_supplier") or raw.get("supplier_id") or ""
+        equipment_tag = equipment_tag or raw.get("equipment_tag") or ""
+
+    root_supplier = suppliers_by_id.get(origin_id)
     if root_supplier is None:
-        return {}
+        root_supplier = {
+            "id": origin_id or shipment_id,
+            "name": (live or {}).get("supplier_name") or (raw or {}).get("supplier_name") or origin_id or "Unknown supplier",
+            "tier": int((live or {}).get("supplier_tier") or 1),
+            "risk_score": float((live or {}).get("supplier_risk_score") or 0.5),
+            "on_time_rate": 0.8,
+            "country": "",
+            "city": "",
+        }
 
+    suppliers = list(suppliers_by_id.values())
     tier_2 = [supplier for supplier in suppliers if int(supplier.get("tier", 0)) == 2]
     tier_3 = [supplier for supplier in suppliers if int(supplier.get("tier", 0)) == 3]
-    tier_2_start = _stable_offset(shipment_id, len(tier_2))
+    tier_2_start = _stable_offset(shipment_id, len(tier_2)) if tier_2 else 0
     selected_tier_2 = [tier_2[(tier_2_start + index) % len(tier_2)] for index in range(min(2, len(tier_2)))]
 
     root = _supplier_node(root_supplier)
     root["tier"] = 1
     for index, supplier in enumerate(selected_tier_2):
         child = _supplier_node(supplier)
-        tier_3_start = _stable_offset(f"{shipment_id}:{supplier['id']}", len(tier_3))
+        supplier_key = supplier.get("id") or supplier.get("supplier_id") or str(index)
+        tier_3_start = _stable_offset(f"{shipment_id}:{supplier_key}", len(tier_3)) if tier_3 else 0
         child["children"] = [
             _supplier_node(tier_3[(tier_3_start + index + child_index) % len(tier_3)])
             for child_index in range(min(2, len(tier_3)))
@@ -164,7 +262,7 @@ def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
 
     return {
         "shipment_id": shipment_id,
-        "equipment_tag": shipment.get("equipment_tag", ""),
+        "equipment_tag": equipment_tag,
         "root": root,
     }
 
@@ -260,11 +358,14 @@ def _fallback_from_json() -> dict[str, Any]:
 
 
 async def run_oracle(project_id: str = "default") -> dict[str, Any]:
-    cached = redis_client.get_cache(f"oracle:{project_id}")
-    if cached:
-        return cached
+    from backend.project_state import shipments_from_submittal
 
-    shipments = get_all_shipments()
+    if not shipments_from_submittal():
+        cached = redis_client.get_cache(f"oracle:{project_id}")
+        if cached:
+            return cached
+
+    shipments, source = get_all_shipments_with_source()
     at_risk = [shipment for shipment in shipments if shipment["risk_flag"] or shipment["delay_days"] > 7]
     result = {
         "all_shipments": shipments,
@@ -272,6 +373,16 @@ async def run_oracle(project_id: str = "default") -> dict[str, Any]:
         "geojson": build_geojson(shipments),
         "total_shipments": len(shipments),
         "at_risk_count": len(at_risk),
+        "source": source,
+        "degraded": source not in {"neo4j", "submittal"},
+        "provenance_note": (
+            "Shipments derived from the latest Guardian vendor submittal."
+            if source == "submittal"
+            else "Shipments loaded from checked-in supplier_graph_data.json"
+            if source == "demo_json"
+            else ""
+        ),
     }
-    redis_client.set_cache(f"oracle:{project_id}", result)
+    if source != "submittal":
+        redis_client.set_cache(f"oracle:{project_id}", result)
     return result

@@ -76,7 +76,13 @@ function formatRelativeTime(date: Date): string {
 async function queryBrainApi(question: string): Promise<ChatMessage> {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  let data: { answer?: string; citations?: { document?: string; page?: number; section?: string }[]; confidence?: string } | null = null;
+  let data: {
+    answer?: string;
+    citations?: { document?: string; page?: number; section?: string }[];
+    confidence?: string;
+    provenance_note?: string;
+    degraded?: boolean;
+  } | null = null;
 
   try {
     const supabase = createClient();
@@ -102,7 +108,9 @@ async function queryBrainApi(question: string): Promise<ChatMessage> {
     return {
       id: Date.now(),
       sender: 'brain',
-      text: data.answer ?? 'No answer returned.',
+      text: data.provenance_note
+        ? `${data.answer ?? 'No answer returned.'}\n\n[${data.provenance_note}]`
+        : (data.answer ?? 'No answer returned.'),
       citations: (data.citations ?? []).map((c) => ({
         text: `${c.document ?? 'Spec'} §${c.section ?? '-'} p.${c.page ?? 1}`,
       })),

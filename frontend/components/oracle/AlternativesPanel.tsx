@@ -37,7 +37,7 @@ export default function AlternativesPanel({ shipment }: { shipment: OracleShipme
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const params = new URLSearchParams({ failing_supplier_id: shipment!.supplierId });
-        const response = await fetch(`${apiBase}/api/v1/oracle/alternatives/${shipment!.equipmentTag}?${params}`, { signal: controller.signal });
+        const response = await fetch(`${apiBase}/api/v1/oracle/alternatives/${encodeURIComponent(shipment!.equipmentTag)}?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error(`Alternatives returned ${response.status}`);
         const data = await response.json() as { alternatives: AlternativeSupplier[] };
         setAlternatives(data.alternatives);

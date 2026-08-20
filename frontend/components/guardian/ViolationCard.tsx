@@ -6,7 +6,7 @@ import SpecDnaChain from './SpecDnaChain';
 import type { GuardianViolation } from '@/components/guardian/types';
 
 interface ViolationCardProps {
-  violation?: GuardianViolation;
+  violation: GuardianViolation;
   chain?: Array<Record<string, unknown>>;
 }
 
@@ -17,26 +17,8 @@ function labelFor(parameter: string) {
     .join(' ');
 }
 
-const defaultViolation: GuardianViolation = {
-  id: 'DEMO-CT-01:ambient_temperature_max',
-  submittal_id: 'DEMO-CT-01',
-  parameter: 'ambient_temperature_max',
-  required: 50,
-  actual: 45,
-  unit: '°C',
-  section: '6.7.1',
-  r0_score: 3.0,
-  severity: 'Critical',
-};
-
-const defaultChain = [
-  { id: 'clause', label: 'ContractClause', parameter_value: 50 },
-  { id: 'boq', label: 'BOQLine', parameter_value: 50 },
-  { id: 'po', label: 'POLine', parameter_value: 50 },
-  { id: 'submittal', label: 'VendorSubmittal', parameter_value: 45, mutation: true },
-];
-
-export default function ViolationCard({ violation = defaultViolation, chain = defaultChain }: ViolationCardProps) {
+export default function ViolationCard({ violation, chain = [] }: ViolationCardProps) {
+  if (!violation) return null;
   const unit = violation.unit || '';
 
   return (

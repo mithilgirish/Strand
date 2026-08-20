@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-type AgentStatus = "active" | "idle";
+type AgentStatus = "active" | "idle" | "degraded";
 
 interface ProjectSummary {
   immunity_score: number;
-  agents: Record<string, AgentStatus>;
+  agents: Record<string, string>;
+  demo_mode?: boolean;
 }
 
 export default function TopBar() {
@@ -17,6 +18,7 @@ export default function TopBar() {
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showAgentDetails, setShowAgentDetails] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -26,7 +28,8 @@ export default function TopBar() {
         const response = await fetch(`${apiBase}/api/v1/project/summary`, { signal: controller.signal });
         if (!response.ok) return;
         const summary = await response.json() as ProjectSummary;
-        setAgentStatuses(summary.agents);
+        setAgentStatuses(summary.agents as Record<string, AgentStatus>);
+        setDemoMode(Boolean(summary.demo_mode));
       } catch {
         // The header keeps its neutral loading state if the API is unavailable.
       }
@@ -72,6 +75,11 @@ export default function TopBar() {
   return (
     <header className="h-16 min-w-0 border-b border-outline-variant bg-surface-container-lowest px-3 sm:px-6 flex items-center justify-between gap-2 text-on-surface sticky top-0 z-10">
       <div className="flex min-w-0 items-center gap-2">
+        {demoMode && (
+          <span className="hidden sm:inline-flex rounded-md border border-amber-400/50 bg-amber-400/15 px-2 py-1 text-[10px] font-bold tracking-[0.08em] uppercase text-amber-200">
+            DEMO
+          </span>
+        )}
         <h1 className="max-w-[112px] truncate font-bold text-sm tracking-wide text-on-surface label-caps sm:max-w-none sm:text-lg">{getPageTitle()}</h1>
 
       </div>

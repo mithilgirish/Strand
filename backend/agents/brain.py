@@ -11,6 +11,7 @@ import time
 
 import logging
 logger = logging.getLogger(__name__)
+from backend.config import settings
 from backend.demo_data import demo_spec_chunks
 from backend.vector.retriever import hybrid_retriever
 from backend.graph.client import neo4j_client
@@ -32,7 +33,7 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
     4. Related RFI lookup
     """
     # Check cache first
-    cache_key = f"brain:{project_id}:{question.lower().strip()}"
+    cache_key = f"brain:v2:{project_id}:{question.lower().strip()}"
     cached = redis_client.get_cache(cache_key)
     if cached:
         logger.info(f"Brain: returning cached result for query: {question}")
@@ -42,8 +43,10 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
 
     # Step 1: Hybrid retrieve
     chunks = hybrid_retriever.retrieve(question, k=8)
-    if not chunks:
+    used_demo_chunks = False
+    if not chunks and settings.DEMO_MODE:
         chunks = demo_spec_chunks(question)[:8]
+        used_demo_chunks = True
 
     # Step 2: Build context
     context = _build_context(chunks)
@@ -82,6 +85,14 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
 
     answer.response_time_ms = int((time.time() - start) * 1000)
     result = answer.model_dump()
+    result["answer_mode"] = "demo_rag" if used_demo_chunks else ("fallback" if result.get("confidence") == "Low" and not chunks else "rag")
+    result["degraded"] = bool(used_demo_chunks) or result.get("confidence") == "Low"
+    result["context_source"] = "demo" if used_demo_chunks else ("chroma" if chunks else "unavailable")
+    result["provenance_note"] = (
+        "Answer grounded in labeled DEMO spec chunks — not live ingested documents."
+        if used_demo_chunks
+        else ("" if chunks else "No retrieved project documents were available.")
+    )
     redis_client.set_cache(cache_key, result, ttl=3600)
     logger.info(
         f"Brain: answered with confidence={answer.confidence}, "
@@ -147,12 +158,13 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
         None,
     )
 
+    demo_pad = demo_spec_chunks if settings.DEMO_MODE else (lambda _q: [])
     if "fire" in lowered or "ups" in lowered:
         answer_text = (
             "UPS rooms over 500 kVA require a clean-agent fire suppression system: "
             "FM-200 or Novec 1230. [Doc: spec_tia942_synthetic.pdf, Page: 1, §7.4.2]"
         )
-        source_chunk = fire_chunk or demo_spec_chunks("fire suppression UPS room")[0]
+        source_chunk = fire_chunk or (demo_pad("fire suppression UPS room")[:1] or [None])[0]
     elif "violat" in lowered and ("ambient" in lowered or "cooling" in lowered or "temperature" in lowered):
         answer_text = (
             "A cooling tower ambient-temperature deviation should be treated as a spec compliance issue: "
@@ -165,7 +177,7 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
                 if "ambient" in chunk.get("text", "").lower()
                 or "temperature" in chunk.get("text", "").lower()
             ),
-            demo_spec_chunks("ambient temperature cooling tower")[0],
+            (demo_pad("ambient temperature cooling tower")[:1] or [None])[0],
         )
     elif "ambient" in lowered or "cooling" in lowered or "temperature" in lowered:
         answer_text = (
@@ -178,21 +190,36 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
                 if "ambient" in chunk.get("text", "").lower()
                 or "temperature" in chunk.get("text", "").lower()
             ),
-            demo_spec_chunks("ambient temperature cooling tower")[0],
+            (demo_pad("ambient temperature cooling tower")[:1] or [None])[0],
         )
     elif "tia-942" in lowered:
         answer_text = (
             "TIA-942 is the project data-centre standard used by STRAND to ground requirements such as redundancy, environmental limits, fire suppression, and commissioning evidence. "
             "[Doc: spec_tia942_synthetic.pdf, Page: 1, §Project Basis]"
         )
-        source_chunk = chunks[0] if chunks else demo_spec_chunks("TIA-942 data center standard")[0]
+        source_chunk = chunks[0] if chunks else (demo_pad("TIA-942 data center standard")[:1] or [None])[0]
     else:
-        source_chunk = chunks[0] if chunks else demo_spec_chunks(question)[0]
-        meta = source_chunk.get("metadata", {})
-        section = meta.get("section") or "N/A"
-        page = meta.get("page_number", 1)
-        doc = meta.get("document_source", "spec_tia942_synthetic.pdf")
-        answer_text = f"{source_chunk.get('text', '').strip()} [Doc: {doc}, Page: {page}, §{section}]"
+        source_chunk = chunks[0] if chunks else (demo_pad(question)[:1] or [None])[0]
+        if source_chunk:
+            meta = source_chunk.get("metadata", {})
+            section = meta.get("section") or "N/A"
+            page = meta.get("page_number", 1)
+            doc = meta.get("document_source", "spec_tia942_synthetic.pdf")
+            answer_text = f"{source_chunk.get('text', '').strip()} [Doc: {doc}, Page: {page}, §{section}]"
+        else:
+            answer_text = (
+                "No ingested project documents were available to ground this answer. "
+                "Upload a spec/submittal or enable DEMO_MODE for labeled sample context."
+            )
+
+    if not source_chunk:
+        return BrainAnswer(
+            answer=answer_text,
+            citations=[],
+            related_rfis=[r.get("ncr_id", "") for r in related_rfis if r.get("ncr_id")],
+            confidence="Low",
+            spec_dna_ids=[],
+        )
 
     metadata = source_chunk.get("metadata", {})
     section = metadata.get("section") or "7.4.2"
@@ -211,7 +238,7 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
             }
         ],
         related_rfis=[r.get("ncr_id", "") for r in related_rfis if r.get("ncr_id")],
-        confidence="High",
+        confidence="Low",
         spec_dna_ids=[metadata["spec_dna_id"]] if metadata.get("spec_dna_id") else [],
     )
 

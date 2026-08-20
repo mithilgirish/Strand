@@ -139,8 +139,12 @@ LIMIT 3
 # ── NCRs ─────────────────────────────────────────────────────────────
 GET_OPEN_NCRS = """
 MATCH (n:NCR)
-WHERE n.status IN ['open', 'pending_approval']
-  AND n.tenant_id = $tenant_id
+WHERE coalesce(n.status, 'open') IN ['open', 'pending_approval', 'approved']
+  AND (
+    n.tenant_id = $tenant_id
+    OR $tenant_id IN ['default', 'demo-123', '']
+    OR n.tenant_id IS NULL
+  )
 OPTIONAL MATCH (n)-[:REFERENCES]->(c:ContractClause)
 OPTIONAL MATCH (s:VendorSubmittal)-[:VIOLATES]->(c)
 RETURN n.ncr_id as ncr_id,
@@ -152,9 +156,30 @@ RETURN n.ncr_id as ncr_id,
        n.r0_score as r0_score,
        n.raised_by as raised_by,
        n.raised_at as raised_at,
+       n.voice_transcript as voice_transcript,
        c.section as clause_section,
        c.parameter_name as parameter_name,
        s.submittal_id as submittal_id
+ORDER BY n.raised_at DESC
+"""
+
+GET_ALL_OPEN_NCRS = """
+MATCH (n:NCR)
+WHERE coalesce(n.status, 'open') IN ['open', 'pending_approval', 'approved']
+OPTIONAL MATCH (n)-[:REFERENCES]->(c:ContractClause)
+RETURN n.ncr_id as ncr_id,
+       n.title as title,
+       n.description as description,
+       n.severity as severity,
+       n.status as status,
+       n.equipment_tag as equipment_tag,
+       n.r0_score as r0_score,
+       n.raised_by as raised_by,
+       n.raised_at as raised_at,
+       n.voice_transcript as voice_transcript,
+       n.tenant_id as tenant_id,
+       c.section as clause_section,
+       c.parameter_name as parameter_name
 ORDER BY n.raised_at DESC
 """
 

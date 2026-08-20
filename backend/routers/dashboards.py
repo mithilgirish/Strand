@@ -12,6 +12,9 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+import tempfile
+
+from loguru import logger
 
 from backend.deps import get_current_user, get_optional_current_user, CurrentUser
 from backend.config import settings
@@ -22,10 +25,11 @@ from backend.agents.inspector import list_ncrs
 from backend.agents.oracle import run_oracle
 from backend.agents.scheduler import run_scheduler
 from backend.redis_client import redis_client
+from backend.project_state import dashboard_rows
 
 router = APIRouter(prefix="/dashboards", tags=["Dashboards"])
 compat_router = APIRouter(prefix="/dashboard", tags=["Dashboard Builder"])
-UPLOAD_DIR = Path("/tmp/strand_dashboard_uploads")
+UPLOAD_DIR = Path(tempfile.gettempdir()) / "strand_dashboard_uploads"
 
 # ---------------------------------------------------------------------------
 # Helper: Supabase Headers & URLs
@@ -405,26 +409,40 @@ def _get_seed_fallback(query_str: str):
 
 @router.post("/query")
 async def execute_dashboard_query(
-    payload: DashboardQuery, 
-    user: CurrentUser = Depends(get_current_user)
+    payload: DashboardQuery,
+    user: CurrentUser | None = Depends(get_optional_current_user),
 ):
-    """
-    Executes a read-only Cypher query with strict tenant isolation.
-    Returns real-time telemetry stream data.
-    """
-    try:
-        secured_cypher = sanitize_and_inject_tenant(payload.query, user.tenant_id)
-        with get_neo4j_session(default_access_mode="READ") as session:
-            result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
+    """Prefer the latest vendor submittal. Cypher is a live overlay when it returns rows."""
+    submittal_rows = dashboard_rows(payload.query)
+    if submittal_rows:
+        return {
+            "data": submittal_rows,
+            "source": "submittal",
+            "degraded": False,
+            "provenance_note": "Widget rows derived from the latest Guardian vendor submittal.",
+        }
+
+    if user:
+        try:
+            secured_cypher = sanitize_and_inject_tenant(payload.query, user.tenant_id)
+            with get_neo4j_session(default_access_mode="READ") as session:
+                result = session.run(secured_cypher, {"tenant_id": user.tenant_id}).data()
             if result:
                 return {"data": result, "source": "live"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Neo4j query execution info: {e}")
-    
-    fallback_data = _get_seed_fallback(payload.query)
-    return {"data": fallback_data, "source": "live"}
+        except HTTPException as exc:
+            if exc.status_code >= 500:
+                raise
+            logger.warning(f"Dashboard Cypher rejected ({exc.status_code}): {exc.detail}")
+        except Exception as e:
+            logger.warning(f"Dashboard query failed, serving degraded response: {e}")
+
+    if settings.DEMO_MODE:
+        return {
+            "data": _get_seed_fallback(payload.query),
+            "source": "demo",
+            "degraded": True,
+        }
+    return {"data": [], "source": "unavailable", "degraded": True}
 
 # ---------------------------------------------------------------------------
 # POST /dashboards/save

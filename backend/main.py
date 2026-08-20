@@ -3,11 +3,13 @@ load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.deps import limiter
+from backend.errors import StrandError
 from backend.routers import health, documents, guardian, scheduler, oracle, inspector, brain, approvals, metrics, planner, judge, project, dashboards, admin, integrations, chat
 
 app = FastAPI(
@@ -18,6 +20,14 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(StrandError)
+async def strand_error_handler(request: Request, exc: StrandError):
+    """Surface StrandError with the documented {ok, error} envelope and the
+    correct status code, instead of a bare 500. Makes degraded/unavailable
+    states visible to clients rather than silently swallowed."""
+    return JSONResponse(status_code=exc.status_code, content=exc.to_envelope())
 
 # CORS middleware configuration
 origins = settings.CORS_ORIGINS.split(",")

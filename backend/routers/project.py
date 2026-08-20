@@ -3,6 +3,7 @@ from loguru import logger
 from backend.graph.client import neo4j_client
 from backend.redis_client import redis_client
 from backend.config import settings
+from backend.routers.health import agent_statuses
 
 router = APIRouter(prefix="/project", tags=["project"])
 
@@ -97,23 +98,33 @@ async def get_project_summary():
     """
     # Collect data from each subsystem, with graceful fallbacks
 
-    # 1. Guardian violations
+    # 1. Guardian violations — latest vendor submittal first
     violations_today = 0
     critical_violations = 0
     try:
-        for key in redis_client.keys("cache:guardian:*"):
-            cached = redis_client.get_json(key)
-            if cached:
-                viols = cached.get("violations", [])
-                violations_today += len(viols)
-                critical_violations += sum(
-                    1 for v in viols if v.get("severity", "").lower() == "critical"
-                )
+        from backend.project_state import load_latest
+        latest = load_latest()
+        if latest:
+            viols = latest.get("violations") or []
+            violations_today = len(viols)
+            critical_violations = sum(
+                1 for v in viols if str(v.get("severity", "")).lower() in {"critical", "systemic"}
+            )
+        if violations_today == 0:
+            for key in redis_client.keys("cache:guardian:*"):
+                cached = redis_client.get_json(key)
+                if cached:
+                    viols = cached.get("violations", [])
+                    violations_today += len(viols)
+                    critical_violations += sum(
+                        1 for v in viols if v.get("severity", "").lower() == "critical"
+                    )
     except Exception as e:
         logger.warning(f"Summary: guardian data unavailable: {e}")
-        violations_today = 2
-        critical_violations = 1
-    if violations_today == 0:
+        if settings.DEMO_MODE:
+            violations_today = 2
+            critical_violations = 1
+    if settings.DEMO_MODE and violations_today == 0:
         violations_today = 2
         critical_violations = 1
 
@@ -138,7 +149,8 @@ async def get_project_summary():
             redis_client.set_cache("scheduler:latest", sched_result, ttl=600)
     except Exception as e:
         logger.warning(f"Summary: scheduler data unavailable: {e}")
-        critical_r0_max = 4.2
+        if settings.DEMO_MODE:
+            critical_r0_max = 4.2
 
     # 3. Oracle at-risk shipments
     at_risk_shipments = 0
@@ -148,35 +160,41 @@ async def get_project_summary():
         at_risk_shipments = oracle_result.get("at_risk_count", 0)
     except Exception as e:
         logger.warning(f"Summary: oracle data unavailable: {e}")
-        at_risk_shipments = 3
+        if settings.DEMO_MODE:
+            at_risk_shipments = 3
 
-    # 4. Open NCRs from Neo4j
+    # 4. Open NCRs from the submittal, then Neo4j
     open_ncrs = 0
     open_ncrs_critical = 0
     try:
-        if settings.DEMO_MODE:
-            raise RuntimeError("Demo mode uses the seeded NCR baseline")
-        ncr_results = neo4j_client.execute_query(
-            """
-            MATCH (n:NCR)
-            WITH properties(n) AS props
-            WHERE props.status IN ['open', 'pending_approval']
-            RETURN props
-            """
-        )
-        if ncr_results:
-            open_ncrs = len(ncr_results)
-            open_ncrs_critical = sum(
-                1 for n in ncr_results
-                if str(n.get("props", {}).get("severity", "")).lower() in ("critical", "systemic")
+        from backend.project_state import ncrs_from_submittal
+        submittal_ncrs = ncrs_from_submittal()
+        if submittal_ncrs:
+            open_ncrs = len(submittal_ncrs)
+            open_ncrs_critical = sum(1 for n in submittal_ncrs if n.get("severity") == "Critical")
+        elif not settings.DEMO_MODE:
+            ncr_results = neo4j_client.execute_query(
+                """
+                MATCH (n:NCR)
+                WITH properties(n) AS props
+                WHERE props.status IN ['open', 'pending_approval']
+                RETURN props
+                """
             )
+            if ncr_results:
+                open_ncrs = len(ncr_results)
+                open_ncrs_critical = sum(
+                    1 for n in ncr_results
+                    if str(n.get("props", {}).get("severity", "")).lower() in ("critical", "systemic")
+                )
     except Exception as e:
         logger.warning(f"Summary: NCR data unavailable: {e}")
-        open_ncrs = 5
-        open_ncrs_critical = 1
-    if open_ncrs == 0 or open_ncrs_critical == 0:
+        if settings.DEMO_MODE:
+            open_ncrs = 5
+            open_ncrs_critical = 1
+    if settings.DEMO_MODE and open_ncrs == 0:
         open_ncrs = max(open_ncrs, 5)
-        open_ncrs_critical = 1
+        open_ncrs_critical = max(open_ncrs_critical, 1)
 
     # Compute immunity score
     immunity_score = _compute_immunity_score(
@@ -186,7 +204,7 @@ async def get_project_summary():
         open_ncrs_critical=open_ncrs_critical,
     )
 
-    return {
+    payload = {
         "immunity_score": immunity_score,
         "violations_today": violations_today,
         "open_ncrs": open_ncrs,
@@ -198,15 +216,10 @@ async def get_project_summary():
             "at_risk_shipments": at_risk_shipments * 3,
             "critical_ncrs": open_ncrs_critical * 5,
         },
-        "agents": {
-            "guardian": "active",
-            "scheduler": "active",
-            "oracle": "active",
-            "inspector": "active",
-            "brain": "active",
-            "judge": "active",
-        },
+        "agents": {k: v.get("status", "idle") for k, v in agent_statuses().items()},
+        "demo_mode": settings.DEMO_MODE,
     }
+    return payload
 
 
 @router.get("/immunity-score")
