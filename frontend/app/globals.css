@@ -247,6 +247,136 @@
   pointer-events: none;
 }
 
+/* ══ Home-screen widget system — entrance, edit jiggle, generation reveal ══ */
+
+/* Spring-in: widget tiles pop into place (scale + rise + fade), iOS launch feel.
+   Staggered per-tile via inline animation-delay based on index. */
+@keyframes widget-spring-in {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.90); }
+  55%  { opacity: 1; transform: translateY(-3px)  scale(1.02); }
+  75%  { transform: translateY(0)     scale(0.995); }
+  100% { opacity: 1; transform: translateY(0)     scale(1); }
+}
+
+.widget-enter {
+  animation: widget-spring-in 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Generation variant: spring-in AND settle-glow together (single `animation`
+   declaration so neither clobbers the other via the shorthand). */
+.widget-enter-glow {
+  animation:
+    widget-spring-in 0.62s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    widget-settle-glow 1.6s ease-out 0.15s 1 both;
+}
+
+/* Emerald light sweep that rakes across the canvas the moment a dashboard
+   finishes synthesizing — the "materializing" flourish. */
+@keyframes generate-sweep {
+  0%   { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
+  15%  { opacity: 0.9; }
+  85%  { opacity: 0.9; }
+  100% { transform: translateX(120%) skewX(-12deg); opacity: 0; }
+}
+
+.generate-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.generate-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(78, 222, 163, 0.06) 30%,
+    rgba(78, 222, 163, 0.28) 50%,
+    rgba(108, 248, 187, 0.10) 70%,
+    transparent 100%
+  );
+  filter: blur(6px);
+  animation: generate-sweep 1.05s ease-in-out 1 both;
+}
+
+/* One-shot glow-settle: a freshly generated tile briefly halos emerald,
+   then settles — reads as "just landed / live". */
+@keyframes widget-settle-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(78, 222, 163, 0.0), 0 4px 20px rgba(0,0,0,0.50); }
+  35%  { box-shadow: 0 0 22px 2px rgba(78, 222, 163, 0.35), 0 4px 20px rgba(0,0,0,0.50); }
+  100% { box-shadow: 0 0 0 0 rgba(78, 222, 163, 0.0), 0 4px 20px rgba(0,0,0,0.50); }
+}
+.widget-settle-glow {
+  animation: widget-settle-glow 1.6s ease-out 1 both;
+}
+
+/* iOS-style jiggle for edit / rearrange mode. Two slightly different phases so
+   neighbouring tiles fall out of sync (organic, not robotic). */
+@keyframes edit-jiggle-a {
+  0%   { transform: rotate(-0.7deg) translateY(0); }
+  50%  { transform: rotate(0.7deg)  translateY(-0.5px); }
+  100% { transform: rotate(-0.7deg) translateY(0); }
+}
+@keyframes edit-jiggle-b {
+  0%   { transform: rotate(0.75deg)  translateY(-0.5px); }
+  50%  { transform: rotate(-0.65deg) translateY(0); }
+  100% { transform: rotate(0.75deg)  translateY(-0.5px); }
+}
+.edit-jiggle {
+  animation: edit-jiggle-a 0.32s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+/* Index-based variants so neighbouring tiles fall out of phase (organic). */
+.edit-jiggle-1 { animation: edit-jiggle-b 0.36s ease-in-out infinite; }
+.edit-jiggle-2 { animation: edit-jiggle-a 0.30s ease-in-out -0.12s infinite; }
+
+/* Soft pop for the floating delete badge appearing on each tile in edit mode. */
+@keyframes badge-pop {
+  0%   { opacity: 0; transform: scale(0.3); }
+  70%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.badge-pop {
+  animation: badge-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Generation progress shimmer for skeleton tiles. */
+@keyframes tile-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.tile-shimmer {
+  background: linear-gradient(
+    100deg,
+    rgba(255,255,255,0.02) 20%,
+    rgba(78,222,163,0.08) 40%,
+    rgba(255,255,255,0.02) 60%
+  );
+  background-size: 200% 100%;
+  animation: tile-shimmer 1.6s linear infinite;
+}
+
+/* Respect reduced-motion: keep opacity fades, drop the movement/jiggle. */
+@media (prefers-reduced-motion: reduce) {
+  .widget-enter,
+  .widget-enter-glow,
+  .widget-settle-glow,
+  .badge-pop { animation-duration: 0.01ms; animation-iteration-count: 1; }
+  .edit-jiggle,
+  .edit-jiggle-1,
+  .edit-jiggle-2,
+  .generate-sweep::after,
+  .tile-shimmer { animation: none; }
+  .widget-enter { opacity: 1 !important; transform: none !important; }
+}
+
 /* ── Enterprise Custom Dashboard Grid Layout & Resize Handles ────────────── */
 .react-grid-layout {
   position: relative;

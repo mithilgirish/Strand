@@ -89,13 +89,13 @@ export default function QueryInspectorModal({
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-[#111317] border border-[#262a33] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-[#111111] border border-[#333333] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Specular Highlight Strip */}
         <div className="h-[1px] bg-gradient-to-r from-transparent via-[#4edea3]/40 to-transparent" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#22262f] bg-[#0c0d10]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] bg-[#0a0a0a]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[#4edea3]/10 border border-[#4edea3]/30 text-[#4edea3]">
               <Database className="w-5 h-5" />
@@ -109,8 +109,8 @@ export default function QueryInspectorModal({
                   {widget.type}
                 </span>
               </div>
-              <p className="text-xs text-[#8c93a0] font-mono mt-0.5">
-                Widget: <span className="text-[#e1e4ea] font-bold">{widget.title || widget.id}</span>
+              <p className="text-xs text-[#a3a3a3] font-mono mt-0.5">
+                Widget: <span className="text-[#e5e5e5] font-bold">{widget.title || widget.id}</span>
               </p>
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function QueryInspectorModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="px-2.5 py-1.5 bg-[#1a1d24] hover:bg-[#262a33] border border-[#303540] rounded-md text-xs font-mono text-[#c5cbd6] flex items-center gap-1.5 transition-all"
+              className="px-2.5 py-1.5 bg-[#1c1c1c] hover:bg-[#333333] border border-[#333333] rounded-md text-xs font-mono text-[#e5e5e5] flex items-center gap-1.5 transition-all"
               title="Copy Query"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-[#4edea3]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -126,7 +126,7 @@ export default function QueryInspectorModal({
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-[#262a33] rounded-md text-[#8c93a0] hover:text-[#f5f5f5] transition-colors"
+              className="p-1.5 hover:bg-[#333333] rounded-md text-[#a3a3a3] hover:text-[#f5f5f5] transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -134,29 +134,29 @@ export default function QueryInspectorModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1 bg-[#111317]">
+        <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1 bg-[#111111]">
           
           {/* Query Editor Box */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono text-[#8c93a0]">
+            <div className="flex items-center justify-between text-xs font-mono text-[#a3a3a3]">
               <span className="flex items-center gap-1.5 text-[#4edea3] font-bold">
                 <Code className="w-4 h-4" />
                 Live Cypher Knowledge Graph Query
               </span>
-              <span className="text-[11px] text-[#606775]">Read-only sandbox / Tenant Isolated</span>
+              <span className="text-[11px] text-[#737373]">Read-only sandbox / Tenant Isolated</span>
             </div>
             
-            <div className="relative rounded-lg border border-[#2a2f3a] bg-[#08090b] overflow-hidden focus-within:border-[#4edea3] focus-within:ring-1 focus-within:ring-[#4edea3]/50 transition-all">
+            <div className="relative rounded-lg border border-[#262626] bg-[#0a0a0a] overflow-hidden focus-within:border-[#4edea3] focus-within:ring-1 focus-within:ring-[#4edea3]/50 transition-all">
               <textarea
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 placeholder="MATCH (s:Submittal) RETURN s.code as Code, s.delay_days as Delay..."
                 rows={4}
-                className="w-full bg-transparent p-4 font-mono text-xs text-[#e1e4ea] focus:outline-none resize-none leading-relaxed placeholder:text-[#454b57]"
+                className="w-full bg-transparent p-4 font-mono text-xs text-[#e5e5e5] focus:outline-none resize-none leading-relaxed placeholder:text-[#404040]"
                 spellCheck={false}
               />
-              <div className="flex items-center justify-between px-4 py-2 border-t border-[#1c2028] bg-[#0c0d10] text-[11px] font-mono">
-                <span className="text-[#606775]">Supports Neo4j Cypher aggregation and graph traversal</span>
+              <div className="flex items-center justify-between px-4 py-2 border-t border-[#1c1c1c] bg-[#0a0a0a] text-[11px] font-mono">
+                <span className="text-[#737373]">Supports Neo4j Cypher aggregation and graph traversal</span>
                 <button
                   onClick={handleTestQuery}
                   disabled={isRunning || !queryText.trim()}
@@ -175,7 +175,7 @@ export default function QueryInspectorModal({
               <div className="flex items-center gap-2">
                 <span className="text-[#f5f5f5] font-bold">Execution Output</span>
                 {latencyMs !== null && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1a1d24] border border-[#2a2f3a] text-[10px] text-[#4edea3]">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1c1c1c] border border-[#262626] text-[10px] text-[#4edea3]">
                     <Clock className="w-3 h-3" />
                     {latencyMs} ms
                   </span>
@@ -183,11 +183,11 @@ export default function QueryInspectorModal({
               </div>
 
               {testResult && !isError && rows.length > 0 && (
-                <div className="flex items-center gap-1 bg-[#08090b] border border-[#262a33] rounded p-0.5">
+                <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#333333] rounded p-0.5">
                   <button
                     onClick={() => setViewMode("table")}
                     className={`px-2 py-0.5 rounded text-[10px] flex items-center gap-1 transition-all ${
-                      viewMode === "table" ? "bg-[#262a33] text-[#4edea3] font-bold" : "text-[#8c93a0]"
+                      viewMode === "table" ? "bg-[#333333] text-[#4edea3] font-bold" : "text-[#a3a3a3]"
                     }`}
                   >
                     <TableIcon className="w-3 h-3" /> Table
@@ -195,7 +195,7 @@ export default function QueryInspectorModal({
                   <button
                     onClick={() => setViewMode("json")}
                     className={`px-2 py-0.5 rounded text-[10px] flex items-center gap-1 transition-all ${
-                      viewMode === "json" ? "bg-[#262a33] text-[#4edea3] font-bold" : "text-[#8c93a0]"
+                      viewMode === "json" ? "bg-[#333333] text-[#4edea3] font-bold" : "text-[#a3a3a3]"
                     }`}
                   >
                     <FileJson className="w-3 h-3" /> JSON
@@ -204,9 +204,9 @@ export default function QueryInspectorModal({
               )}
             </div>
 
-            <div className="rounded-lg border border-[#262a33] bg-[#08090b] min-h-[160px] max-h-[260px] overflow-auto custom-scrollbar p-3 font-mono text-xs">
+            <div className="rounded-lg border border-[#333333] bg-[#0a0a0a] min-h-[160px] max-h-[260px] overflow-auto custom-scrollbar p-3 font-mono text-xs">
               {isRunning ? (
-                <div className="flex flex-col items-center justify-center h-36 text-[#8c93a0] space-y-2">
+                <div className="flex flex-col items-center justify-center h-36 text-[#a3a3a3] space-y-2">
                   <RotateCw className="w-6 h-6 text-[#4edea3] animate-spin" />
                   <span>Traversing Neo4j Graph DB...</span>
                 </div>
@@ -219,12 +219,12 @@ export default function QueryInspectorModal({
                   </div>
                 </div>
               ) : testResult === null ? (
-                <div className="flex flex-col items-center justify-center h-36 text-[#505766] space-y-1">
+                <div className="flex flex-col items-center justify-center h-36 text-[#525252] space-y-1">
                   <Play className="w-5 h-5 opacity-40" />
                   <span>Click "Test Run Query" to preview returned graph payload.</span>
                 </div>
               ) : rows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-36 text-[#505766]">
+                <div className="flex flex-col items-center justify-center h-36 text-[#525252]">
                   <span>Query returned 0 records.</span>
                 </div>
               ) : viewMode === "json" ? (
@@ -234,17 +234,17 @@ export default function QueryInspectorModal({
               ) : (
                 <table className="w-full text-left text-[11px]">
                   <thead>
-                    <tr className="border-b border-[#20242c] text-[#8c93a0]">
+                    <tr className="border-b border-[#262626] text-[#a3a3a3]">
                       {Object.keys(rows[0]).map((col) => (
                         <th key={col} className="pb-2 pr-4 font-bold uppercase tracking-wider">{col}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#15181e]">
+                  <tbody className="divide-y divide-[#171717]">
                     {rows.slice(0, 50).map((row, i) => (
                       <tr key={i} className="hover:bg-white/5 transition-colors">
                         {Object.values(row).map((val, j) => (
-                          <td key={j} className="py-1.5 pr-4 text-[#d8dce6] truncate max-w-[200px]">
+                          <td key={j} className="py-1.5 pr-4 text-[#d4d4d4] truncate max-w-[200px]">
                             {typeof val === "object" ? JSON.stringify(val) : String(val ?? "—")}
                           </td>
                         ))}
@@ -258,14 +258,14 @@ export default function QueryInspectorModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#22262f] bg-[#0c0d10]">
-          <span className="text-xs text-[#8c93a0] font-mono">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[#262626] bg-[#0a0a0a]">
+          <span className="text-xs text-[#a3a3a3] font-mono">
             {rows.length > 0 ? `Validated ${rows.length} rows` : "Ready to update"}
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-[#1a1d24] hover:bg-[#262a33] border border-[#303540] rounded-md text-xs font-mono text-[#c5cbd6] transition-all"
+              className="px-4 py-2 bg-[#1c1c1c] hover:bg-[#333333] border border-[#333333] rounded-md text-xs font-mono text-[#e5e5e5] transition-all"
             >
               Cancel
             </button>

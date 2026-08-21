@@ -57,13 +57,13 @@ export default function ConfigureWidgetModal({
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-[#111317] border border-[#262a33] rounded-xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-[#111111] border border-[#333333] rounded-xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Specular Edge Highlight */}
         <div className="h-[1px] bg-gradient-to-r from-transparent via-[#4edea3]/40 to-transparent" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#22262f] bg-[#0c0d10]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] bg-[#0a0a0a]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[#4edea3]/10 border border-[#4edea3]/30 text-[#4edea3]">
               <Settings className="w-5 h-5" />
@@ -72,27 +72,27 @@ export default function ConfigureWidgetModal({
               <h2 className="text-base font-bold text-[#f5f5f5] font-sans">
                 Configure Widget Properties
               </h2>
-              <p className="text-xs text-[#8c93a0] font-mono mt-0.5">
-                Widget: <span className="text-[#e1e4ea] font-bold">{widget.title || widget.id}</span>
+              <p className="text-xs text-[#a3a3a3] font-mono mt-0.5">
+                Widget: <span className="text-[#e5e5e5] font-bold">{widget.title || widget.id}</span>
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-[#262a33] rounded-md text-[#8c93a0] hover:text-[#f5f5f5] transition-colors"
+            className="p-1.5 hover:bg-[#333333] rounded-md text-[#a3a3a3] hover:text-[#f5f5f5] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form Body */}
-        <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar bg-[#111317] font-mono text-xs">
+        <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar bg-[#111111] font-mono text-xs">
           
           {/* Title & Description */}
           <div className="space-y-3">
             <div>
-              <label className="text-[#8c93a0] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
+              <label className="text-[#a3a3a3] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
                 Display Title
               </label>
               <input
@@ -100,12 +100,12 @@ export default function ConfigureWidgetModal({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Submittal Variance KPI"
-                className="w-full bg-[#161920] border border-[#2b313d] rounded-md px-3 py-2 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all font-sans"
+                className="w-full bg-[#171717] border border-[#404040] rounded-md px-3 py-2 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all font-sans"
               />
             </div>
 
             <div>
-              <label className="text-[#8c93a0] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
+              <label className="text-[#a3a3a3] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
                 Subtitle / Description
               </label>
               <input
@@ -113,20 +113,20 @@ export default function ConfigureWidgetModal({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g. Calculated from Neo4j knowledge graph"
-                className="w-full bg-[#161920] border border-[#2b313d] rounded-md px-3 py-2 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all font-sans"
+                className="w-full bg-[#171717] border border-[#404040] rounded-md px-3 py-2 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3] focus:ring-1 focus:ring-[#4edea3]/50 transition-all font-sans"
               />
             </div>
           </div>
 
           {/* Visualizer Type */}
           <div>
-            <label className="text-[#8c93a0] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
+            <label className="text-[#a3a3a3] text-[11px] block mb-1.5 font-bold uppercase tracking-wider">
               Visualization Type
             </label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value as WidgetType)}
-              className="w-full bg-[#161920] border border-[#2b313d] rounded-md px-3 py-2 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3]"
+              className="w-full bg-[#171717] border border-[#404040] rounded-md px-3 py-2 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3]"
             >
               <option value="FormulaCard">Formula Card (Large Metric / KPI)</option>
               <option value="R0Gauge">R0 Risk Severity Radial Gauge</option>
@@ -144,15 +144,15 @@ export default function ConfigureWidgetModal({
           </div>
 
           {/* Grid Dimensions */}
-          <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-[#161920]/80 border border-[#262a33]">
+          <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-[#171717]/80 border border-[#333333]">
             <div>
-              <label className="text-[#8c93a0] text-[11px] block mb-1 font-bold uppercase tracking-wider">
+              <label className="text-[#a3a3a3] text-[11px] block mb-1 font-bold uppercase tracking-wider">
                 Columns Width (1 - 12)
               </label>
               <select
                 value={width}
                 onChange={(e) => setWidth(Number(e.target.value))}
-                className="w-full bg-[#0c0d10] border border-[#2b313d] rounded px-3 py-1.5 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3]"
+                className="w-full bg-[#0a0a0a] border border-[#404040] rounded px-3 py-1.5 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3]"
               >
                 <option value={3}>3 Columns (1/4 Width)</option>
                 <option value={4}>4 Columns (1/3 Width)</option>
@@ -163,13 +163,13 @@ export default function ConfigureWidgetModal({
             </div>
 
             <div>
-              <label className="text-[#8c93a0] text-[11px] block mb-1 font-bold uppercase tracking-wider">
+              <label className="text-[#a3a3a3] text-[11px] block mb-1 font-bold uppercase tracking-wider">
                 Rows Height (2 - 6)
               </label>
               <select
                 value={height}
                 onChange={(e) => setHeight(Number(e.target.value))}
-                className="w-full bg-[#0c0d10] border border-[#2b313d] rounded px-3 py-1.5 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3]"
+                className="w-full bg-[#0a0a0a] border border-[#404040] rounded px-3 py-1.5 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3]"
               >
                 <option value={2}>2 Rows (Compact ~240px)</option>
                 <option value={3}>3 Rows (Standard ~360px)</option>
@@ -182,10 +182,10 @@ export default function ConfigureWidgetModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#22262f] bg-[#0c0d10]">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#262626] bg-[#0a0a0a]">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-[#1a1d24] hover:bg-[#262a33] border border-[#303540] rounded-md text-xs font-mono text-[#c5cbd6] transition-all"
+            className="px-4 py-2 bg-[#1c1c1c] hover:bg-[#333333] border border-[#333333] rounded-md text-xs font-mono text-[#e5e5e5] transition-all"
           >
             Cancel
           </button>

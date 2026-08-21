@@ -929,7 +929,7 @@ export default function CustomDashboardsPage() {
   };
 
   return (
-    <div className="h-full w-full flex overflow-hidden bg-[#0c0d10] font-sans relative">
+    <div className="h-full w-full flex overflow-hidden bg-[#0a0a0a] font-sans relative">
       {/* Global Banner (Error or Warning) */}
       {errorMsg && (
         <div className={`absolute top-2 left-4 right-4 z-50 p-3 rounded-lg text-xs font-mono flex items-center justify-between shadow-lg backdrop-blur-md transition-all ${

@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import ChatWindow from '@/components/brain/ChatWindow';
 import InputBar from '@/components/brain/InputBar';
-
+import BrainAvatar from '@/components/brain/BrainAvatar';
 import SuggestedPrompts from '@/components/brain/SuggestedPrompts';
 import { ChatMessage } from '@/components/brain/MessageBubble';
 import { createClient } from '@/utils/supabase/client';
@@ -386,15 +386,15 @@ export default function BrainAgent() {
     <div className="flex h-[calc(100vh-64px)] bg-black/40 w-full">
 
       {/* ── Left Sidebar (Glass Panel) ─────────────────────────────────── */}
-      <aside className="w-72 flex-shrink-0 bg-white/5 backdrop-blur-[12px] border-r border-white/10 shadow-[4px_0_24px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden z-10">
+      <aside className="w-72 flex-shrink-0 bg-white/5 backdrop-blur-[12px] border-r border-outline-variant shadow-[4px_0_24px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden z-10">
         
         {/* Brain identity */}
-        <div className="p-6 border-b border-white/10 bg-black/20">
+        <div className="p-6 border-b border-outline-variant bg-black/20">
           <div className="flex items-center gap-3 mb-3">
-
+            <BrainAvatar size="md" />
             <div>
-              <h2 className="font-black text-on-surface text-lg tracking-wide uppercase font-primary">BRAIN</h2>
-              <p className="text-[10px] text-primary font-bold uppercase tracking-[0.08em] font-primary">RAG Intelligence</p>
+              <h2 className="font-black text-on-surface text-lg tracking-wide uppercase label-caps">BRAIN</h2>
+              <p className="text-[10px] text-secondary font-bold uppercase tracking-[0.08em]">RAG Intelligence</p>
             </div>
           </div>
           <p className="text-xs text-on-surface-variant leading-relaxed">
@@ -403,11 +403,11 @@ export default function BrainAgent() {
         </div>
 
         {/* New session button */}
-        <div className="p-4 border-b border-white/10 bg-black/10">
+        <div className="p-4 border-b border-outline-variant bg-black/10">
           <button
             type="button"
             onClick={handleNewSession}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/40 text-primary text-xs font-bold uppercase tracking-[0.08em] transition-all duration-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-md bg-white/5 hover:bg-white/10 border border-outline hover:border-white/40 text-primary text-xs font-bold uppercase tracking-[0.08em] transition-all duration-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
           >
             <Plus className="w-3.5 h-3.5" />
             New Session
@@ -433,7 +433,7 @@ export default function BrainAgent() {
                       key={session.id}
                       className={`group relative flex items-start gap-2 px-3 py-3 rounded-md transition-all cursor-pointer ${
                         isActive
-                          ? 'bg-white/10 border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+                          ? 'bg-white/10 border border-outline shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
                           : 'hover:bg-white/5 border border-transparent'
                       }`}
                       onClick={() => !isEditing && switchSession(session.id)}
@@ -520,14 +520,14 @@ export default function BrainAgent() {
       <div className="flex-1 bg-white/[0.02] backdrop-blur-[12px] flex flex-col overflow-hidden min-w-0">
 
         {/* Header bar */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-white/10 bg-black/20 flex-shrink-0">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-outline-variant bg-black/20 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-2.5 h-2.5 rounded-full ${activeSessionId ? 'bg-primary shadow-[0_0_8px_rgba(255,255,255,0.6)] animate-pulse' : 'bg-outline shadow-[0_0_6px_rgba(82,82,82,0.5)]'}`} />
             <span className="text-sm font-bold text-primary tracking-wide uppercase">
               {activeSession ? activeSession.title : 'New Conversation'}
             </span>
             {messages.length > 0 && (
-              <span className="text-xs text-on-surface-variant font-mono border border-white/10 px-2 py-0.5 rounded-sm bg-black/20">
+              <span className="text-xs text-on-surface-variant font-mono border border-outline-variant px-2 py-0.5 rounded-sm bg-black/20">
                 {messages.length} message{messages.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -539,8 +539,9 @@ export default function BrainAgent() {
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-full text-center py-10 gap-10">
               <div className="flex flex-col items-center gap-5">
+                <BrainAvatar size="lg" animated />
                 <div>
-                  <h3 className="text-3xl font-black text-primary tracking-wide mb-3">
+                  <h3 className="text-3xl font-black text-on-surface tracking-wide mb-3">
                     Ask Brain Anything
                   </h3>
                   <p className="text-base text-on-surface-variant max-w-lg leading-relaxed">
@@ -565,7 +566,7 @@ export default function BrainAgent() {
         </div>
 
         {/* Input bar */}
-        <div className="flex-shrink-0 px-8 py-6 border-t border-white/10 bg-black/20">
+        <div className="flex-shrink-0 px-8 py-6 border-t border-outline-variant bg-black/20">
           <InputBar onSend={handleSendMessage} disabled={isLoading} />
         </div>
       </div>

@@ -196,13 +196,13 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-[#111317] border border-[#262a33] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-[#111111] border border-[#333333] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         
         {/* Specular Edge */}
         <div className="h-[1px] bg-gradient-to-r from-transparent via-[#4edea3]/40 to-transparent" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#22262f] bg-[#0c0d10]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#262626] bg-[#0a0a0a]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[#4edea3]/10 border border-[#4edea3]/30 text-[#4edea3]">
               <Plus className="w-5 h-5" />
@@ -211,7 +211,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
               <h2 className="text-base font-bold text-[#f5f5f5] font-sans">
                 Add Visualizer Widget to Dashboard
               </h2>
-              <p className="text-xs text-[#8c93a0] font-mono mt-0.5">
+              <p className="text-xs text-[#a3a3a3] font-mono mt-0.5">
                 Select from 11 specialized enterprise widgets pre-configured for Neo4j telemetry.
               </p>
             </div>
@@ -219,15 +219,15 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
 
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-[#262a33] rounded-md text-[#8c93a0] hover:text-[#f5f5f5] transition-colors"
+            className="p-1.5 hover:bg-[#333333] rounded-md text-[#a3a3a3] hover:text-[#f5f5f5] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Category Filter & Search Bar */}
-        <div className="px-6 py-3 border-b border-[#22262f] bg-[#0c0d10]/60 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-[#15181f] p-1 rounded-lg border border-[#262a33] text-xs font-mono">
+        <div className="px-6 py-3 border-b border-[#262626] bg-[#0a0a0a]/60 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1 bg-[#171717] p-1 rounded-lg border border-[#333333] text-xs font-mono">
             {(["all", "kpi", "charts", "tables", "text"] as const).map((cat) => (
               <button
                 key={cat}
@@ -235,7 +235,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                 className={`px-3 py-1 rounded-md transition-all uppercase tracking-wider text-[10px] font-bold ${
                   selectedCategory === cat
                     ? "bg-[#4edea3] text-[#003824] shadow-sm"
-                    : "text-[#8c93a0] hover:text-[#f5f5f5]"
+                    : "text-[#a3a3a3] hover:text-[#f5f5f5]"
                 }`}
               >
                 {cat === "all" ? "All Visualizers" : cat}
@@ -243,14 +243,14 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
             ))}
           </div>
 
-          <div className="flex items-center gap-2 bg-[#15181f] border border-[#262a33] rounded-lg px-3 py-1.5 text-xs text-[#e1e4ea] w-64">
-            <Search className="w-3.5 h-3.5 text-[#606775]" />
+          <div className="flex items-center gap-2 bg-[#171717] border border-[#333333] rounded-lg px-3 py-1.5 text-xs text-[#e5e5e5] w-64">
+            <Search className="w-3.5 h-3.5 text-[#737373]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search visualizers..."
-              className="bg-transparent border-none outline-none w-full placeholder:text-[#606775]"
+              className="bg-transparent border-none outline-none w-full placeholder:text-[#737373]"
             />
           </div>
         </div>
@@ -259,7 +259,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
         <div className="grid grid-cols-1 md:grid-cols-3 flex-1 overflow-hidden">
           
           {/* Left List (2 cols) */}
-          <div className="md:col-span-2 p-6 overflow-y-auto space-y-3 custom-scrollbar border-r border-[#22262f]">
+          <div className="md:col-span-2 p-6 overflow-y-auto space-y-3 custom-scrollbar border-r border-[#262626]">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {filteredItems.map((item) => {
                 const isSelected = selectedItem?.type === item.type;
@@ -274,13 +274,13 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                     className={`p-4 rounded-lg border cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
                       isSelected
                         ? "bg-[#4edea3]/10 border-[#4edea3] shadow-[0_0_16px_rgba(78,222,163,0.15)]"
-                        : "bg-[#15181f]/80 hover:bg-[#1a1e27] border-[#262a33] hover:border-[#383e4c]"
+                        : "bg-[#171717]/80 hover:bg-[#1c1c1c] border-[#333333] hover:border-[#404040]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <div className={`p-2 rounded-md ${
-                          isSelected ? "bg-[#4edea3] text-[#003824]" : "bg-[#202530] text-[#4edea3]"
+                          isSelected ? "bg-[#4edea3] text-[#003824]" : "bg-[#262626] text-[#4edea3]"
                         }`}>
                           <Icon className="w-4 h-4" />
                         </div>
@@ -288,7 +288,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                           <h4 className="text-xs font-bold text-[#f5f5f5] font-sans">
                             {item.title}
                           </h4>
-                          <span className="text-[10px] text-[#8c93a0] font-mono uppercase tracking-wider">
+                          <span className="text-[10px] text-[#a3a3a3] font-mono uppercase tracking-wider">
                             {item.defaultW}x{item.defaultH} Grid Units
                           </span>
                         </div>
@@ -299,7 +299,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-[#8c93a0] line-clamp-2 leading-relaxed">
+                    <p className="text-[11px] text-[#a3a3a3] line-clamp-2 leading-relaxed">
                       {item.description}
                     </p>
                   </div>
@@ -309,7 +309,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
           </div>
 
           {/* Right Preview Panel (1 col) */}
-          <div className="p-6 bg-[#0c0d10] flex flex-col justify-between space-y-4 overflow-y-auto custom-scrollbar">
+          <div className="p-6 bg-[#0a0a0a] flex flex-col justify-between space-y-4 overflow-y-auto custom-scrollbar">
             {selectedItem ? (
               <div className="space-y-4">
                 <div className="space-y-1">
@@ -320,26 +320,26 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                 </div>
 
                 <div className="space-y-1.5 font-mono text-xs">
-                  <label className="text-[#8c93a0] text-[11px]">Widget Display Title</label>
+                  <label className="text-[#a3a3a3] text-[11px]">Widget Display Title</label>
                   <input
                     type="text"
                     value={customTitle}
                     onChange={(e) => setCustomTitle(e.target.value)}
                     placeholder={selectedItem.title}
-                    className="w-full bg-[#15181f] border border-[#262a33] rounded-md px-3 py-2 text-xs text-[#e1e4ea] focus:outline-none focus:border-[#4edea3]"
+                    className="w-full bg-[#171717] border border-[#333333] rounded-md px-3 py-2 text-xs text-[#e5e5e5] focus:outline-none focus:border-[#4edea3]"
                   />
                 </div>
 
-                <div className="p-3 rounded-lg bg-[#15181f] border border-[#262a33] space-y-2 font-mono text-xs">
-                  <span className="text-[10px] text-[#8c93a0] uppercase tracking-wider block font-bold">
+                <div className="p-3 rounded-lg bg-[#171717] border border-[#333333] space-y-2 font-mono text-xs">
+                  <span className="text-[10px] text-[#a3a3a3] uppercase tracking-wider block font-bold">
                     Default Cypher Query
                   </span>
-                  <pre className="text-[10px] text-[#4edea3] whitespace-pre-wrap bg-[#08090b] p-2 rounded border border-[#1c2028]">
+                  <pre className="text-[10px] text-[#4edea3] whitespace-pre-wrap bg-[#0a0a0a] p-2 rounded border border-[#1c1c1c]">
                     {selectedItem.defaultQuery}
                   </pre>
                 </div>
 
-                <div className="p-3 rounded-lg bg-[#15181f]/60 border border-[#20242c] space-y-1 text-xs text-[#8c93a0]">
+                <div className="p-3 rounded-lg bg-[#171717]/60 border border-[#262626] space-y-1 text-xs text-[#a3a3a3]">
                   <div className="flex justify-between text-[11px] font-mono">
                     <span>Default Width:</span>
                     <span className="text-[#f5f5f5] font-bold">{selectedItem.defaultW} Columns</span>
@@ -351,15 +351,15 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-[#505766] text-xs font-mono">
+              <div className="text-center py-12 text-[#525252] text-xs font-mono">
                 Select a visualizer from the left catalog.
               </div>
             )}
 
-            <div className="pt-4 border-t border-[#22262f] flex gap-2">
+            <div className="pt-4 border-t border-[#262626] flex gap-2">
               <button
                 onClick={onClose}
-                className="w-1/3 py-2 bg-[#1a1d24] hover:bg-[#262a33] border border-[#303540] rounded-md text-xs font-mono text-[#c5cbd6] transition-all"
+                className="w-1/3 py-2 bg-[#1c1c1c] hover:bg-[#333333] border border-[#333333] rounded-md text-xs font-mono text-[#e5e5e5] transition-all"
               >
                 Cancel
               </button>
