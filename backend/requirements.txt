@@ -45,6 +45,7 @@ loguru==0.7.0
 
 # Added in Phase 1
 redis==5.0.1
+fakeredis==2.26.2
 slowapi==0.1.9
 pyyaml==6.0.1
 sentence-transformers==2.7.0

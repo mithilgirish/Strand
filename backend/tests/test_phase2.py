@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 import httpx
@@ -11,31 +12,52 @@ from backend.agents.oracle import (
     get_geospatial_shipments,
     get_supply_chain_tree,
 )
-from backend.agents.scheduler import scheduler_graph
+from backend.agents.scheduler import run_scheduler, scheduler_graph
 from backend.main import app
 
 
 class Phase2AgentTests(unittest.TestCase):
     def test_scheduler_published_acceptance_contract(self):
         schedule = pd.read_csv("data/project_schedule_100tasks.csv").to_dict("records")
-        result = asyncio.run(
-            scheduler_graph.ainvoke(
-                {
-                    "schedule_data": schedule,
-                    "task_graph": None,
-                    "at_risk_tasks": [],
-                    "r0_scores": {},
-                    "critical_path": [],
-                    "mitigation_suggestions": [],
-                }
+        with patch("backend.project_state.load_latest", return_value=None):
+            result = asyncio.run(
+                scheduler_graph.ainvoke(
+                    {
+                        "schedule_data": schedule,
+                        "task_graph": None,
+                        "at_risk_tasks": [],
+                        "r0_scores": {},
+                        "critical_path": [],
+                        "mitigation_suggestions": [],
+                    }
+                )
             )
-        )
         risks = {task["task_id"]: task for task in result["at_risk_tasks"]}
         for task_id in ("T023", "T047", "T078"):
             self.assertGreater(risks[task_id]["delay_probability"], 0.8)
             self.assertGreater(risks[task_id]["r0_score"], 2.0)
             self.assertLessEqual(risks[task_id]["r0_score"], 10.0)
         self.assertEqual(len(result["mitigation_suggestions"]), 3)
+
+    def test_submittal_enriches_csv_tasks_instead_of_replacing(self):
+        fake = {
+            "submittal_id": "SUB-TEST",
+            "r0_max": 5.2,
+            "violations": [
+                {"parameter": "cooling_capacity", "r0_score": 3.4, "severity": "Critical"},
+            ],
+            "extracted_parameters": {"cooling_capacity": {"value": 420}},
+        }
+        with patch("backend.project_state.load_latest", return_value=fake):
+            result = asyncio.run(run_scheduler())
+        ids = [task["task_id"] for task in result["at_risk_tasks"]]
+        self.assertIn("T023", ids)
+        self.assertIn("T047", ids)
+        self.assertIn("T078", ids)
+        self.assertNotIn("T-SUBMITTAL", ids)
+        self.assertFalse(any(str(task_id).startswith("T-SUB") for task_id in ids))
+        self.assertTrue(any(task.get("submittal_linked") for task in result["at_risk_tasks"]))
+        self.assertGreaterEqual(len(result["mitigations"]), 1)
 
     def test_oracle_is_deterministic_and_complete(self):
         first = get_geospatial_shipments()

@@ -11,6 +11,10 @@ export default function ImmunityScore({ score }: ImmunityScoreProps) {
   const [animatedScore, setAnimatedScore] = useState(0);
 
   useEffect(() => {
+    if (score <= 0) {
+      setAnimatedScore(0);
+      return;
+    }
     let current = 0;
     const interval = setInterval(() => {
       current += 2.5;

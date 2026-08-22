@@ -90,18 +90,25 @@ export default function OutboxPage() {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
 
-      // 1. Fetch Guardian RFIs
-      const rfiPromise = fetch(`${apiBase}/api/v1/guardian/rfi/outbox`, {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+      const rfiResponse = await fetch(`${apiBase}/api/v1/guardian/rfi/outbox`, {
         cache: "no-store",
-        headers: session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}
-      }).then(r => r.ok ? r.json() : { approvals: [] }).catch(() => ({ approvals: [] }));
-
-      // 2. Fetch Oracle Supplier Switches
-      const switchPromise = fetch(`${apiBase}/api/v1/oracle/switches`, {
-        cache: "no-store"
-      }).then(r => r.ok ? r.json() : { switches: [] }).catch(() => ({ switches: [] }));
-
-      const [rfiData, switchData] = await Promise.all([rfiPromise, switchPromise]);
+        headers,
+      });
+      const switchResponse = await fetch(`${apiBase}/api/v1/oracle/switches`, {
+        cache: "no-store",
+        headers,
+      });
+      const rfiData = rfiResponse.ok ? await rfiResponse.json() : { approvals: [] };
+      const switchData = switchResponse.ok ? await switchResponse.json() : { switches: [] };
+      // #region agent log
+      fetch('http://127.0.0.1:7582/ingest/5f4dba18-bce0-401b-8b4b-251b5b4366fb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e2e3'},body:JSON.stringify({sessionId:'66e2e3',runId:'post-fix',hypothesisId:'C',location:'frontend/app/(main)/outbox/page.tsx:fetchOutboxData',message:'outbox fetch',data:{hasSession:Boolean(session?.access_token),rfiStatus:rfiResponse.status,switchStatus:switchResponse.status,rfiCount:(rfiData.approvals||[]).length,switchCount:(switchData.switches||[]).length,approvedSwitchCount:(switchData.switches||[]).filter((s: SwitchProtocol)=>s.status==='approved').length,rfiIds:(rfiData.approvals||[]).slice(0,5).map((a: RfiApproval)=>a.violation_id)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (!rfiResponse.ok && !switchResponse.ok) {
+        throw new Error("Outbox endpoints failed");
+      }
 
       setRfis(rfiData.approvals || []);
       setSwitches((switchData.switches || []).filter((s: SwitchProtocol) => s.status === "approved"));

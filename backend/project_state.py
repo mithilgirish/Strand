@@ -9,6 +9,7 @@ from typing import Any
 from loguru import logger
 
 STATE_PATH = Path(__file__).resolve().parents[1] / "data" / "runtime" / "latest_submittal.json"
+OUTBOX_PATH = Path(__file__).resolve().parents[1] / "data" / "runtime" / "outbox.json"
 
 
 def save_guardian_result(result: dict[str, Any]) -> None:
@@ -23,11 +24,13 @@ def save_guardian_result(result: dict[str, Any]) -> None:
         payload.get("submittal_id"),
         len(payload.get("violations") or []),
     )
+    queue_rfi_from_submittal(payload)
     try:
         from backend.redis_client import redis_client
 
-        redis_client.delete("scheduler:latest")
-        for key in redis_client.keys("oracle:*"):
+        redis_client.delete_cache("scheduler:latest")
+        redis_client.delete_cache("scheduler:latest:v2")
+        for key in redis_client.keys("cache:oracle:*"):
             redis_client.delete(key)
     except Exception as exc:
         logger.debug("Could not bust agent caches after submittal save: {}", exc)
@@ -41,6 +44,78 @@ def load_latest() -> dict[str, Any] | None:
     except Exception as exc:
         logger.warning("Failed to read latest submittal state: {}", exc)
         return None
+
+
+def load_outbox() -> list[dict[str, Any]]:
+    if not OUTBOX_PATH.exists():
+        return []
+    try:
+        data = json.loads(OUTBOX_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        logger.warning("Failed to read outbox state: {}", exc)
+        return []
+
+
+def upsert_outbox_item(item: dict[str, Any]) -> None:
+    rows = load_outbox()
+    item_id = str(item.get("violation_id") or item.get("id") or "")
+    rows = [row for row in rows if str(row.get("violation_id") or row.get("id") or "") != item_id]
+    rows.append(item)
+    OUTBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUTBOX_PATH.write_text(json.dumps(rows, default=str), encoding="utf-8")
+
+
+def queue_rfi_from_submittal(state: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Persist the Guardian RFI letter so Outbox survives Redis restarts."""
+    state = state or load_latest()
+    if not state:
+        return None
+    rfi = str(state.get("rfi_draft") or "").strip()
+    if not rfi or rfi.lower().startswith("no violations"):
+        return None
+    violations = state.get("violations") or []
+    first = violations[0] if violations else {}
+    item = {
+        "violation_id": first.get("id") or state.get("submittal_id"),
+        "tenant_id": state.get("tenant_id") or "default",
+        "status": "queued",
+        "approved_at": state.get("saved_at") or datetime.now(timezone.utc).isoformat(),
+        "delivery_channel": "System Outbox",
+        "message": rfi,
+        "submittal_id": state.get("submittal_id"),
+        "parameter": first.get("parameter"),
+        "spec_clause": first.get("section"),
+        "contractor_recipient": "Vendor (submittal)",
+        "source": "submittal",
+    }
+    existing = next(
+        (
+            row
+            for row in load_outbox()
+            if str(row.get("violation_id")) == str(item["violation_id"])
+            and row.get("status") in {"approved_sent", "approved"}
+        ),
+        None,
+    )
+    if existing:
+        return existing
+    upsert_outbox_item(item)
+    return item
+
+
+def outbox_for_tenant(tenant_id: str) -> list[dict[str, Any]]:
+    queue_rfi_from_submittal()
+    latest = load_latest() or {}
+    latest_submittal_id = latest.get("submittal_id")
+    rows = []
+    for item in load_outbox():
+        item_tenant = item.get("tenant_id") or "default"
+        shared_submittal = bool(latest_submittal_id) and item.get("submittal_id") == latest_submittal_id
+        if item_tenant == tenant_id or item_tenant == "default" or shared_submittal:
+            rows.append(item)
+    rows.sort(key=lambda item: item.get("approved_at") or "", reverse=True)
+    return rows
 
 
 def ncrs_from_submittal() -> list[dict[str, Any]]:
@@ -115,67 +190,90 @@ def shipments_from_submittal() -> list[dict[str, Any]]:
 
 
 def overlay_scheduler(result: dict[str, Any]) -> dict[str, Any]:
-    """Replace CSV schedule risk with tasks derived from the latest submittal."""
+    """Annotate CPM schedule risk with the latest Guardian submittal. Never swap task IDs."""
+    from backend.r0.classifier import r0_to_severity
+
     state = load_latest()
     if not state:
         return result
-    r0 = float(state.get("r0_max") or 0)
+
     violations = state.get("violations") or []
     submittal_id = state.get("submittal_id") or "SUB-UNKNOWN"
-    tasks: list[dict[str, Any]] = []
-    for index, violation in enumerate(violations):
-        severity = _severity(violation.get("severity"))
-        param = str(violation.get("parameter") or f"parameter-{index + 1}")
-        score = float(violation.get("r0_score") or r0 or 0)
-        delay_prob = round(min(0.95, 0.35 + (score / 10.0) * 0.55), 2)
-        tasks.append(
-            {
-                "task_id": f"T-SUB-{index + 1:02d}",
-                "task_name": f"Clear {param} deviation on {submittal_id}",
-                "delay_probability": delay_prob,
-                "r0_score": score,
-                "severity": severity,
-                "discipline": "Mechanical",
-                "status": "at_risk",
-                "on_critical_path": True,
-                "expected_delay_days": max(1, int(round(score))) if score >= 1 else 0,
-                "downstream_count": max(0, len(violations) - index - 1),
-                "downstream_task_ids": [],
-                "end_date": datetime.now(timezone.utc).date().isoformat(),
-                "equipment_tag": violation.get("submittal_id") or submittal_id,
-                "source": "submittal",
-            }
+    tag_scores, discipline_scores = _submittal_match_scores(state)
+
+    enriched_count = 0
+    for task in result.get("at_risk_tasks") or []:
+        tag = str(task.get("equipment_tag") or "").strip()
+        discipline = str(task.get("discipline") or "").strip()
+        boost = max(tag_scores.get(tag, 0.0), discipline_scores.get(discipline, 0.0))
+        if boost <= 0:
+            continue
+        old_r0 = float(task.get("r0_score") or 0)
+        new_r0 = round(min(10.0, old_r0 + min(2.0, boost * 0.35)), 2)
+        task["r0_score"] = new_r0
+        task["severity"] = r0_to_severity(new_r0)
+        task["delay_probability"] = round(min(0.99, float(task.get("delay_probability") or 0) + 0.05), 2)
+        task["submittal_linked"] = True
+        task["submittal_id"] = submittal_id
+        task["source"] = "submittal_enriched"
+        enriched_count += 1
+
+    result["at_risk_tasks"] = sorted(
+        result.get("at_risk_tasks") or [],
+        key=lambda task: (task.get("r0_score", 0), task.get("delay_probability", 0)),
+        reverse=True,
+    )
+    result["r0_scores"] = {
+        task.get("task_id"): task.get("r0_score", 0)
+        for task in result["at_risk_tasks"]
+        if task.get("task_id")
+    }
+    result["at_risk_count"] = len(result["at_risk_tasks"])
+    result["submittal_id"] = submittal_id
+    result["submittal_enriched"] = enriched_count > 0
+    if violations:
+        result["source"] = "submittal_enriched" if enriched_count else result.get("source")
+        result["degraded"] = False
+        result["provenance_note"] = (
+            f"CPM schedule enriched with {len(violations)} Guardian violations from {submittal_id}"
+            if enriched_count
+            else f"Guardian submittal {submittal_id} analyzed ({len(violations)} violations); no schedule tags matched"
         )
-    if not tasks:
-        tasks = [
-            {
-                "task_id": "T-SUBMITTAL",
-                "task_name": f"Install / commission {submittal_id}",
-                "delay_probability": 0.2 if r0 <= 0 else 0.85,
-                "r0_score": r0,
-                "severity": "Critical" if r0 >= 5 else "Major",
-                "discipline": "Mechanical",
-                "status": "at_risk" if r0 > 0 else "on_track",
-                "on_critical_path": True,
-                "expected_delay_days": 7 if r0 > 0 else 0,
-                "downstream_count": 0,
-                "downstream_task_ids": [],
-                "end_date": datetime.now(timezone.utc).date().isoformat(),
-                "equipment_tag": submittal_id,
-                "source": "submittal",
-            }
-        ]
-    tasks.sort(key=lambda task: (task.get("r0_score", 0), task.get("delay_probability", 0)), reverse=True)
-    scores = {task.get("task_id"): task.get("r0_score", 0) for task in tasks if task.get("task_id")}
-    result["at_risk_tasks"] = tasks
-    result["critical_path"] = [task.get("task_id") for task in tasks]
-    result["r0_scores"] = scores
-    result["total_tasks"] = len(tasks)
-    result["at_risk_count"] = len(tasks)
-    result["source"] = "submittal"
-    result["degraded"] = False
-    result["provenance_note"] = f"Schedule risk derived from vendor submittal {submittal_id}"
+    else:
+        result["provenance_note"] = f"Guardian submittal {submittal_id} analyzed with 0 violations"
+
     return result
+
+
+def _submittal_match_scores(state: dict[str, Any]) -> tuple[dict[str, float], dict[str, float]]:
+    """Map Guardian violation parameters onto schedule equipment tags / disciplines."""
+    tag_scores: dict[str, float] = {}
+    discipline_scores: dict[str, float] = {}
+    rules: list[tuple[tuple[str, ...], list[str], list[str]]] = [
+        (("cooling", "chill", "thermal", "ambient", "hvac", "crah", "temperature"), ["CT-01", "EQ-CH-01", "EQ-CRAH-01"], ["HVAC"]),
+        (("pdu",), ["EQ-PDU-01", "EQ-PDU-02"], ["Electrical"]),
+        (("cable", "derating"), ["EQ-HV-01", "EQ-LV-01", "EQ-PDU-01", "EQ-PDU-02", "EQ-TX-01"], []),
+        (("ups", "battery"), ["EQ-UPS-01", "EQ-BAT-01"], []),
+        (("generator", "fuel"), ["EQ-GEN-01"], []),
+        (("floor", "loading"), [], ["Civil", "Structural"]),
+    ]
+    extracted = state.get("extracted_parameters") or {}
+    tokens: list[tuple[str, float]] = []
+    for violation in state.get("violations") or []:
+        tokens.append((str(violation.get("parameter") or "").lower(), float(violation.get("r0_score") or 0)))
+    for name, payload in extracted.items():
+        value = payload.get("value") if isinstance(payload, dict) else payload
+        tokens.append((str(name).lower(), 1.0 if value not in (None, "") else 0.0))
+    for token, score in tokens:
+        if not token or score <= 0:
+            continue
+        for keys, tags, disciplines in rules:
+            if any(key in token for key in keys):
+                for tag in tags:
+                    tag_scores[tag] = max(tag_scores.get(tag, 0.0), score)
+                for discipline in disciplines:
+                    discipline_scores[discipline] = max(discipline_scores.get(discipline, 0.0), score)
+    return tag_scores, discipline_scores
 
 
 def dashboard_rows(query: str) -> list[dict[str, Any]]:

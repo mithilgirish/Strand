@@ -13,7 +13,7 @@ from backend.redis_client import redis_client
 
 
 router = APIRouter(tags=["scheduler"])
-CACHE_KEY = "scheduler:latest"
+CACHE_KEY = "scheduler:latest:v2"
 SCHEDULE_PATH = Path(__file__).resolve().parents[2] / "data" / "project_schedule_100tasks.csv"
 
 
@@ -34,18 +34,24 @@ async def _get_scheduler_result() -> dict:
 @router.get("/scheduler/risks")
 async def get_risks():
     result = await _get_scheduler_result()
-    return {
+    payload = {
         "at_risk_tasks": result["at_risk_tasks"],
         "mitigations": result["mitigations"],
         "count": result["at_risk_count"],
         "total_tasks": result["total_tasks"],
+        "source": result.get("source"),
+        "degraded": result.get("degraded", False),
+        "provenance_note": result.get("provenance_note") or "",
+        "submittal_id": result.get("submittal_id"),
     }
+    return payload
 
 
 @router.get("/scheduler/critical-path")
 async def get_critical_path():
     result = await _get_scheduler_result()
-    tasks = {task["task_id"]: task for task in parse_schedule_csv(str(SCHEDULE_PATH))}
+    schedule = result.get("schedule_tasks") or parse_schedule_csv(str(SCHEDULE_PATH))
+    tasks = {task["task_id"]: task for task in schedule}
     ordered_tasks = [tasks[task_id] for task_id in result["critical_path"] if task_id in tasks]
     return {"critical_path": result["critical_path"], "tasks": ordered_tasks, "length": len(ordered_tasks)}
 
@@ -84,7 +90,7 @@ async def get_timeline():
     result = await _get_scheduler_result()
     critical_path = set(result["critical_path"])
     risks = {task["task_id"]: task for task in result["at_risk_tasks"]}
-    tasks = parse_schedule_csv(str(SCHEDULE_PATH))
+    tasks = result.get("schedule_tasks") or parse_schedule_csv(str(SCHEDULE_PATH))
     valid_dates = [datetime.fromisoformat(task["start_date"]) for task in tasks if task.get("start_date")]
     base_date = min(valid_dates) if valid_dates else datetime.now()
     timeline = []

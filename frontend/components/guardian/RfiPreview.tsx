@@ -27,11 +27,13 @@ export default function RfiPreview({ rfiDraft, violationId }: RfiPreviewProps) {
       const { data: { session } } = await supabase.auth.getSession();
       
       const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
       const response = await fetch(`${apiBase}/api/v1/guardian/rfi/${encodeURIComponent(violationId)}/approve`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
+        headers,
       });
 
       if (!response.ok) {

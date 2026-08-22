@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,16 +9,57 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from loguru import logger
 
 from backend.config import settings
 from backend.deps import limiter
 from backend.errors import StrandError
 from backend.routers import health, documents, guardian, scheduler, oracle, inspector, brain, approvals, metrics, planner, judge, project, dashboards, admin, integrations, chat
 
+
+def _seed_chroma_if_empty() -> None:
+    from backend.vector.store import chroma_store
+
+    if not chroma_store.is_available:
+        logger.warning("Chroma unavailable — skipping document seed")
+        return
+    try:
+        if chroma_store.count() > 0:
+            return
+    except Exception:
+        return
+
+    from backend.ingestion.pipeline import ingest_document
+
+    root = Path(__file__).resolve().parent.parent
+    seeds = [
+        (root / "data" / "spec_tia942_synthetic.pdf", "spec"),
+        (root / "data" / "vendor_submittal_cooling_tower.pdf", "submittal"),
+        (root / "data" / "vendor_submittal_ups_compliant.pdf", "submittal"),
+        (root / "data" / "vendor_submittal_generator_minor.pdf", "submittal"),
+        (root / "data" / "project_schedule_100tasks.csv", "schedule"),
+    ]
+    for path, doc_type in seeds:
+        if not path.exists():
+            continue
+        try:
+            result = ingest_document(str(path), document_type=doc_type, tenant_id="default")
+            logger.info("Seeded {} -> {}", path.name, result.get("status"))
+        except Exception as exc:
+            logger.warning("Failed to seed {}: {}", path.name, exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _seed_chroma_if_empty()
+    yield
+
+
 app = FastAPI(
     title="STRAND API",
     description="Backend API services for STRAND construction intelligence platform",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Ensure static asset directories exist and mount static route

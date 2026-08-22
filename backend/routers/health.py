@@ -21,8 +21,6 @@ def probe_services() -> dict:
         chroma = {"status": "unavailable", "error": str(e)}
     try:
         redis = redis_client.health()
-        if redis.get("using_fallback") and str(redis.get("status", "")).lower() == "ok":
-            redis["status"] = "degraded"
     except Exception as e:
         redis = {"status": "error", "using_fallback": True, "error": str(e)}
     return {

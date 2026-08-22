@@ -21,6 +21,8 @@ export interface SchedulerRisk {
   equipment_tag: string;
   downstream_count: number;
   downstream_task_ids: string[];
+  submittal_linked?: boolean;
+  submittal_id?: string;
 }
 
 export interface SchedulerMitigation {

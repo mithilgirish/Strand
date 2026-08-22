@@ -7,11 +7,16 @@ import MilestoneCard, { type Milestone } from "@/components/scheduler/MilestoneC
 import MitigationPanel from "@/components/scheduler/MitigationPanel";
 import R0ContagionTree from "@/components/scheduler/R0ContagionTree";
 import R0Gauge from "@/components/scheduler/R0Gauge";
+import ProvenanceBadge from "@/components/shared/ProvenanceBadge";
 import type { SchedulerMitigation, SchedulerRisk, TaskActivity } from "@/components/scheduler/types";
 
 interface RisksResponse {
   at_risk_tasks: SchedulerRisk[];
   mitigations: SchedulerMitigation[];
+  source?: string;
+  degraded?: boolean;
+  provenance_note?: string;
+  submittal_id?: string;
 }
 
 export default function SchedulerAgent() {
@@ -24,6 +29,7 @@ export default function SchedulerAgent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [provenance, setProvenance] = useState<{ source: string; note: string } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,18 +54,36 @@ export default function SchedulerAgent() {
           risksResponse.json() as Promise<RisksResponse>,
         ]);
         const timelineById = new Map(timelineData.map((task) => [task.id, task]));
+        let joinedTasks = riskData.at_risk_tasks
+          .map((risk) => timelineById.get(risk.task_id))
+          .filter((task): task is TaskActivity => Boolean(task));
+        if (joinedTasks.length === 0 && riskData.at_risk_tasks.length > 0) {
+          joinedTasks = riskData.at_risk_tasks.slice(0, 12).map((risk, index) => ({
+            id: risk.task_id,
+            name: risk.task_name,
+            startDay: index * 3,
+            duration: Math.max(1, risk.expected_delay_days || 3),
+            critical: true,
+            atRisk: true,
+            status: "at_risk",
+            r0Score: risk.r0_score,
+            discipline: risk.discipline,
+          }));
+        }
         setTasks(
-          riskData.at_risk_tasks
-            .map((risk) => timelineById.get(risk.task_id))
-            .filter((task): task is TaskActivity => Boolean(task))
+          joinedTasks
             .slice(0, 12)
-            .map((task) => ({ ...task, name: `${task.id} · ${task.name}` })),
+            .map((task) => ({ ...task, name: task.name.includes(" · ") ? task.name : `${task.id} · ${task.name}` })),
         );
         setMilestones(milestoneData.slice(0, 6));
         setRisks(riskData.at_risk_tasks);
         setMitigations(riskData.mitigations);
         setR0Score(r0Data.score);
         setSelectedRisk(riskData.at_risk_tasks[0] ?? null);
+        setProvenance({
+          source: riskData.source || "live",
+          note: riskData.provenance_note || "",
+        });
       } catch (loadError) {
         if ((loadError as Error).name !== "AbortError") setError("Scheduler intelligence is unavailable.");
       } finally {
@@ -73,7 +97,24 @@ export default function SchedulerAgent() {
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col space-y-5 pb-10">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
-        <div><h1 className="flex items-center gap-3 text-2xl font-black text-on-surface"><Calendar className="h-6 w-6 text-primary" />Schedule Risk Control</h1><p className="mt-1 text-sm text-on-surface-variant">Critical-path exposure and downstream delay containment.</p></div>
+        <div>
+          <h1 className="flex items-center gap-3 text-2xl font-black text-on-surface"><Calendar className="h-6 w-6 text-primary" />Schedule Risk Control</h1>
+          <p className="mt-1 text-sm text-on-surface-variant">Critical-path exposure and downstream delay containment.</p>
+          {provenance && (
+            <div className="mt-3">
+              <ProvenanceBadge
+                source={
+                  provenance.source.includes("submittal")
+                    ? "submittal"
+                    : provenance.source === "project_schedule_csv" || provenance.source === "degraded"
+                      ? "degraded"
+                      : "live"
+                }
+                note={provenance.note || provenance.source}
+              />
+            </div>
+          )}
+        </div>
         <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="flex items-center gap-2 border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-on-surface hover:bg-white/10"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh analysis</button>
       </header>
 

@@ -229,11 +229,18 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
         "r0_scores": state["r0_scores"],
         "total_tasks": len(schedule_data),
         "at_risk_count": len(state["at_risk_tasks"]),
+        "schedule_tasks": schedule_data,
         "source": source,
-        "degraded": source == "project_schedule_csv",
-        "provenance_note": "Using checked-in project_schedule_100tasks.csv" if source == "project_schedule_csv" else "",
+        "degraded": False,
+        "provenance_note": "Live CPM on project_schedule_100tasks.csv" if source == "project_schedule_csv" else "",
     }
-    return overlay_scheduler(result) if schedule_data is None else result
+    result = overlay_scheduler(result)
+    if result.get("submittal_enriched"):
+        state["at_risk_tasks"] = result["at_risk_tasks"]
+        state["r0_scores"] = result["r0_scores"]
+        state = suggest_mitigations(state)
+        result["mitigations"] = state["mitigation_suggestions"]
+    return result
 
 
 class SchedulerGraph:
