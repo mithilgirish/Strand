@@ -9,6 +9,7 @@
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/native-stack": "^6.9.26",
     "@supabase/supabase-js": "^2.109.0",
+    "base64-arraybuffer": "^1.0.2",
     "expo": "~57.0.15",
     "expo-asset": "~57.0.13",
     "expo-audio": "~57.0.4",
@@ -34,7 +35,6 @@
     "web": "expo start --web"
   },
   "overrides": {
-    "image-size": "file:./local_modules/image-size",
     "uuid": "^11.1.1"
   },
   "private": true

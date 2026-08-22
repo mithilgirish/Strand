@@ -5,15 +5,16 @@ import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, s
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
+import { uploadPhotoAsync } from '../photoUpload';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function NcrLogScreen({ route, navigation }: any) {
-  const { equipmentTag, stepId } = route.params;
+  const { equipmentTag, stepId, initialPhotoUri } = route.params || {};
   
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(initialPhotoUri || null);
   const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [inputMode, setInputMode] = useState<'voice' | 'type'>('voice');
@@ -32,6 +33,8 @@ export default function NcrLogScreen({ route, navigation }: any) {
     };
   }, [audioRecorder]);
 
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+
   const handleCapturePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -42,9 +45,11 @@ export default function NcrLogScreen({ route, navigation }: any) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
+      base64: true,
     });
-    if (!result.canceled) {
+    if (!result.canceled && result.assets && result.assets.length > 0) {
       setPhotoUri(result.assets[0].uri);
+      setPhotoBase64(result.assets[0].base64 || null);
     }
   };
 
@@ -123,9 +128,17 @@ export default function NcrLogScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      // Attempt connection to the backend server with a 3s timeout
+      let finalPhotoUrl = photoUri;
+      if (photoUri && photoUri.startsWith('file://')) {
+        const uploaded = await uploadPhotoAsync(photoUri, photoBase64);
+        if (uploaded) {
+          finalPhotoUrl = uploaded;
+        }
+      }
+
+      // Attempt connection to the backend server with a 6s timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const headers = await buildJsonAuthHeaders();
       
       const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
@@ -136,7 +149,7 @@ export default function NcrLogScreen({ route, navigation }: any) {
           equipment_tag: equipmentTag,
           step_id: stepId,
           raised_by: 'field_engineer',
-          photo_url: photoUri ? photoUri : null,
+          photo_url: finalPhotoUrl || null,
         }),
         signal: controller.signal
       });

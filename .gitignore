@@ -14,13 +14,14 @@ __pycache__/
 *.py[cod]
 # Runtime analysis artifacts (latest vendor submittal)
 data/runtime/
+data/as_built_records/
+static/
 backend/ncr_db.json
 backend/mock_ncr_db.json
 
 # Node.js
 node_modules/
 dist/
-!mobile/local_modules/**
 build/
 npm-debug.log
 yarn-error.log

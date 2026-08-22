@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity, Alert, Platform, ActivityIndicator, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_BASE_URL, setApiBaseUrl } from '../config';
+import { uploadUserAvatarAsync } from '../photoUpload';
 
 export default function SettingsScreen({ navigation }: any) {
   const [offlineSync, setOfflineSync] = useState(true);
@@ -15,6 +17,8 @@ export default function SettingsScreen({ navigation }: any) {
   });
   
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
 
@@ -64,6 +68,9 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        const avatar = user.user_metadata?.avatar_url || null;
+        if (avatar) setAvatarUrl(avatar);
+
         const { data } = await supabase
           .from('profiles')
           .select('*')
@@ -95,6 +102,78 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
+  const handleChangeAvatar = async () => {
+    Alert.alert(
+      'Profile Avatar',
+      'Upload your profile photo to Supabase Storage:',
+      [
+        {
+          text: '📷 Take Photo',
+          onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Camera permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.6,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              await processAvatarUpload(result.assets[0].uri, result.assets[0].base64);
+            }
+          }
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Photo library permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.6,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              await processAvatarUpload(result.assets[0].uri, result.assets[0].base64);
+            }
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const processAvatarUpload = async (localUri: string, base64?: string | null) => {
+    setIsUploadingAvatar(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user session.');
+      
+      setAvatarUrl(localUri);
+      const publicUrl = await uploadUserAvatarAsync(localUri, user.id, base64);
+      if (publicUrl) {
+        setAvatarUrl(publicUrl);
+        await supabase.auth.updateUser({
+          data: { avatar_url: publicUrl, full_name: displayName || profile.name }
+        });
+        Alert.alert('Avatar Updated', 'Profile photo saved to Supabase Storage.');
+      } else {
+        Alert.alert('Upload Failed', 'Could not upload avatar to cloud storage.');
+      }
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message || 'Error updating avatar.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleSaveName = async () => {
     if (!displayName.trim()) {
       Alert.alert('Validation Error', 'Display name cannot be empty.');
@@ -105,13 +184,17 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ full_name: displayName.trim() })
-          .eq('id', user.id);
+        await supabase.auth.updateUser({
+          data: { full_name: displayName.trim(), avatar_url: avatarUrl }
+        });
 
-        if (error) throw error;
-        
+        try {
+          await supabase
+            .from('profiles')
+            .update({ full_name: displayName.trim() })
+            .eq('id', user.id);
+        } catch (e) {}
+
         setProfile(prev => ({ ...prev, name: displayName.trim() }));
         setIsEditingName(false);
         Alert.alert('Profile Updated', 'Name saved successfully.');
@@ -220,48 +303,72 @@ export default function SettingsScreen({ navigation }: any) {
       <ScrollView style={styles.scrollContent}>
         {/* Profile Card */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Operator Identity</Text>
+          <Text style={styles.sectionTitle}>Operator Identity & Avatar</Text>
         </View>
         <View style={styles.profileCard}>
-          <View style={styles.profileInfo}>
-            {isEditingName ? (
-              <View style={styles.editNameRow}>
-                <TextInput
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  style={styles.nameInput}
-                  placeholder="Enter Name"
-                  placeholderTextColor="#737373"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity 
-                  style={styles.saveNameBtn} 
-                  onPress={handleSaveName}
-                  disabled={isSavingName}
-                >
-                  {isSavingName ? (
-                    <ActivityIndicator size="small" color="#111111" />
-                  ) : (
-                    <Text style={styles.saveNameBtnText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.cancelNameBtn} 
-                  onPress={() => { setIsEditingName(false); setDisplayName(profile.name); }}
-                >
-                  <Text style={styles.cancelNameBtnText}>Cancel</Text>
-                </TouchableOpacity>
+          <View style={styles.avatarRow}>
+            <TouchableOpacity onPress={handleChangeAvatar} style={styles.avatarWrapper} activeOpacity={0.8} disabled={isUploadingAvatar}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitial}>
+                    {(displayName || profile.name).charAt(0).toUpperCase() || 'O'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.cameraIconBadge}>
+                {isUploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#003824" />
+                ) : (
+                  <Text style={styles.cameraIconText}>📷</Text>
+                )}
               </View>
-            ) : (
-              <View style={styles.nameRow}>
-                <Text style={styles.profileName}>{profile.name}</Text>
-                <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditingName(true)}>
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <Text style={styles.profileRole}>{profile.role.toUpperCase()}</Text>
-            <Text style={styles.profileEmail}>{profile.email}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.profileInfo}>
+              {isEditingName ? (
+                <View style={styles.editNameRow}>
+                  <TextInput
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    style={styles.nameInput}
+                    placeholder="Enter Name"
+                    placeholderTextColor="#737373"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity 
+                    style={styles.saveNameBtn} 
+                    onPress={handleSaveName}
+                    disabled={isSavingName}
+                  >
+                    {isSavingName ? (
+                      <ActivityIndicator size="small" color="#111111" />
+                    ) : (
+                      <Text style={styles.saveNameBtnText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.cancelNameBtn} 
+                    onPress={() => { setIsEditingName(false); setDisplayName(profile.name); }}
+                  >
+                    <Text style={styles.cancelNameBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.nameRow}>
+                  <Text style={styles.profileName}>{profile.name}</Text>
+                  <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditingName(true)}>
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <Text style={styles.profileRole}>{profile.role.toUpperCase()}</Text>
+              <Text style={styles.profileEmail}>{profile.email}</Text>
+              <TouchableOpacity style={styles.changeAvatarLink} onPress={handleChangeAvatar}>
+                <Text style={styles.changeAvatarLinkText}>Upload Cloud Avatar &gt;</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -446,8 +553,64 @@ const styles = StyleSheet.create({
     borderColor: '#262626',
     padding: 16,
   },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#4edea3',
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#262626',
+    borderWidth: 2,
+    borderColor: '#404040',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#4edea3',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#4edea3',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#171717',
+  },
+  cameraIconText: {
+    fontSize: 10,
+  },
+  changeAvatarLink: {
+    marginTop: 6,
+  },
+  changeAvatarLinkText: {
+    color: '#4edea3',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
   profileInfo: {
-    width: '100%',
+    flex: 1,
   },
   nameRow: {
     flexDirection: 'row',
@@ -456,7 +619,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     color: '#F5F5F5',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
   },
   editBtn: {

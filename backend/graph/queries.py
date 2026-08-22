@@ -157,6 +157,7 @@ RETURN n.ncr_id as ncr_id,
        n.raised_by as raised_by,
        n.raised_at as raised_at,
        n.voice_transcript as voice_transcript,
+       n.photo_url as photo_url,
        c.section as clause_section,
        c.parameter_name as parameter_name,
        s.submittal_id as submittal_id
@@ -177,6 +178,7 @@ RETURN n.ncr_id as ncr_id,
        n.raised_by as raised_by,
        n.raised_at as raised_at,
        n.voice_transcript as voice_transcript,
+       n.photo_url as photo_url,
        n.tenant_id as tenant_id,
        c.section as clause_section,
        c.parameter_name as parameter_name
@@ -255,10 +257,12 @@ ON CREATE SET n.title = $title,
               n.status = $status,
               n.voice_transcript = $voice_transcript,
               n.tenant_id = $tenant_id,
+              n.photo_url = $photo_url,
               n.r0_score = $r0_score
 ON MATCH SET  n.status = $status,
               n.severity = $severity,
               n.tenant_id = $tenant_id,
+              n.photo_url = $photo_url,
               n.r0_score = $r0_score
 RETURN n
 """

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
+import { uploadPhotoAsync } from '../photoUpload';
 
 export default function SyncStatusScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -42,8 +43,16 @@ export default function SyncStatusScreen({ navigation }: any) {
 
       // Loop and sync each local NCR to the backend
       for (const ncr of localNcrs) {
+        let photoUrl = ncr.photo_url;
+        if (photoUrl && photoUrl.startsWith('file://')) {
+          const uploaded = await uploadPhotoAsync(photoUrl);
+          if (uploaded) {
+            photoUrl = uploaded;
+          }
+        }
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
         
         const response = await fetch(`${API_BASE_URL}/inspector/ncr`, {
           method: 'POST',
@@ -53,7 +62,7 @@ export default function SyncStatusScreen({ navigation }: any) {
             equipment_tag: ncr.equipment_tag,
             step_id: ncr.step_id,
             raised_by: ncr.raised_by || 'field_engineer',
-            photo_url: ncr.photo_url || null,
+            photo_url: photoUrl || null,
           }),
           signal: controller.signal
         });

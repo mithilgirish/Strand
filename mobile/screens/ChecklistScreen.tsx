@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { buildJsonAuthHeaders } from '../apiAuth';
 import { API_BASE_URL } from '../config';
+import { uploadPhotoAsync } from '../photoUpload';
 
 // Define step structure
 interface TestStep {
@@ -82,6 +83,7 @@ export default function ChecklistScreen({ route, navigation }: any) {
     await AsyncStorage.setItem(`checklist_${equipmentTag}`, JSON.stringify(updated));
 
     if (status === 'fail') {
+      const stepTarget = updated.find(s => s.step_id === stepId);
       Alert.alert(
         'Observation Log Required',
         'You marked this step as FAIL. Do you want to record a voice observation/NCR?',
@@ -89,7 +91,7 @@ export default function ChecklistScreen({ route, navigation }: any) {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Log Voice NCR',
-            onPress: () => navigation.navigate('NcrLog', { equipmentTag, stepId })
+            onPress: () => navigation.navigate('NcrLog', { equipmentTag, stepId, initialPhotoUri: stepTarget?.photoUri })
           }
         ]
       );
@@ -108,18 +110,39 @@ export default function ChecklistScreen({ route, navigation }: any) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
+      base64: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const localUri = result.assets[0].uri;
+      const base64Data = result.assets[0].base64;
       const updated = steps.map(s => {
         if (s.step_id === stepId) {
-          return { ...s, photoUri: result.assets[0].uri };
+          return { ...s, photoUri: localUri };
         }
         return s;
       });
       setSteps(updated);
       await AsyncStorage.setItem(`checklist_${equipmentTag}`, JSON.stringify(updated));
       Alert.alert('Success', 'Photo successfully attached to step.');
+
+      // Background upload to Supabase / backend so server has persistent asset
+      uploadPhotoAsync(localUri, base64Data).then(async (remoteUrl) => {
+        if (remoteUrl && remoteUrl !== localUri) {
+          const rawCached = await AsyncStorage.getItem(`checklist_${equipmentTag}`);
+          const curSteps: TestStep[] = rawCached ? JSON.parse(rawCached) : updated;
+          const synced = curSteps.map(s => {
+            if (s.step_id === stepId) {
+              return { ...s, photoUri: remoteUrl };
+            }
+            return s;
+          });
+          setSteps(synced);
+          await AsyncStorage.setItem(`checklist_${equipmentTag}`, JSON.stringify(synced));
+        }
+      }).catch(err => {
+        console.log("Background photo upload deferred:", err);
+      });
     }
   };
 
@@ -144,6 +167,17 @@ export default function ChecklistScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
+      // Ensure all local photo URIs are uploaded before closing
+      const stepsToUpload = await Promise.all(
+        steps.map(async (step) => {
+          if (step.photoUri && step.photoUri.startsWith('file://')) {
+            const uploaded = await uploadPhotoAsync(step.photoUri);
+            return { ...step, photoUri: uploaded || step.photoUri };
+          }
+          return step;
+        })
+      );
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       const headers = await buildJsonAuthHeaders();
@@ -152,7 +186,7 @@ export default function ChecklistScreen({ route, navigation }: any) {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          steps,
+          steps: stepsToUpload,
           closed_by: 'field_engineer',
         }),
         signal: controller.signal,

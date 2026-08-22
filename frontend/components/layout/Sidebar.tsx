@@ -20,10 +20,12 @@ import {
   Plug,
   Send
 } from "lucide-react";
+import UserProfileModal from "@/components/profile/UserProfileModal";
 
 interface SidebarProfile {
   full_name: string | null;
   role: string;
+  tenant_id?: string;
 }
 
 export default function Sidebar() {
@@ -31,6 +33,7 @@ export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<SidebarProfile | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -41,7 +44,7 @@ export default function Sidebar() {
         setUser(authUser);
         const { data } = await supabase
           .from('profiles')
-          .select('full_name, role')
+          .select('full_name, role, tenant_id')
           .eq('id', authUser.id)
           .single();
         if (data) {
@@ -61,8 +64,8 @@ export default function Sidebar() {
   const userEmail = user?.email || 'Loading...';
   const userName = profile?.full_name || userEmail.split('@')[0];
   const userInitial = userName.charAt(0).toUpperCase() || 'U';
-  // Role comes exclusively from the profiles table — not from JWT app_metadata
   const userRole = profile?.role || 'viewer';
+  const userAvatarUrl = user?.user_metadata?.avatar_url || null;
 
   const menuItems = [
     { name: "Risk Cockpit", href: "/", icon: Home },
@@ -153,16 +156,24 @@ export default function Sidebar() {
 
       {/* Footer Info: User Profile & Sign Out */}
       <div className={`py-4 border-t border-outline-variant bg-surface-container-lowest transition-all duration-300 ${isExpanded ? 'px-4' : 'flex flex-col items-center gap-4'}`}>
-        <div className={`flex items-center group cursor-pointer transition-all duration-200 border ${isExpanded ? 'rounded-full hover:bg-surface-container hover:shadow-[0_4px_12px_rgba(0,0,0,0.5)] border-transparent hover:border-outline-variant p-1.5 gap-3 w-full justify-between' : 'rounded-full border-transparent flex-col justify-center'}`}>
+        <div 
+          onClick={() => setIsProfileModalOpen(true)}
+          className={`flex items-center group cursor-pointer transition-all duration-200 border ${isExpanded ? 'rounded-full hover:bg-surface-container hover:shadow-[0_4px_12px_rgba(0,0,0,0.5)] border-transparent hover:border-outline-variant p-1.5 gap-3 w-full justify-between' : 'rounded-full border-transparent flex-col justify-center'}`}
+          title="Click to update profile & avatar"
+        >
           
           <div className={`flex items-center ${isExpanded ? 'gap-3' : ''}`}>
-            <div className="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center shadow-inner group-hover:border-primary group-hover:bg-[rgba(255,255,255,0.1)] transition-all flex-shrink-0 relative">
-              <span className="font-bold text-on-surface font-mono tracking-wider">{userInitial}</span>
+            <div className="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant overflow-hidden flex items-center justify-center shadow-inner group-hover:border-primary group-hover:bg-[rgba(255,255,255,0.1)] transition-all flex-shrink-0 relative">
+              {userAvatarUrl ? (
+                <img src={userAvatarUrl} alt={userName} className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <span className="font-bold text-on-surface font-mono tracking-wider">{userInitial}</span>
+              )}
               
               {/* Custom Tooltip for collapsed mode profile */}
               {!isExpanded && (
                 <div className="absolute left-[calc(100%+12px)] px-3 py-1.5 bg-surface-container-high border border-outline-variant text-on-surface text-xs font-bold label-caps rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg flex items-center">
-                  {userName}
+                  {userName} (Edit Icon/Profile)
                   <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-surface-container-high border-l border-b border-outline-variant rotate-45"></div>
                 </div>
               )}
@@ -204,6 +215,28 @@ export default function Sidebar() {
           </button>
         )}
       </div>
+
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        profile={profile}
+        onProfileUpdated={({ full_name, avatar_url }) => {
+          if (profile) {
+            setProfile({ ...profile, full_name });
+          }
+          if (user) {
+            setUser({
+              ...user,
+              user_metadata: {
+                ...user.user_metadata,
+                full_name,
+                ...(avatar_url ? { avatar_url } : {}),
+              },
+            } as any);
+          }
+        }}
+      />
     </aside>
   );
 }

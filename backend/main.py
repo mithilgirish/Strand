@@ -1,9 +1,11 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -17,6 +19,12 @@ app = FastAPI(
     description="Backend API services for STRAND construction intelligence platform",
     version="1.0.0"
 )
+
+# Ensure static asset directories exist and mount static route
+static_dir = Path("static")
+static_dir.mkdir(parents=True, exist_ok=True)
+(static_dir / "ncr_photos").mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

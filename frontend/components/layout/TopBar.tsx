@@ -17,6 +17,7 @@ export default function TopBar() {
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showAgentDetails, setShowAgentDetails] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
 
@@ -39,6 +40,9 @@ export default function TopBar() {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          const avatar = user.user_metadata?.avatar_url || null;
+          if (avatar) setAvatarUrl(avatar);
+
           const { data: profile } = await supabase
             .from('profiles')
             .select('tenant_id, role')
@@ -88,7 +92,14 @@ export default function TopBar() {
       <div className="flex min-w-0 items-center gap-2 lg:gap-6">
         {/* Tenant & Role Profile Badge */}
         {tenantName && (
-          <div className="hidden lg:flex items-center gap-3 bg-surface border border-outline-variant rounded-md px-4 py-1.5 ml-auto">
+          <div className="hidden lg:flex items-center gap-3 bg-surface border border-outline-variant rounded-md px-3.5 py-1.5 ml-auto">
+            {avatarUrl && (
+              <img 
+                src={avatarUrl} 
+                alt="Profile Avatar" 
+                className="w-7 h-7 rounded-full object-cover border border-primary/50" 
+              />
+            )}
             <div className="flex flex-col">
               <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">Tenant</span>
               <span className="text-[11px] text-primary font-mono font-semibold">{tenantName}</span>

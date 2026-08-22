@@ -39,6 +39,7 @@ async def process_voice_ncr(
     equipment_tag: str,
     step_id: str,
     raised_by: str = "field_engineer",
+    photo_url: str | None = None,
     tenant_id: str = "default"
 ) -> dict:
     """
@@ -113,6 +114,7 @@ async def process_voice_ncr(
                 "status": "pending_approval",  # v1.2: HITL gate
                 "voice_transcript": transcript,
                 "r0_score": r0,
+                "photo_url": photo_url,
                 "tenant_id": tenant_id
             },
         )
@@ -142,6 +144,7 @@ async def process_voice_ncr(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mitigation": ncr_data.immediate_action,
         "transcript": transcript,
+        "photo_url": photo_url,
     }
 
     redis_client.set_json(f"inspector:ncr:{_tenant_cache_part(tenant_id)}:{ncr_id}", result, ttl=86400)
@@ -295,6 +298,24 @@ async def close_checklist_session(
     }
     redis_client.set_json(f"inspector:as_built:{_tenant_cache_part(tenant_id)}:{equipment_tag.upper()}", record, ttl=86400)
     logger.info(f"Inspector: generated as-built record {record_id} for {equipment_tag.upper()}")
+
+    # For any failed steps, ensure structured NCRs are compiled and stored
+    for step in steps:
+        if step.get("status") == "fail":
+            transcript = step.get("notes") or f"{step.get('description', '')} failed criteria: {step.get('acceptance_criteria', '')}"
+            photo_url = step.get("photo_uri") or None
+            try:
+                await process_voice_ncr(
+                    transcript=transcript,
+                    equipment_tag=equipment_tag.upper(),
+                    step_id=step.get("step_id", ""),
+                    raised_by=closed_by,
+                    photo_url=photo_url,
+                    tenant_id=tenant_id
+                )
+            except Exception as e:
+                logger.warning(f"Failed to auto-create NCR for step {step.get('step_id')}: {e}")
+
     return record
 
 
@@ -305,7 +326,7 @@ async def get_latest_as_built(equipment_tag: str, tenant_id: str = "default") ->
 
 
 async def list_ncrs(tenant_id: str = "default") -> list[dict]:
-    """Return NCRs from the latest submittal, then Neo4j / Redis."""
+    """Return NCRs from the latest submittal, Neo4j graph, and Redis cache."""
     from backend.project_state import ncrs_from_submittal
 
     ncrs: list[dict] = []
@@ -335,14 +356,15 @@ async def list_ncrs(tenant_id: str = "default") -> list[dict]:
                 "raised_by": row.get("raised_by") or "field_engineer",
                 "timestamp": str(row.get("timestamp") or row.get("raised_at") or ""),
                 "status": row.get("status") or "open",
+                "photo_url": row.get("photo_url") or row.get("image_url") or row.get("photoUri"),
             }
         )
 
+    # 1. Include latest submittal violations if present
     for row in ncrs_from_submittal():
         _append(row)
-    if ncrs:
-        return sorted(ncrs, key=lambda ncr: ncr.get("timestamp", ""), reverse=True)
 
+    # 2. Query Neo4j graph database
     try:
         rows = neo4j_client.execute_query(queries.GET_OPEN_NCRS, {"tenant_id": tenant_id or "default"})
         if not rows:
@@ -352,16 +374,24 @@ async def list_ncrs(tenant_id: str = "default") -> list[dict]:
     except Exception as e:
         logger.debug(f"Inspector: NCR graph list unavailable, using cache: {e}")
 
-    for key in redis_client.keys(f"inspector:ncr:{_tenant_cache_part(tenant_id)}:*"):
+    # 3. Query Redis cache for tenant
+    tenant_part = _tenant_cache_part(tenant_id)
+    for key in redis_client.keys(f"inspector:ncr:{tenant_part}:*"):
         cached = redis_client.get_json(key)
         if cached:
             _append(cached)
-    if tenant_id not in {"default", ""}:
-        for key in redis_client.keys("inspector:ncr:default:*"):
-            cached = redis_client.get_json(key)
-            if cached:
+
+    # Also search default and general inspector:ncr keys for maximum resilience
+    for key in redis_client.keys("inspector:ncr:*"):
+        cached = redis_client.get_json(key)
+        if cached and isinstance(cached, dict) and cached.get("ncr_id"):
+            if tenant_id and tenant_id not in {"default", ""}:
+                if cached.get("tenant_id") in {tenant_id, "default", None, ""}:
+                    _append(cached)
+            else:
                 _append(cached)
 
+    # 4. Fallback to Guardian cache if nothing found
     if not ncrs:
         for key in redis_client.keys("cache:guardian:*"):
             cached = redis_client.get_json(key)
