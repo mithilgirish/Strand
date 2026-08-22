@@ -6,6 +6,7 @@ import UserDirectory from "@/components/admin/UserDirectory";
 import AuditLogs from "@/components/admin/AuditLogs";
 import TenantProvisioning from "@/components/admin/TenantProvisioning";
 import SystemTelemetry from "@/components/admin/SystemTelemetry";
+import SupplierSwitches from "@/components/admin/SupplierSwitches";
 import { useRouter } from "next/navigation";
 
 interface AdminUser {
@@ -14,7 +15,7 @@ interface AdminUser {
 }
 
 export default function AdminConsole() {
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useState("switches");
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -77,7 +78,13 @@ export default function AdminConsole() {
       </header>
 
       {/* Glassmorphic Tab Bar */}
-      <div className="flex gap-2 p-1.5 bg-[#171717] rounded-lg mb-8 border border-[#333333] w-fit">
+      <div className="flex flex-wrap gap-2 p-1.5 bg-[#171717] rounded-lg mb-8 border border-[#333333] w-fit font-mono">
+        <button
+          onClick={() => setActiveTab("switches")}
+          className={`px-4 py-2.5 rounded-md text-[10px] font-bold tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === "switches" ? "bg-[#4edea3] text-[#003824] shadow-sm" : "text-[#a3a3a3] hover:text-[#f5f5f5] hover:bg-[#262626]"}`}
+        >
+          <span>HITL Supplier Switches</span>
+        </button>
         <button
           onClick={() => setActiveTab("users")}
           className={`px-4 py-2.5 rounded-md text-[10px] font-bold tracking-widest uppercase transition-all ${activeTab === "users" ? "bg-[#e5e5e5] text-[#171717] shadow-sm" : "text-[#a3a3a3] hover:text-[#f5f5f5] hover:bg-[#262626]"}`}
@@ -114,6 +121,7 @@ export default function AdminConsole() {
 
       {/* Dynamic Pane Rendering */}
       <main className="flex-1 bg-[#111111] rounded-xl p-2 overflow-y-auto">
+        {activeTab === "switches" && <SupplierSwitches tenantId={user.tenant_id} isSuper={isSuper} />}
         {activeTab === "users" && <UserDirectory tenantId={user.tenant_id} isSuper={isSuper} />}
         {activeTab === "logs" && <AuditLogs tenantId={user.tenant_id} isSuper={isSuper} />}
         {activeTab === "tenants" && isSuper && <TenantProvisioning />}

@@ -63,7 +63,7 @@ def _normalise_shipment(
     suppliers_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     supplier = suppliers_by_id.get(shipment.get("origin_supplier", ""), {})
-    return {
+    normalized = {
         "shipment_id": shipment.get("shipment_id") or shipment.get("id", ""),
         "equipment_tag": shipment.get("equipment_tag", ""),
         "supplier_id": shipment.get("supplier_id") or shipment.get("origin_supplier", ""),
@@ -80,6 +80,31 @@ def _normalise_shipment(
         "destination_port": shipment.get("destination_port", ""),
     }
 
+    # Check for approved supplier switch overrides in Redis
+    eq_tag = normalized.get("equipment_tag", "")
+    if eq_tag:
+        try:
+            switch_override = redis_client.get_json(f"oracle:approved_switch:{eq_tag}")
+            if switch_override and switch_override.get("status") == "approved":
+                target_id = switch_override.get("target_supplier_id")
+                catalog_suppliers, _ = _merged_catalog()
+                target_supp = catalog_suppliers.get(target_id) or suppliers_by_id.get(target_id, {})
+                if target_supp:
+                    normalized["supplier_id"] = target_id
+                    normalized["supplier_name"] = target_supp.get("name", normalized["supplier_name"])
+                    normalized["supplier_risk_score"] = float(target_supp.get("risk_score", 0.1))
+                    normalized["supplier_tier"] = _safe_int(target_supp.get("tier", 1), 1)
+                    normalized["current_status"] = "on_track"
+                    normalized["risk_flag"] = False
+                    normalized["delay_days"] = 0
+                    if target_supp.get("lat") and target_supp.get("lng"):
+                        normalized["lat"] = float(target_supp["lat"])
+                        normalized["lng"] = float(target_supp["lng"])
+        except Exception:
+            pass
+
+    return normalized
+
 
 def _fallback_shipments() -> list[dict[str, Any]]:
     data = _load_data()
@@ -94,17 +119,13 @@ def get_all_shipments() -> list[dict[str, Any]]:
 
 
 def get_all_shipments_with_source() -> tuple[list[dict[str, Any]], str]:
-    from backend.project_state import shipments_from_submittal
-
-    submittal_rows = shipments_from_submittal()
-    if submittal_rows:
-        return submittal_rows, "submittal"
     if settings.DEMO_MODE:
         return _fallback_shipments(), "demo_json"
+    catalog_suppliers, _ = _merged_catalog()
     try:
         results = neo4j_client.execute_query(queries.GET_ALL_SHIPMENTS)
-        if results:
-            return [_normalise_shipment(shipment, {}) for shipment in results], "neo4j"
+        if results and len(results) >= 5:
+            return [_normalise_shipment(shipment, catalog_suppliers) for shipment in results], "neo4j"
     except Exception as exc:
         logger.debug(f"Oracle graph unavailable, using local shipments: {exc}")
     return _fallback_shipments(), "demo_json"

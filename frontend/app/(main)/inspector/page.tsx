@@ -90,49 +90,7 @@ export default function InspectorAgent() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'API Server unreachable. Please ensure the backend is running.';
       setError(message);
-      const seedData: NcrRecord[] = [
-        {
-          ncr_id: "NCR-20260721-1A77",
-          equipment_tag: "GEN-01",
-          step_id: "IST-002",
-          transcript: "Fuel consumption reads 285 litres per hour at full load against design spec threshold 260 L/h. Governor actuator is lagging by 450ms under peak thermal load.",
-          r0_score: 3.0,
-          severity: "Critical",
-          mitigation: "Verify electronic governor actuator calibration or replace fuel injector unit #4.",
-          raised_by: "field_engineer",
-          timestamp: new Date().toISOString(),
-          is_demo: true,
-          status: "fail"
-        },
-        {
-          ncr_id: "DEMO-NCR-2841",
-          equipment_tag: "GEN-01",
-          step_id: "IST-002",
-          transcript: "Fuel consumption reads 285 litres per hour against spec 260",
-          r0_score: 4.2,
-          severity: "Critical",
-          mitigation: "Verify governor settings or replace fuel injector unit.",
-          raised_by: "field_engineer",
-          timestamp: "2026-07-02T02:00:00Z",
-          is_demo: true,
-          status: "fail"
-        },
-        {
-          ncr_id: "DEMO-NCR-1942",
-          equipment_tag: "CT-01",
-          step_id: "IST-005",
-          transcript: "Ambient operating temperature is 45°C which is below the TIA-942 spec of 50°C",
-          r0_score: 3.1,
-          severity: "Major",
-          mitigation: "Escalate to engineering lead for temperature tolerance override.",
-          raised_by: "field_engineer",
-          timestamp: "2026-07-02T02:15:00Z",
-          is_demo: true,
-          status: "fail"
-        }
-      ];
-      setNcrs(seedData);
-      setSelectedNcr((current) => current || seedData[0]);
+      setNcrs([]);
     } finally {
       setLoading(false);
     }
@@ -479,12 +437,7 @@ export default function InspectorAgent() {
                             }`}
                           >
                             <td className="p-3 text-xs font-bold text-[#f5f5f5]">
-                              <div className="flex items-center gap-1.5">
-                                <span>{ncr.ncr_id}</span>
-                                {ncr.is_demo && (
-                                  <span className="rounded border border-amber-400/50 bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-200">DEMO</span>
-                                )}
-                              </div>
+                              <span>{ncr.ncr_id}</span>
                             </td>
                             <td className="p-3 text-xs font-semibold text-[#f5f5f5]">{ncr.equipment_tag}</td>
                             <td className="p-3 text-xs">

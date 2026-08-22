@@ -134,11 +134,6 @@ export default function NcrDetailModal({
                 }`}>
                   {isPassed ? "Verified Pass" : `${ncr.severity} Severity`}
                 </span>
-                {ncr.is_demo && (
-                  <span className="rounded border border-amber-400/50 bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-bold font-mono tracking-wider text-amber-200">
-                    DEMO
-                  </span>
-                )}
               </div>
               <p className="text-xs text-[#8c93a0] font-mono mt-0.5">
                 Target Node: <span className="text-[#f5f5f5] font-bold">{ncr.equipment_tag}</span> • Ref Step: <span className="text-[#4edea3] font-bold">{ncr.step_id || 'General Inspection'}</span>

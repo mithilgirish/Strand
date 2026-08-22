@@ -16,6 +16,7 @@ from backend.r0.engine import compute_r0_from_task_graph
 from backend.r0.classifier import r0_to_severity
 from backend.llm.client import has_configured_llm, invoke_raw
 from backend.prompts.registry import load_prompt, get_prompt_version
+from backend.config import settings
 
 
 class SchedulerState(TypedDict):
@@ -188,22 +189,7 @@ def _estimate_delay_days(task_data: dict) -> int:
 # ── Agent runner ─────────────────────────────────────────────────────
 async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional[str] = None) -> dict:
     """Run the full Scheduler pipeline."""
-    from backend.project_state import load_latest, overlay_scheduler
-
-    if schedule_data is None and csv_path is None and load_latest():
-        return overlay_scheduler(
-            {
-                "at_risk_tasks": [],
-                "critical_path": [],
-                "mitigations": [],
-                "r0_scores": {},
-                "total_tasks": 0,
-                "at_risk_count": 0,
-                "source": "submittal",
-                "degraded": False,
-                "provenance_note": "",
-            }
-        )
+    from backend.project_state import overlay_scheduler
 
     source = "uploaded_schedule"
     if schedule_data is None and csv_path:
@@ -247,7 +233,7 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
         "degraded": source == "project_schedule_csv",
         "provenance_note": "Using checked-in project_schedule_100tasks.csv" if source == "project_schedule_csv" else "",
     }
-    return overlay_scheduler(result)
+    return overlay_scheduler(result) if schedule_data is None else result
 
 
 class SchedulerGraph:
