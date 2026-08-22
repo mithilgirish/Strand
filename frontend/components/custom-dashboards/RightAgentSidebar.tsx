@@ -558,7 +558,7 @@ export default function RightAgentSidebar({
         )}
 
         {/* INPUT PROMPT BOX (Bottom Fixed Area) */}
-        <div className="p-3.5 border-t border-[#262626] bg-[#0d0d0e] space-y-2.5 shrink-0">
+        <div className="p-3.5 border-t border-[#262626] bg-[#0a0a0a] space-y-2.5 shrink-0">
           <form onSubmit={handleSubmit} className="space-y-2">
             <div className="relative rounded-lg border border-[#333333] bg-[#0a0a0a] focus-within:border-[#e5e5e5] focus-within:shadow-[0_0_8px_rgba(229,229,229,0.25)] transition-all p-2" style={{ boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.60)' }}>
               <textarea
