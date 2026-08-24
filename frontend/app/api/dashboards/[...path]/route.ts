@@ -39,30 +39,34 @@ async function proxyToBackend(
   pathSegments: string[],
   method: string
 ) {
+  const joinedPath = pathSegments.join('/');
+  const isQueryRoute =
+    method === 'POST' && (joinedPath === 'query' || joinedPath === 'execute-query');
+
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (!user || error) {
+  if (!isQueryRoute && (!user || error)) {
     return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
   }
 
-  // Get the fresh session to extract the access token
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  if (!isQueryRoute && !session) {
     return NextResponse.json({ detail: 'No session found' }, { status: 401 });
   }
 
-  const backendPath = pathSegments.join('/');
+  const backendPath = joinedPath === 'execute-query' ? 'query' : joinedPath;
   const targetUrl = `${BACKEND_URL}/api/v1/dashboards/${backendPath}`;
 
-  // Forward any query params
   const searchParams = request.nextUrl.searchParams.toString();
   const fullUrl = searchParams ? `${targetUrl}?${searchParams}` : targetUrl;
 
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
   };
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
 
   const fetchOptions: RequestInit = { method, headers };
 
@@ -77,8 +81,16 @@ async function proxyToBackend(
 
   try {
     const backendResp = await fetch(fullUrl, fetchOptions);
-    const data = await backendResp.json();
-    return NextResponse.json(data, { status: backendResp.status });
+    const raw = await backendResp.text();
+    try {
+      const data = raw ? JSON.parse(raw) : {};
+      return NextResponse.json(data, { status: backendResp.status });
+    } catch {
+      return NextResponse.json(
+        { detail: raw || 'Backend returned a non-JSON response.' },
+        { status: backendResp.status || 502 }
+      );
+    }
   } catch {
     return NextResponse.json(
       { detail: 'Backend service unavailable. Is the FastAPI server running?' },

@@ -57,10 +57,18 @@ async def get_optional_current_user(
 
     Demo-compatible endpoints use this to support local smoke tests without
     cookies while still enforcing JWT tenant claims when a real user is signed in.
+    Invalid or incomplete tokens must not 401 the whole request — submittal
+    reads still need to succeed for Guardian/dashboard widgets.
     """
     if credentials is None:
         return None
-    return await get_current_user(credentials)
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        from loguru import logger
+
+        logger.warning("Optional auth failed; continuing unauthenticated")
+        return None
 
 
 async def _decode_supabase_jwt(token: str) -> dict[str, Any]:
@@ -127,6 +135,11 @@ def _current_user_from_payload(payload: dict[str, Any]) -> CurrentUser:
         tenant_id=tenant_id,
         role=role,
     )
+
+
+# Compat alias used by tests and older imports
+_current_user_from_payload = _current_user_from_payload
+
 
 class RoleChecker:
     def __init__(self, allowed_roles: List[str]):

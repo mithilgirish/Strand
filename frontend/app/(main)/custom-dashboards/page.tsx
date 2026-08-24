@@ -416,38 +416,47 @@ export default function CustomDashboardsPage() {
   const fetchWidgetQuery = useCallback(async (widgetId: string, query: string) => {
     setLoadingData((prev) => ({ ...prev, [widgetId]: true }));
     try {
-      const resp = await fetch("/api/dashboards/query", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+      } catch {
+        // continue without a bearer token
+      }
+
+      let resp = await fetch("/api/dashboards/query", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ query }),
       });
+      if (!resp.ok) {
+        resp = await fetch(`${apiBase}/api/v1/dashboards/query`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query }),
+        });
+      }
+
       if (resp.ok) {
         const result = await resp.json() as { data?: DashboardRow[], source?: string, provenance_note?: string };
         const source = result.source || "live";
         const rows = Array.isArray(result.data) ? result.data : [];
-        setWidgetData((prev) => ({ ...prev, [widgetId]: rows }));
-        setWidgetSources((prev) => ({ ...prev, [widgetId]: source }));
-        hasLiveWidgetRef.current = hasLiveWidgetRef.current || source === "live";
-        if (source === "submittal") {
-          setErrorMsg(null);
-        } else if (source === "live") {
-          setErrorMsg((prev) => (prev?.startsWith("Showing DEMO") ? null : prev));
-        } else if (source === "unavailable" || rows.length === 0) {
-          setErrorMsg("Upload a vendor submittal on Guardian. Custom dashboards read that PDF, not demo graph rows.");
-        } else {
-          setErrorMsg("Showing DEMO / fallback widget rows from the backend. Not the vendor submittal.");
+        if (rows.length > 0 || source === "submittal") {
+          setWidgetData((prev) => ({ ...prev, [widgetId]: rows }));
         }
+        setWidgetSources((prev) => ({ ...prev, [widgetId]: source }));
+        hasLiveWidgetRef.current = hasLiveWidgetRef.current || source === "live" || source === "submittal";
         return;
       }
 
-      setWidgetData((prev) => ({ ...prev, [widgetId]: [] }));
-      setWidgetSources((prev) => ({ ...prev, [widgetId]: "unavailable" }));
-      setErrorMsg("Dashboard query failed. Upload a vendor submittal on Guardian, then refresh.");
+      setWidgetSources((prev) => ({ ...prev, [widgetId]: prev[widgetId] || "unavailable" }));
     } catch {
-      setWidgetData((prev) => ({ ...prev, [widgetId]: [] }));
-      setWidgetSources((prev) => ({ ...prev, [widgetId]: "unavailable" }));
-      setErrorMsg("Dashboard query is offline. Confirm the API is running, then re-upload the vendor PDF.");
+      setWidgetSources((prev) => ({ ...prev, [widgetId]: prev[widgetId] || "unavailable" }));
     } finally {
       setLoadingData((prev) => ({ ...prev, [widgetId]: false }));
     }
@@ -462,16 +471,52 @@ export default function CustomDashboardsPage() {
     }
   }, [currentDashboard, fetchWidgetQuery]);
 
-  // Re-run queries on dashboard change. Poll only live widgets, and not every 6s.
+  // Re-run queries on dashboard change. Keep polling so a Guardian PDF shows up without a manual refresh.
   useEffect(() => {
     hasLiveWidgetRef.current = false;
     runAllDashboardQueries();
     const interval = setInterval(() => {
-      if (hasLiveWidgetRef.current) runAllDashboardQueries();
-    }, 30000);
-    return () => clearInterval(interval);
+      runAllDashboardQueries();
+    }, 15000);
+    const onSubmittalUpdated = () => runAllDashboardQueries();
+    window.addEventListener("strand-submittal-updated", onSubmittalUpdated);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "strand_submittal_updated") runAllDashboardQueries();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("strand-submittal-updated", onSubmittalUpdated);
+      window.removeEventListener("storage", onStorage);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDashboard?.id]);
+
+  useEffect(() => {
+    if (!currentDashboard?.queries) return;
+    const ids = Object.keys(currentDashboard.queries);
+    if (!ids.length) return;
+    if (ids.some((id) => loadingData[id])) return;
+    if (ids.some((id) => widgetSources[id] == null)) return;
+
+    const sources = ids.map((id) => widgetSources[id]);
+    if (sources.includes("submittal")) {
+      setErrorMsg(null);
+      return;
+    }
+    const hasRows = ids.some((id) => Array.isArray(widgetData[id]) && widgetData[id].length > 0);
+    if (hasRows) {
+      if (sources.some((source) => source === "demo" || source === "degraded")) {
+        setErrorMsg("Showing DEMO / fallback widget rows from the backend. Not the vendor submittal.");
+      } else {
+        setErrorMsg(null);
+      }
+      return;
+    }
+    if (sources.every((source) => source === "unavailable")) {
+      setErrorMsg("Upload a vendor submittal on Guardian. Custom dashboards read that PDF.");
+    }
+  }, [widgetSources, widgetData, loadingData, currentDashboard]);
 
   // Handle AI synthesis generation from prompt
   const handleGenerate = async (promptToRun?: string) => {

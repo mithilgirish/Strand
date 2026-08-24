@@ -190,6 +190,10 @@ def sanitize_and_inject_tenant(cypher: str, tenant_id: str) -> str:
     return secured
 
 
+# Compat alias used by tests and older imports
+sanitize_and_inject_tenant = sanitize_and_inject_tenant
+
+
 def _tenant_cache_part(tenant_id: str = "default") -> str:
     return (tenant_id or "default").replace(":", "_")
 
@@ -443,6 +447,14 @@ async def execute_dashboard_query(
             "degraded": True,
         }
     return {"data": [], "source": "unavailable", "degraded": True}
+
+
+@router.post("/execute-query")
+async def execute_dashboard_query_alias(
+    payload: DashboardQuery,
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    return await execute_dashboard_query(payload, user)
 
 # ---------------------------------------------------------------------------
 # POST /dashboards/save

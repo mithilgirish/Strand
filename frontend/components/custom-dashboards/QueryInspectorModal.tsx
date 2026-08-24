@@ -51,15 +51,16 @@ export default function QueryInspectorModal({
     setIsRunning(true);
     const startTime = performance.now();
     try {
-      const res = await fetch("/api/dashboards/execute-query", {
+      const res = await fetch("/api/dashboards/query", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: queryText })
       });
       const data = await res.json();
       const endTime = performance.now();
       setLatencyMs(Math.round(endTime - startTime));
-      if (res.ok && data.success) {
+      if (res.ok) {
         setTestResult(data.data || []);
       } else {
         setTestResult({ error: data.error || data.detail || "Query execution failed." });

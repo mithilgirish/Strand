@@ -33,7 +33,9 @@ export default function UploadZone({ onUpload }: UploadZoneProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      startUpload(e.target.files[0]);
+      const file = e.target.files[0];
+      e.target.value = "";
+      startUpload(file);
     }
   };
 

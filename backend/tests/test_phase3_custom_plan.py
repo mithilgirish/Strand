@@ -333,6 +333,24 @@ class CustomPlanSecurityTests(unittest.TestCase):
                 "tenant_a",
             )
 
+    def test_dashboard_query_uses_latest_submittal_without_auth(self):
+        async def run_request():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                return await client.post(
+                    "/api/v1/dashboards/query",
+                    json={"query": "MATCH (s:Submittal) RETURN avg(s.r0_severity) as r0"},
+                    headers={"Authorization": "Bearer not-a-real-jwt"},
+                )
+
+        with patch("backend.routers.dashboards.dashboard_rows", return_value=[{"primary_metric": 4.1, "status": "Moderate"}]):
+            response = asyncio.run(run_request())
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["source"], "submittal")
+        self.assertEqual(payload["data"][0]["primary_metric"], 4.1)
+
 
 if __name__ == "__main__":
     unittest.main()

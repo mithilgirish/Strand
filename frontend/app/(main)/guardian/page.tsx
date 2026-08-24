@@ -21,12 +21,23 @@ function GuardianAgentContent() {
   const [fileName, setFileName] = useState(remembered.fileName);
   const [error, setError] = useState('');
   const [loadingReference, setLoadingReference] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    const stored = getGuardianSession();
+    setAnalysis(stored.analysis);
+    setSelectedViolation(stored.selectedViolation);
+    setFileName(stored.fileName);
+    setSessionReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionReady) return;
     const ref = searchParams.get("drawingId") || searchParams.get("submittalId") || searchParams.get("refId");
     if (!ref) return;
+    if (getGuardianSession().analysis) return;
 
     const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
     const refKey = normalise(ref);
@@ -54,8 +65,6 @@ function GuardianAgentContent() {
           if (getGuardianSession().analysis) {
             return;
           }
-          setAnalysis(null);
-          setSelectedViolation(null);
           setError(`No live Guardian analysis found for "${ref}". Upload the source PDF to run the real agent.`);
           return;
         }
@@ -92,7 +101,7 @@ function GuardianAgentContent() {
     };
 
     void loadLiveReference();
-  }, [searchParams]);
+  }, [searchParams, sessionReady]);
 
   const handleUpload = async (file: File) => {
     setError('');
@@ -113,15 +122,30 @@ function GuardianAgentContent() {
       }
 
       const result = await response.json() as GuardianResult;
-      const firstViolation = result.violations?.[0] || null;
-      setAnalysis(result);
+      const normalized: GuardianResult = {
+        ...result,
+        violations: Array.isArray(result.violations) ? result.violations : [],
+        spec_dna_chain: result.spec_dna_chain || {},
+        rfi_draft: result.rfi_draft || "",
+        status: result.status || "analyzed",
+        violation_count: result.violation_count ?? (result.violations?.length || 0),
+        r0_max: Number(result.r0_max || 0),
+      };
+      const firstViolation = normalized.violations[0] || null;
+      setAnalysis(normalized);
       setSelectedViolation(firstViolation);
       setFileName(file.name);
       setGuardianSession({
-        analysis: result,
+        analysis: normalized,
         selectedViolation: firstViolation,
         fileName: file.name,
       });
+      try {
+        window.localStorage.setItem("strand_submittal_updated", String(Date.now()));
+      } catch {
+        // ignore
+      }
+      window.dispatchEvent(new Event("strand-submittal-updated"));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Guardian analysis failed.');
       throw err;
@@ -153,6 +177,11 @@ function GuardianAgentContent() {
         </div>
       </div>
 
+      {!sessionReady ? (
+        <div className="flex-1 flex items-center justify-center text-on-surface-variant">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
       <div className="flex flex-1 gap-6 min-h-0">
         {/* Left Column: Upload & Violations */}
         <div className="flex-1 flex flex-col overflow-y-auto pr-2 custom-scrollbar">
@@ -203,6 +232,7 @@ function GuardianAgentContent() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

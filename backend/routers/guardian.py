@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from backend.agents.guardian import run_guardian
 from backend.deps import CurrentUser, get_optional_current_user, limiter
+from backend.project_state import load_latest
 from backend.redis_client import redis_client
 
 router = APIRouter()
@@ -15,6 +16,22 @@ UPLOAD_DIR = Path(tempfile.gettempdir()) / "strand_uploads"
 
 def _tenant_cache_part(tenant_id: str = "default") -> str:
     return (tenant_id or "default").replace(":", "_")
+
+
+def _latest_analysis() -> dict | None:
+    latest = load_latest()
+    if not latest:
+        return None
+    return latest
+
+
+def _violations_from_latest() -> list[dict]:
+    latest = _latest_analysis() or {}
+    submittal_id = latest.get("submittal_id") or ""
+    rows = []
+    for violation in latest.get("violations") or []:
+        rows.append({**violation, "submittal_id": violation.get("submittal_id") or submittal_id})
+    return rows
 
 
 def _resolve_tenant(user: CurrentUser | None, requested_tenant_id: str | None) -> str:
@@ -54,6 +71,19 @@ async def analyze_submittal(
         raise HTTPException(status_code=500, detail=f"Guardian analysis failed: {e}") from e
 
 
+@router.get("/guardian/latest")
+async def get_latest_submittal(
+    tenant_id: str | None = None,
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
+    """Return the persisted vendor submittal analysis so the UI can keep it on screen."""
+    _resolve_tenant(user, tenant_id)
+    latest = _latest_analysis()
+    if not latest:
+        return {"analysis": None, "violations": [], "count": 0}
+    return latest
+
+
 @router.get("/guardian/violations")
 async def list_violations(
     tenant_id: str | None = None,
@@ -61,12 +91,21 @@ async def list_violations(
 ):
     resolved_tenant_id = _resolve_tenant(user, tenant_id)
     violations = []
+    seen: set[str] = set()
     for key in redis_client.keys(f"cache:guardian:{_tenant_cache_part(resolved_tenant_id)}:*"):
         cached = redis_client.get_json(key)
         if not cached:
             continue
         for violation in cached.get("violations", []):
+            vid = str(violation.get("id") or "")
+            if vid:
+                seen.add(vid)
             violations.append({**violation, "submittal_id": cached.get("submittal_id", "")})
+    for violation in _violations_from_latest():
+        vid = str(violation.get("id") or "")
+        if vid and vid in seen:
+            continue
+        violations.append(violation)
     return {"violations": violations, "count": len(violations)}
 
 
@@ -90,6 +129,17 @@ async def get_violation(
                     "spec_dna_chain": cached.get("spec_dna_chain", {}).get(parameter, []),
                     "rfi_draft": cached.get("rfi_draft", ""),
                 }
+    latest = _latest_analysis() or {}
+    for violation in latest.get("violations") or []:
+        if violation.get("id") == violation_id:
+            parameter = violation.get("parameter", "")
+            chain = (latest.get("spec_dna_chain") or {}).get(parameter, [])
+            return {
+                **violation,
+                "submittal_id": violation.get("submittal_id") or latest.get("submittal_id", ""),
+                "spec_dna_chain": chain,
+                "rfi_draft": latest.get("rfi_draft", ""),
+            }
     raise HTTPException(status_code=404, detail="Violation not found")
 
 @router.get("/guardian/rfi/outbox")
@@ -136,8 +186,7 @@ async def get_rfi(
         violation = await get_violation(violation_id, tenant_id=tenant_id, user=user)
         return {"violation_id": violation_id, "rfi_draft": violation.get("rfi_draft", "")}
     except HTTPException:
-        from backend.project_state import load_latest
-        latest = load_latest() or {}
+        latest = _latest_analysis() or {}
         return {"violation_id": violation_id, "rfi_draft": latest.get("rfi_draft", "")}
 
 
@@ -147,7 +196,7 @@ async def approve_rfi(
     tenant_id: str | None = None,
     user: CurrentUser | None = Depends(get_optional_current_user),
 ):
-    from backend.project_state import load_latest, upsert_outbox_item
+    from backend.project_state import upsert_outbox_item
 
     resolved_tenant_id = _resolve_tenant(user, tenant_id)
     rfi_text = ""
@@ -161,7 +210,7 @@ async def approve_rfi(
         parameter = violation.get("parameter")
         spec_clause = violation.get("section")
     except HTTPException:
-        latest = load_latest() or {}
+        latest = _latest_analysis() or {}
         rfi_text = str(latest.get("rfi_draft") or "")
         submittal_id = latest.get("submittal_id")
         first = (latest.get("violations") or [{}])[0]
