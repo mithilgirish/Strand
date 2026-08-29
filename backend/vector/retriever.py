@@ -1,11 +1,10 @@
-# backend/vector/retriever.py — Hybrid BM25 + dense retrieval with RRF per PRD §6.5
 """
 Brain Agent's retrieval engine:
 1. Dense retrieval via Chroma (semantic similarity)
 2. BM25 keyword retrieval (exact term matching)
 3. Reciprocal Rank Fusion (RRF) to merge results
 
-Per PRD §6.5: the groundedness check ensures answers cite sources.
+Per specification: the groundedness check ensures answers cite sources.
 """
 
 from __future__ import annotations
@@ -158,7 +157,7 @@ class HybridRetriever:
         rrf_k: int = 60,
     ) -> list[dict]:
         """
-        Reciprocal Rank Fusion (RRF) per PRD §6.5.
+        Reciprocal Rank Fusion (RRF) per specification.
 
         RRF_score(d) = Σ 1/(rrf_k + rank_in_list_i)
 

@@ -1,4 +1,4 @@
-"""Phase 3 Inspector API routes wired to the real QA agent."""
+"""Inspector API routes wired to the real QA agent."""
 
 import os
 import tempfile

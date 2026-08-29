@@ -1,7 +1,5 @@
-# backend/agents/brain.py — The Brain (Project Knowledge Copilot) per PRD §6.5
 """
 Hybrid retrieval (dense + BM25 + RRF fusion).
-v1.2: spec_dna_ids as differentiator + graph_context for PKG-traceable answers.
 Groundedness check: answers must cite sources.
 """
 
@@ -31,7 +29,7 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
     Main Brain query handler.
     1. Hybrid retrieval (BM25 + dense via RRF)
     2. LLM answer generation with citations
-    3. Spec-DNA graph context enrichment (v1.2)
+    3. Spec-DNA graph context enrichment
     4. Related RFI lookup
     """
     # Check cache first
@@ -79,7 +77,7 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
         logger.warning(f"Brain: LLM answer generation failed: {e}")
         answer = _fallback_answer(question, chunks, related_rfis)
 
-    # Step 5: Enrich with graph context (v1.2 differentiator)
+    # Step 5: Enrich with graph context
     graph_context = None
     if answer.spec_dna_ids:
         graph_context = _enrich_with_graph_context(answer.spec_dna_ids)
@@ -284,7 +282,7 @@ def _find_related_rfis(question: str) -> list[dict]:
 
 def _enrich_with_graph_context(spec_dna_ids: list[str]) -> dict | None:
     """
-    v1.2: When retrieved chunks correspond to PKG entities with DERIVES_FROM lineage,
+    When retrieved chunks correspond to PKG entities with DERIVES_FROM lineage,
     include the 1-hop neighborhood so the answer can surface relationships
     a pure vector-search RAG system cannot.
     """

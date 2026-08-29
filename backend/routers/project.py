@@ -114,7 +114,7 @@ def _systemic_r0_count(sched: dict | None) -> tuple[int, dict]:
 
 @router.get("/summary")
 async def get_project_summary():
-    """Phase 2: unified dashboard summary with immunity score.
+    """unified dashboard summary with immunity score.
 
     Returns: immunity_score, violations_today, open_ncrs, at_risk_shipments,
              critical_r0_max, agents

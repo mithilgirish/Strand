@@ -1,4 +1,3 @@
-# backend/ingestion/pipeline.py — Document ingestion orchestrator per PRD §3
 """
 Orchestrates: parse → extract parameters → link entities → write to PKG + Chroma.
 Handles PDF, CSV, and JSON file types.

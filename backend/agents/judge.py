@@ -1,10 +1,9 @@
-# backend/agents/judge.py — The Judge (Validator & Arbitrator) per PRD §6.6
 """
 Independent verifier invoked by the Planner to check LLM-authored content
 (RFI drafts, executive reports, NCR extractions) against Neo4j facts
 BEFORE a human sees them.
 
-Per v1.2 §14.4: Judge checks content truth; HITL checks action approval.
+Judge checks content truth; HITL checks action approval.
 These are separate gates and must not be collapsed into one.
 """
 
@@ -30,7 +29,7 @@ async def run_judge(
     """
     Verify LLM-generated content against the PKG.
 
-    Per PRD §6.6:
+    Per specification:
     - Re-derives facts using read-only tools (trace_spec_dna, compute_r0, search_vector)
     - Checks claimed values against actual PKG data
     - Produces verdict with confidence_score, evidence_chain, flags

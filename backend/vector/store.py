@@ -1,4 +1,3 @@
-# backend/vector/store.py — Chroma vector store client per PRD §3
 """
 Chroma client singleton with collection management for document chunks.
 """

@@ -1,4 +1,3 @@
-# backend/models/query.py — Brain models per PRD §6.5
 from __future__ import annotations
 
 from typing import Optional
@@ -27,9 +26,9 @@ class Citation(BaseModel):
 
 class BrainAnswer(BaseModel):
     """
-    Per PRD §6.5 (v1.2):
+    Per specification:
     - spec_dna_ids: differentiator from generic RAG — every cited fact traces to a PKG node
-    - graph_context: 1-hop neighborhood when chunks correspond to PKG entities (v1.2 new)
+    - graph_context: 1-hop neighborhood when chunks correspond to PKG entities (new)
     """
 
     answer: str

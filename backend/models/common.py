@@ -1,4 +1,3 @@
-# backend/models/common.py — Shared Pydantic models per PRD §5.3
 from __future__ import annotations
 
 from enum import Enum
@@ -44,7 +43,7 @@ class ErrorDetail(BaseModel):
 
 
 class StrandErrorResponse(BaseModel):
-    """Standard error envelope per §5.3."""
+    """Standard error envelope"""
 
     ok: bool = False
     error: ErrorDetail

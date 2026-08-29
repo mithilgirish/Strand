@@ -1,4 +1,3 @@
-# backend/prompts/registry.py — YAML-based prompt loader per PRD §5.9 (v1.2)
 """
 All prompts are externalized to YAML files, one per prompt.
 Agents call load_prompt() instead of embedding f-strings.

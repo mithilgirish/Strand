@@ -1,4 +1,3 @@
-# backend/agents/scheduler.py — The Scheduler (Predictive R0 Risk Engine) per PRD §6.2
 """
 Builds CPM dependency graph, forecasts delays, computes R0, suggests mitigations.
 """
@@ -59,7 +58,7 @@ def build_task_graph(state: SchedulerState) -> SchedulerState:
 def forecast_delays(state: SchedulerState) -> SchedulerState:
     """
     Identify at-risk tasks using heuristic delay model.
-    (XGBoost structure ready for Phase 2 upgrade)
+    (XGBoost structure ready for future upgrade)
     """
     at_risk = []
     G = state["task_graph"]
@@ -159,7 +158,7 @@ def suggest_mitigations(state: SchedulerState) -> SchedulerState:
 
 
 def _estimate_delay_probability(task_data: dict, G: nx.DiGraph) -> float:
-    """Phase 2 delay heuristic, including delayed predecessor contagion."""
+    """Delay heuristic, including delayed predecessor contagion."""
     progress = float(task_data.get("progress_pct", 0)) / 100
     status = str(task_data.get("status", "")).lower()
     task_id = task_data.get("task_id")

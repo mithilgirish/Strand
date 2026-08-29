@@ -1,4 +1,3 @@
-# backend/ingestion/spec_dna/fingerprint.py — SHA-256 Spec-DNA ID generator per PRD §5.4
 """
 Spec-DNA is a deterministic SHA-256 ID written onto every entity the moment
 it's ingested. It serves as the universal lineage identifier across the PKG.

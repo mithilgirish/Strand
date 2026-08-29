@@ -1,4 +1,3 @@
-# backend/config.py — Expanded settings per PRD §5.1
 from pydantic import AliasChoices, ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings
 
@@ -28,7 +27,7 @@ class Settings(BaseSettings):
     # ── Chroma ──────────────────────────────────────────────────
     CHROMA_PERSIST_DIR: str = "./chroma_db"
     CHROMA_COLLECTION: str = "strand_docs"
-    CHROMA_HISTORY_COLLECTION: str = "strand_history"  # Phase 2 item
+    CHROMA_HISTORY_COLLECTION: str = "strand_history"  # Config item
 
     # ── Redis ───────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -45,14 +44,14 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""  # Never expose this to clients — server only
 
     # ── API & Security ──────────────────────────────────────────
-    API_KEY: str = "strand-dev-key"  # Static X-API-Key for write routes §9
-    RATE_LIMIT_PER_MINUTE: int = 30  # §14.20 — per IP on LLM routes
+    API_KEY: str = "strand-dev-key"  # Static X-API-Key for write routes
+    RATE_LIMIT_PER_MINUTE: int = 30  # — per IP on LLM routes
     BACKEND_URL: str = "http://localhost:8000"
     CORS_ORIGINS: str = "https://strand-iota.vercel.app,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081"
     APS_WEBHOOK_SECRET: str = "strand-fallback-webhook-secret-98765"
 
     # ── Demo Mode ───────────────────────────────────────────────
-    DEMO_MODE: bool = False  # §13 — auto-approve cached writes
+    DEMO_MODE: bool = False  # — auto-approve cached writes
     LOG_LEVEL: str = "INFO"
 
     # ── Frontend (passthrough) ──────────────────────────────────

@@ -1,9 +1,8 @@
-# backend/agents/planner.py — The Planner (Orchestration Layer) per PRD §7
 """
 Routes user requests to agents.
 - LLM path: classify_intent → decompose → execute → judge → approve → synthesize
 
-Per v1.2 §14.4: Write operations go through HITL approval gate.
+Write operations go through HITL approval gate.
 Cross-agent trigger: Guardian r0_max > 5.0 → Scheduler re-check.
 """
 
@@ -66,7 +65,7 @@ async def run_planner(query: str, session_id: str | None = None) -> dict:
     4. Judge output (if write)
     5. Return synthesized response
 
-    Per v1.2: Write operations create pending approvals.
+    Write operations create pending approvals.
     """
     # Step 1: Classify intent
     intent = await _classify_intent(query)

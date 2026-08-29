@@ -1,6 +1,5 @@
-# backend/graph/queries.py — All parameterized Cypher queries per PRD §4.4
 """
-All Cypher queries are parameterized ($param syntax) per §5.6 anti-injection rule.
+All Cypher queries are parameterized ($param syntax) per anti-injection rule.
 Never use f-strings with extracted/attacker-controlled text in Cypher.
 """
 
@@ -191,7 +190,7 @@ OPTIONAL MATCH (n)-[:REFERENCES]->(c:ContractClause)
 RETURN n, c
 """
 
-# ── Write queries (all use MERGE for idempotency per §5.6, §4.5) ────
+# ── Write queries (all use MERGE for idempotency,.5) ────
 MERGE_CONTRACT_CLAUSE = """
 MERGE (c:ContractClause {spec_dna_id: $spec_dna_id})
 ON CREATE SET c.section = $section,
@@ -229,7 +228,7 @@ ON MATCH SET  s.status = $status,
 RETURN s
 """
 
-# Idempotent violation write: delete-then-recreate per §4.5
+# Idempotent violation write: delete-then-recreate
 WRITE_VIOLATION = """
 MATCH (s:VendorSubmittal {submittal_id: $submittal_id})
 MATCH (c:ContractClause {spec_dna_id: $spec_dna_id})
@@ -343,7 +342,7 @@ WITH total_violations, open_ncrs, at_risk_shipments,
 RETURN total_violations, open_ncrs, at_risk_shipments, r0_max
 """
 
-# ── 1-hop neighborhood for Brain graph_context (§6.5 v1.2) ──────────
+# ── 1-hop neighborhood for Brain graph_context ──────────
 GET_SPEC_DNA_NEIGHBORHOOD = """
 MATCH (center {spec_dna_id: $spec_dna_id})
 OPTIONAL MATCH (center)-[r]-(neighbor)

@@ -1,4 +1,3 @@
-# backend/ingestion/ner/parameter_extractor.py — NER for engineering parameters per PRD §3
 """
 Two-pass parameter extraction:
 1. Regex primary patterns for known engineering values (temperatures, pressures, flows)

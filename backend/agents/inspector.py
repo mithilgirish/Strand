@@ -1,7 +1,6 @@
-# backend/agents/inspector.py — The Inspector (Commissioning QA) per PRD §6.4
 """
 Converts field engineer voice transcripts into structured NCRs.
-Per v1.2: NCR status starts as 'pending_approval' (HITL gate).
+NCR status starts as 'pending_approval' (HITL gate).
 """
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ async def process_voice_ncr(
 ) -> dict:
     """
     Convert voice observation to structured NCR with Spec-DNA.
-    Per v1.2 §6.4: NCR starts as 'pending_approval'.
+    NCR starts as 'pending_approval'.
     """
     ncr_id = f"NCR-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:4].upper()}"
 
@@ -99,7 +98,7 @@ async def process_voice_ncr(
     r0 = breakdown["r0"]
     severity = breakdown["severity"]
 
-    # Step 4: Write NCR to PKG with pending_approval status (v1.2 HITL)
+    # Step 4: Write NCR to PKG with pending_approval status (HITL)
     try:
         neo4j_client.execute_write(
             queries.MERGE_NCR,
@@ -111,7 +110,7 @@ async def process_voice_ncr(
                 "raised_by": raised_by,
                 "equipment_tag": equipment_tag,
                 "spec_dna_ref": spec_dna_ref,
-                "status": "pending_approval",  # v1.2: HITL gate
+                "status": "pending_approval",  # HITL gate
                 "voice_transcript": transcript,
                 "r0_score": r0,
                 "photo_url": photo_url,
@@ -434,7 +433,7 @@ def generate_checklist(tag: str) -> list[dict]:
 
 
 async def get_checklist(equipment_tag: str, tenant_id: str = "default") -> dict:
-    """Return the mobile-facing IST checklist loaded from the Phase 3 data source."""
+    """Return the mobile-facing IST checklist loaded from the inspection data source."""
     checklist_id = "IST-23"
     title = f"TIA-942 System Validation Checklist — {equipment_tag.upper()}"
     try:

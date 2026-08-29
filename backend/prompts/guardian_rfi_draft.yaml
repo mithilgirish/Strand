@@ -2,7 +2,7 @@ version: 1
 template: |
   You are a senior EPC engineer drafting a formal RFI (Request for Information) document.
 
-  PROJECT: {project_name} — Phase 1
+  PROJECT: {project_name}
   SUBMITTAL ID: {submittal_id}
   DATE: {today}
 

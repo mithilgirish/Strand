@@ -1,12 +1,8 @@
-# backend/approvals/manager.py — HITL Approval Gate per PRD §14.4 (v1.2)
 """
-Per v1.2: HITL approval is DISTINCT from Judge verification.
-- Judge checks truth (are the facts correct?)
-- HITL checks action (should we send this RFI / create this NCR?)
-
-Phase 1: in-memory queue
-Phase 2: Redis-backed queue
-DEMO_MODE: auto-approve cached-path writes
+Human-in-the-loop (HITL) approval gate and queue manager.
+- Judge agent verifies compliance and factual truth.
+- HITL gate arbitrates high-impact write operations (RFI dispatch, schedule alterations).
+- Supports Redis-backed persistent queues with in-memory fallback.
 """
 
 from __future__ import annotations

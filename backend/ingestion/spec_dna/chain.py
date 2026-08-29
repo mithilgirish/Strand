@@ -1,4 +1,3 @@
-# backend/ingestion/spec_dna/chain.py — Spec-DNA lineage chain builder per PRD §5.4
 """
 Builds and queries the full lineage chain:
 ContractClause → BOQLine → POLine → VendorSubmittal → TestStep
@@ -43,7 +42,7 @@ def build_chain(submittal_id: str) -> dict:
     """
     Build DERIVES_FROM lineage edges for a submittal when enough PKG nodes exist.
 
-    The Phase 1 demo can run with synthetic fallback chains, so this function is
+    The system can run with synthetic fallback chains, so this function is
     deliberately best-effort: it never blocks analysis when the graph lacks
     intermediate BOQ/PO nodes.
     """
@@ -82,7 +81,7 @@ def find_mutation_point(chain: list[dict]) -> dict | None:
 
 def get_spec_dna_neighborhood(spec_dna_id: str) -> dict:
     """
-    Get the 1-hop neighborhood of a Spec-DNA node (§6.5 v1.2).
+    Get the 1-hop neighborhood of a Spec-DNA node.
 
     Used by Brain's graph_context to show relationships a pure
     vector-search RAG system cannot surface.

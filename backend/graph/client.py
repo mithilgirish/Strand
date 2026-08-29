@@ -1,8 +1,7 @@
-# backend/graph/client.py — Neo4j driver singleton per PRD §5.6
 """
 Neo4j driver with session factory, health check, and graceful
 fallback to NetworkX in-memory graph if Aura times out.
-All Cypher queries MUST use parameterized queries (§5.6 anti-injection rule).
+All Cypher queries MUST use parameterized queries.
 """
 
 from __future__ import annotations

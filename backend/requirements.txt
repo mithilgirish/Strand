@@ -43,7 +43,7 @@ httpx==0.27.0
 python-dotenv==1.0.0
 loguru==0.7.0
 
-# Added in Phase 1
+# Caching & Infrastructure
 redis==5.0.1
 fakeredis==2.26.2
 slowapi==0.1.9

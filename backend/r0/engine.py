@@ -1,8 +1,7 @@
-# backend/r0/engine.py — Canonical R0 computation per PRD §5.5
 """
 ONE shared function, TWO callers (Guardian/Inspector via PKG, Scheduler via task graph).
 
-Contagion (PRD §5.5):
+Contagion :
     R0_contagion = (downstream + 2 * critical_downstream) / normaliser   → 0–10
 
 Engineering (submittal-aware):
@@ -68,7 +67,7 @@ def score_downstream_r0(
 ) -> float:
     """
     The single canonical contagion formula used everywhere.
-    PRD §5.5: R0 = (downstream + 2 * critical_downstream) / normaliser
+    R0 = (downstream + 2 * critical_downstream) / normaliser
     """
     raw = downstream_count + (2 * critical_downstream_count)
     return round(max(0.0, min(10.0, raw / max(normaliser, 1.0))), 1)

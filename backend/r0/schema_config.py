@@ -1,4 +1,3 @@
-# backend/r0/schema_config.py — Configurable R0 traversal per PRD §4.6 (v1.2)
 """
 Externalizes the edge types used by R0 traversal.
 A schema change that adds e.g. SUPERSEDES as a second lineage-relevant edge

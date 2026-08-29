@@ -46,7 +46,7 @@ class PlannerResponse(BaseModel):
 
 
 class JudgeVerdict(BaseModel):
-    """Per PRD §6.6 — independent verification result."""
+    """Per specification — independent verification result."""
 
     verdict: str = "approved"  # approved | approved_with_flag | rejected
     confidence_score: float = 0.0
@@ -75,7 +75,7 @@ class ApprovalItem(BaseModel):
 
 
 class ExecutiveReportRequest(BaseModel):
-    """§8.2 Executive Report Generator."""
+    """Executive Report Generator."""
 
     topic: str | None = None
     include_agents: list[str] = []

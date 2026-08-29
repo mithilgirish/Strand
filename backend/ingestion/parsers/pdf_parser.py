@@ -1,4 +1,3 @@
-# backend/ingestion/parsers/pdf_parser.py — PyMuPDF PDF parser per PRD §3 (Acquisition)
 """
 Two-pass extraction:
 1. PyMuPDF for text and table extraction

@@ -1,4 +1,3 @@
-# backend/llm/client.py — Shared LLM client wrapper per PRD §5.2
 """
 All agents use invoke_structured() for reliable Pydantic JSON parsing.
 - Supports Groq (dev) and Anthropic (demo)
@@ -22,7 +21,7 @@ from backend.errors import StrandLLMError, StrandLLMParseError
 T = TypeVar("T", bound=BaseModel)
 
 
-# ── Metrics accumulator (§14.6 observability) ────────────────────────
+# ── Metrics accumulator ────────────────────────
 _agent_metrics: dict[str, dict] = {}
 
 
@@ -131,7 +130,7 @@ def invoke_structured(
     """
     Invoke the LLM and parse the response into a Pydantic model.
 
-    Per PRD §5.2:
+    Per specification:
     - Retries up to LLM_RETRY_COUNT times on parse failures
     - Exponential backoff between retries
     - Logs prompt_name, prompt_version, latency, token counts
@@ -141,7 +140,7 @@ def invoke_structured(
         prompt: The full prompt string to send to the LLM
         response_model: Pydantic model class to parse the response into
         agent_name: Name of the calling agent (for metrics/logging)
-        prompt_name: Registry name of the prompt (§5.9)
+        prompt_name: Registry name of the prompt
         prompt_version: Version of the prompt
         max_retries: Override default retry count
 

@@ -1,4 +1,3 @@
-# backend/errors.py — Standard error envelope per PRD §5.3
 """
 Every error returned by the API uses this envelope:
 {
@@ -120,7 +119,7 @@ class StrandValidationError(StrandError):
 
 
 class StrandPermissionError(StrandError):
-    """Tool policy / RBAC denial — §5.7 authorize_tool_call."""
+    """Tool policy / RBAC denial — authorize_tool_call."""
 
     def __init__(self, message: str = "Permission denied", agent: str | None = None):
         super().__init__(code=ErrorCode.FORBIDDEN, message=message, agent=agent)

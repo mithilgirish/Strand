@@ -1,4 +1,3 @@
-# backend/tools/registry.py — Tool Registry per PRD §5.7
 """
 Two tiers:
 - Tier 1 (Agent-level): run_guardian, run_scheduler, run_oracle, run_inspector, run_brain, run_judge

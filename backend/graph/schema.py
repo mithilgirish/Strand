@@ -1,15 +1,14 @@
-# backend/graph/schema.py — PKG node/edge definitions per PRD §4
 """
 Node types, properties, constraints, and the critical passes_constraint() function.
 ContractClause.passes_constraint corrects the constraint-direction bug from the
-reference code (PRD §11, correction #1).
+reference code .
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-# ── Cypher constraint creation statements (§4.1) ────────────────────
+# ── Cypher constraint creation statements ────────────────────
 SCHEMA_CONSTRAINTS = [
     "CREATE CONSTRAINT IF NOT EXISTS FOR (c:ContractClause) REQUIRE c.spec_dna_id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (d:DrawingElement) REQUIRE d.spec_dna_id IS UNIQUE",
@@ -32,7 +31,7 @@ SCHEMA_INDEXES = [
 ]
 
 
-# ── Node schemas (§4.2) ─────────────────────────────────────────────
+# ── Node schemas ─────────────────────────────────────────────
 NODE_SCHEMAS: dict[str, dict[str, str]] = {
     "ContractClause": {
         "spec_dna_id": "str (SHA-256 fingerprint)",
@@ -96,7 +95,7 @@ NODE_SCHEMAS: dict[str, dict[str, str]] = {
 }
 
 
-# ── Constraint checking (§4.2, §11 correction #1) ───────────────────
+# ── Constraint checking ───────────────────
 # The reference code had a bug where passes_constraint only checked >=.
 # In reality, some constraints are upper bounds (max temp, max consumption)
 # and some are lower bounds (min capacity, min redundancy).
@@ -148,7 +147,7 @@ def passes_constraint(
     """
     Check if an actual value passes the constraint defined by the required value.
 
-    Per PRD §4.2 and §11 correction #1:
+    For schema adherence:
     - The operator determines the direction of comparison
     - Falls back to string equality for non-numeric values
 

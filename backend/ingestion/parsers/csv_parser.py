@@ -1,4 +1,4 @@
-# backend/ingestion/parsers/csv_parser.py — Schedule CSV parser per STRAND_AGENT.md §6
+# backend/ingestion/parsers/csv_parser.py — Schedule CSV parser
 """
 Parses project schedule CSV (MS Project / Primavera export format).
 Expected columns: task_id, task_name, start_date, end_date, status,

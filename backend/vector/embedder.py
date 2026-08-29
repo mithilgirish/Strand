@@ -1,7 +1,6 @@
-# backend/vector/embedder.py — Embedding model wrapper
 """
-Thin wrapper around the embedding model used for Chroma.
-Uses Chroma's default embedding function (all-MiniLM-L6-v2) for Phase 1.
+Vector embedding model wrapper and text chunking utilities.
+Uses Chroma's ONNX embedding function (all-MiniLM-L6-v2).
 """
 
 from __future__ import annotations

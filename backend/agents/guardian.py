@@ -1,4 +1,3 @@
-# backend/agents/guardian.py — The Guardian (Spec Compliance Auditor) per PRD §6.1
 """
 Full LangGraph StateGraph:
 extract_parameters → check_against_spec → compute_spec_dna → score_r0 → draft_rfi
@@ -63,7 +62,7 @@ def extract_parameters(state: GuardianState) -> GuardianState:
 def check_against_spec(state: GuardianState) -> GuardianState:
     """
     Step 2: Compare extracted parameters against PKG constraints.
-    Uses corrected constraint direction (PRD §11, correction #1).
+    Uses corrected constraint direction .
     """
     violations = []
 
@@ -160,7 +159,7 @@ def compute_spec_dna(state: GuardianState) -> GuardianState:
 def score_r0(state: GuardianState) -> GuardianState:
     """
     Step 4: Compute R0 contagion score for each violation.
-    Writes violations to PKG using idempotent MERGE (§4.5).
+    Writes violations to PKG using idempotent MERGE.
     """
     scored = []
     r0_max = 0.0
@@ -205,7 +204,7 @@ def score_r0(state: GuardianState) -> GuardianState:
         r0_max = max(r0_max, r0)
         scored.append(v)
 
-        # Write violation to PKG (idempotent: delete-then-recreate §4.5)
+        # Write violation to PKG (idempotent: delete-then-recreate.5)
         if v.get("spec_dna_id"):
             try:
                 neo4j_client.execute_write(
@@ -295,7 +294,7 @@ def _fallback_rfi(state: GuardianState) -> str:
 async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "default") -> dict:
     """
     Run the full Guardian pipeline.
-    Uses idempotency lock to prevent duplicate analysis (§5.8).
+    Uses idempotency lock to prevent duplicate analysis.
     """
     # Check cache first
     tenant_cache = _tenant_cache_part(tenant_id)

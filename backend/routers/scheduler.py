@@ -1,4 +1,4 @@
-"""Phase 2 Scheduler API routes."""
+"""Scheduler API routes."""
 
 from __future__ import annotations
 

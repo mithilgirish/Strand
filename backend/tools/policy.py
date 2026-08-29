@@ -1,4 +1,3 @@
-# backend/tools/policy.py — Tool authorization policy per PRD §5.7 (v1.2)
 """
 TOOL_POLICY dict + authorize_tool_call().
 Role-based tool permissions. planner_llm_write role requires HITL.
@@ -10,7 +9,7 @@ from loguru import logger
 
 from backend.errors import StrandPermissionError
 
-# ── Tool access control (§5.7 v1.2) ─────────────────────────────────
+# ── Tool access control ─────────────────────────────────
 # Role → which tools are allowed
 TOOL_POLICY: dict[str, list[str]] = {
     "guardian": ["run_guardian", "trace_spec_dna", "compute_r0", "search_vector"],
@@ -57,7 +56,7 @@ def authorize_tool_call(tool_name: str, is_write: bool = False) -> bool:
     """
     Check if the current role is authorized to call a tool.
 
-    Per v1.2: write tools from planner require HITL approval.
+    write tools from planner require HITL approval.
     The approval gate is in the Planner, not here — this just checks
     if the role can *initiate* the call.
 

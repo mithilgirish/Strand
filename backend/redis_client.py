@@ -1,4 +1,3 @@
-# backend/redis_client.py — Redis connection per PRD §5.8
 """
 Redis serves three roles:
 1. Session store (user context, conversation state)
@@ -217,7 +216,7 @@ class RedisClient:
     def set_json(self, key: str, value: dict, ttl: int | None = None) -> None:
         self.set(key, json.dumps(value), ttl=ttl)
 
-    # ── Idempotency locks (§5.8) ─────────────────────────────────
+    # ── Idempotency locks ─────────────────────────────────
     def acquire_lock(self, lock_key: str, ttl: int | None = None) -> bool:
         """
         Acquire an idempotency lock. Returns True if acquired, False if already held.

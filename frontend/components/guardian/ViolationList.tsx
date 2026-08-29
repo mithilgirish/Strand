@@ -16,7 +16,7 @@ export default function ViolationList({ violations, specDnaChain, onSelectViolat
     return (
       <div className="mt-6 bg-surface-container-low rounded-lg border border-outline-variant p-6">
         <h3 className="text-lg font-bold text-on-surface">No deviations detected</h3>
-        <p className="text-sm text-on-surface-variant mt-1">The uploaded submittal passed the Phase 1 specification checks.</p>
+        <p className="text-sm text-on-surface-variant mt-1">The uploaded submittal passed all specification compliance checks.</p>
       </div>
     );
   }

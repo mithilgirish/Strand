@@ -1,6 +1,3 @@
-# backend/r0/classifier.py — R0 → severity label mapping per PRD §5.5
-
-
 def r0_to_severity(r0: float) -> str:
     """
     Map R0 score to severity label.
@@ -31,7 +28,7 @@ def severity_to_action(severity: str) -> str:
 
 
 def r0_to_action(r0: float) -> str:
-    """Map R0 score directly to the recommended action from the Phase 1 plan."""
+    """Map R0 score directly to the recommended action from the baseline plan."""
     if r0 < 1.0:
         return "Monitor — resolve within standard cycle"
     if r0 < 2.5:

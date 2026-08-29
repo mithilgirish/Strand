@@ -1,4 +1,4 @@
-"""Phase 2 Oracle API routes with live HITL supplier switch governance."""
+"""Oracle API routes with live HITL supplier switch governance."""
 
 from __future__ import annotations
 
