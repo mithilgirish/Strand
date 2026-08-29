@@ -19,8 +19,15 @@ def _is_schema_error(exc: Exception) -> bool:
     text = str(exc).lower()
     return any(
         token in text
-        for token in ("mismatched types", "sql type `blob`", "backfill request to compactor")
-    )
+        for token in (
+            "mismatched types",
+            "sql type `blob`",
+            "backfill request to compactor",
+            "has no len()",
+            "no such table",
+            "database disk image is malformed",
+        )
+    ) or isinstance(exc, (TypeError, KeyError))
 
 
 def _resolve_persist_dir() -> Path:
@@ -84,6 +91,7 @@ class ChromaStore:
         reset_attempted = False
         for attempt in range(retries):
             try:
+                self._close_client()
                 import chromadb
                 self._client = chromadb.PersistentClient(
                     path=str(self._persist_dir),

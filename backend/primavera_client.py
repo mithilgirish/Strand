@@ -53,7 +53,7 @@ class PrimaveraClient:
         """Exchange the authorization code for access and refresh tokens."""
         client_id, client_secret = self.get_client_credentials()
         
-        if settings.DEMO_MODE and code == "tokenspark_primavera":
+        if settings.DEMO_MODE and code == "strand_primavera_demo":
             logger.info("Exchanging internal Primavera authorization code.")
             return {
                 "access_token": "admin-primavera-token-xyz",

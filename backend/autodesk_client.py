@@ -34,9 +34,9 @@ class AutodeskClient:
             raise HTTPException(status_code=500, detail="APS_CLIENT_ID not configured")
         
         # Development bypass for 3-legged redirect
-        if settings.DEMO_MODE and client_id in ["admin@strand", "tokenspark"]:
+        if settings.DEMO_MODE and client_id in ["admin@strand", "strand_demo", "strand_dev"]:
             logger.info("Generating internal 3-legged redirect URL.")
-            dev_code = "tokenspark"
+            dev_code = "strand_demo"
             state_param = f"&state={state}" if state else ""
             return f"http://localhost:8000/api/v1/integrations/autodesk/callback?code={dev_code}{state_param}"
 
@@ -54,7 +54,7 @@ class AutodeskClient:
         client_id, client_secret = self.get_client_credentials(tenant_id)
         
         # Development bypass for 3-legged token exchange
-        if settings.DEMO_MODE and (code == "tokenspark" or client_id in ["admin@strand", "tokenspark"]):
+        if settings.DEMO_MODE and (code == "strand_demo" or client_id in ["admin@strand", "strand_demo", "strand_dev"]):
             logger.info("Exchanging internal authorization code.")
             token_data = {
                 "access_token": "admin-3legged-token-xyz",
@@ -101,7 +101,7 @@ class AutodeskClient:
             raise HTTPException(status_code=401, detail="Autodesk credentials not configured")
             
         # Administrator bypass for internal diagnostics
-        if settings.DEMO_MODE and client_id in ["admin@strand", "tokenspark"]:
+        if settings.DEMO_MODE and client_id in ["admin@strand", "strand_demo", "strand_dev"]:
             logger.info("Using internal Autodesk 2-legged token.")
             return "admin-2legged-token-xyz"
             

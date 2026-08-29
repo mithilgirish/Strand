@@ -326,7 +326,7 @@ async def primavera_mock_login(redirect_uri: str, state: Optional[str] = None):
     
     # URL encode the state for the redirect script
     state_param = f"&state={state}" if state else ""
-    target_url = f"{redirect_uri}?code=tokenspark_primavera{state_param}"
+    target_url = f"{redirect_uri}?code=strand_primavera_demo{state_param}"
     
     html_content = f"""
     <!DOCTYPE html>

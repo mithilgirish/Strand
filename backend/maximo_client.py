@@ -22,7 +22,7 @@ class MaximoClient:
         
         is_sandbox = (
             settings.DEMO_MODE 
-            or api_key == "tokenspark_maximo"
+            or api_key == "strand_maximo_demo"
             or not base_url
             or not api_key
             or "demo" in (base_url or "").lower()
@@ -33,7 +33,7 @@ class MaximoClient:
 
         if is_sandbox:
             logger.info("Simulating Maximo successful connection in demo/sandbox mode.")
-            demo_config = {"base_url": base_url or "https://maximo.demo.strand.build", "api_key": api_key or "tokenspark_maximo"}
+            demo_config = {"base_url": base_url or "https://maximo.demo.strand.build", "api_key": api_key or "strand_maximo_demo"}
             cache_key = f"{tenant_id}:maximo_config" if tenant_id else "maximo_config"
             redis_client.set_cache(cache_key, demo_config)
             return {"status": "success", "message": "Connected to Maximo successfully (Sandbox)"}

@@ -403,7 +403,7 @@ function IntegrationsHubContent() {
           base_url: configs[id]?.base_url || (id === "primavera" ? "https://primavera.demo.strand.build" : id === "maximo" ? "https://maximo.demo.strand.build" : ""),
           username: configs[id]?.username || (id === "primavera" ? "admin@strand-demo.com" : ""),
           password: "",
-          api_key: id === "maximo" ? (configs[id]?.api_key || "tokenspark_maximo") : ""
+          api_key: id === "maximo" ? (configs[id]?.api_key || "strand_maximo_demo") : "",
         });
         return;
       }

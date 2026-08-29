@@ -90,7 +90,7 @@ IBM Maximo does not natively expose a 3-legged Authorization Code flow for exter
 5. If a `200 OK` is returned, status is marked as `connected`.
 
 ### Demo Mode:
-If `DEMO_MODE=True` in `.env`, entering `tokenspark_maximo` as the API Key in the UI will bypass the real HTTP request and instantly connect the integration, revealing the AI Sync UI block.
+If `DEMO_MODE=True` in `.env`, entering `strand_maximo_demo` as the API Key in the UI will bypass the real HTTP request and instantly connect the integration, revealing the AI Sync UI block.
 
 ### Environment Setup (`.env`):
 *(No global Client ID required. Relies on Tenant API keys).*

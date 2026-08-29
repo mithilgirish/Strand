@@ -164,15 +164,6 @@ async def get_rfi_outbox(
 
     approvals = list(by_id.values())
     approvals.sort(key=lambda item: item.get("approved_at") or "", reverse=True)
-    # #region agent log
-    try:
-        import json as _dj, time as _dt
-        from pathlib import Path as _P
-        with _P(r"C:\Users\revku\Documents\ET-HACKATHON\Strand\debug-66e2e3.log").open("a", encoding="utf-8") as _f:
-            _f.write(_dj.dumps({"sessionId":"66e2e3","runId":"post-fix","hypothesisId":"F","location":"backend/routers/guardian.py:get_rfi_outbox","message":"outbox list","data":{"tenant":resolved_tenant_id,"auth":bool(user),"redis_keys":len(raw_keys),"count":len(approvals),"ids":[a.get("violation_id") for a in approvals[:8]],"statuses":[a.get("status") for a in approvals[:8]],"item_tenants":[a.get("tenant_id") for a in approvals[:8]]},"timestamp":int(_dt.time()*1000)})+"\n")
-    except Exception:
-        pass
-    # #endregion
     return {"approvals": approvals}
 
 

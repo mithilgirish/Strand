@@ -28,9 +28,9 @@ class ProcoreClient:
         if not client_id:
             raise HTTPException(status_code=500, detail="PROCORE_CLIENT_ID not configured")
         
-        if settings.DEMO_MODE and client_id in ["admin@strand", "tokenspark"]:
+        if settings.DEMO_MODE and client_id in ["admin@strand", "strand_demo", "strand_dev"]:
             logger.info("Generating internal Procore redirect URL.")
-            dev_code = "tokenspark_procore"
+            dev_code = "strand_procore_demo"
             state_param = f"&state={state}" if state else ""
             return f"http://localhost:8000/api/v1/integrations/procore/callback?code={dev_code}{state_param}"
 
@@ -45,7 +45,7 @@ class ProcoreClient:
         """Exchange the authorization code for access and refresh tokens."""
         client_id, client_secret = self.get_client_credentials(tenant_id)
         
-        if settings.DEMO_MODE and (code == "tokenspark_procore" or client_id in ["admin@strand", "tokenspark"]):
+        if settings.DEMO_MODE and (code == "strand_procore_demo" or client_id in ["admin@strand", "strand_demo", "strand_dev"]):
             logger.info("Exchanging internal Procore authorization code.")
             token_data = {
                 "access_token": "admin-procore-token-xyz",

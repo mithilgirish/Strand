@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased dark" data-theme="dark">
+    <html lang="en" className="h-full antialiased dark" data-theme="dark" suppressHydrationWarning>
       <head>
         {/* Design-system fonts (DESIGN.md): Outfit for UI chrome, JetBrains Mono for data */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -22,7 +22,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-full bg-[#111111] text-[#f5f5f5] flex flex-col font-sans">
+      <body className="h-full bg-[#111111] text-[#f5f5f5] flex flex-col font-sans" suppressHydrationWarning>
         {children}
       </body>
     </html>
