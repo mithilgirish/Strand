@@ -1,7 +1,5 @@
 <p align="center">
-  <img src="static/strand-logo.png" alt="STRAND" width="140" />
-  <h1 align="center">STRAND</h1>
-  <p align="center"><strong>Autonomous  Intelligence for Hyperscale Infrastructure Construction</strong></p>
+  <img src="docs/images/strand-banner.jpg" alt="STRAND — Autonomous Intelligence for Hyperscale Infrastructure" width="100%" />
 </p>
 
 <p align="center">
