@@ -61,3 +61,9 @@ Thumbs.db
 # Security - Ignore seed scripts with credentials
 scripts/create_super_admin.py
 scripts/seed_test_users.py
+
+.coverage
+.pytest_cache/
+*.pem
+credentials*.json
+service-account*.json

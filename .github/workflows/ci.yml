@@ -15,12 +15,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install dependencies
+        run: |
+          pip install ruff pytest pytest-asyncio pytest-cov httpx -r backend/requirements.txt
       - name: Lint
         run: ruff check backend/
       - name: Format check
         run: ruff format --check backend/
+      - name: Run Tests
+        run: PYTHONPATH=. pytest --cov=backend backend/tests/
+        env:
+          DEMO_MODE: "True"
 
   frontend:
     name: Frontend Type Check & Build

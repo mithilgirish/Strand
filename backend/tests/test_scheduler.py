@@ -16,7 +16,7 @@ from backend.agents.scheduler import run_scheduler, scheduler_graph
 from backend.main import app
 
 
-class Phase2AgentTests(unittest.TestCase):
+class SchedulerAgentTests(unittest.TestCase):
     def test_scheduler_published_acceptance_contract(self):
         schedule = pd.read_csv("data/project_schedule_100tasks.csv").to_dict("records")
         with patch("backend.project_state.load_latest", return_value=None):
@@ -82,7 +82,7 @@ class Phase2AgentTests(unittest.TestCase):
         )
 
 
-class Phase2RouteTests(unittest.TestCase):
+class SchedulerRouteTests(unittest.TestCase):
     def test_required_routes(self):
         routes = (
             "/api/v1/scheduler/risks",

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/strand-banner.jpg" alt="STRAND — Autonomous Intelligence for Hyperscale Infrastructure" width="100%" />
+  <img src="docs/images/strand-banner.png" alt="STRAND — Autonomous Intelligence for Hyperscale Infrastructure" width="100%" />
 </p>
 
 <p align="center">
@@ -11,10 +11,10 @@
 </p>
 
 <p align="center">
-  <a href="https://strand-iota.vercel.app/">🌐 Live Demo</a> ·
-  <a href="https://strand-87qa.onrender.com/docs">⚡ API Docs</a> ·
-  <a href="ARCHITECTURE.md">🏗️ Architecture</a> ·
-  <a href="CONTRIBUTING.md">🤝 Contributing</a>
+  <a href="https://strand-iota.vercel.app/">Live Demo</a> ·
+  <a href="https://strand-87qa.onrender.com/docs">API Docs</a> ·
+  <a href="ARCHITECTURE.md">Architecture</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ---
@@ -75,9 +75,9 @@ npm run dev                             # http://localhost:3000
 
 | Key | Where to Get It | Required |
 | :--- | :--- | :--- |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | ✅ Yes |
-| `NEO4J_URI` + `NEO4J_PASSWORD` | [neo4j.com/cloud/aura](https://neo4j.com/cloud/aura/) (free tier) | ✅ Yes |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | [supabase.com](https://supabase.com) (free tier) | ✅ Yes |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | Yes |
+| `NEO4J_URI` + `NEO4J_PASSWORD` | [neo4j.com/cloud/aura](https://neo4j.com/cloud/aura/) (free tier) | Yes |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | [supabase.com](https://supabase.com) (free tier) | Yes |
 
 ---
 
