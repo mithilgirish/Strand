@@ -130,7 +130,7 @@ export default function RiskCockpit() {
             RISK COCKPIT
           </h2>
           <p className="text-on-surface-variant mt-1.5 text-sm font-sans tracking-normal">
-            Real-time causal project intelligence, compliance tracking, and contagion monitoring.
+            Real-time autonomous project intelligence, compliance tracking, and contagion monitoring.
           </p>
         </div>
         {loading && (

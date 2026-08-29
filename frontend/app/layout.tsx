@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "STRAND Platform",
-  description: "Causal Construction Intelligence Platform for EPC Delivery",
+  description: "Autonomous Construction Intelligence Platform for EPC Delivery",
 };
 
 export default function RootLayout({
