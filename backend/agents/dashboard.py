@@ -1,5 +1,6 @@
 import json
 import re
+
 from langchain_core.messages import HumanMessage
 
 # System prompt as specified in custom_plan.md Appendix
@@ -43,6 +44,7 @@ Output format must be exactly:
 }}
 """
 
+
 def _has_configured_llm() -> bool:
     from backend.llm.client import has_configured_llm
 
@@ -55,7 +57,15 @@ def _fallback_dashboard_config(user_prompt: str) -> dict:
         "dashboard_name": name.title(),
         "layout": [
             {"id": "widget_r0", "type": "R0Gauge", "title": "Maximum R0", "x": 0, "y": 0, "w": 6, "h": 3},
-            {"id": "widget_shipments", "type": "DataGrid", "title": "Critical Shipments", "x": 6, "y": 0, "w": 6, "h": 3},
+            {
+                "id": "widget_shipments",
+                "type": "DataGrid",
+                "title": "Critical Shipments",
+                "x": 6,
+                "y": 0,
+                "w": 6,
+                "h": 3,
+            },
         ],
         "queries": {
             "widget_r0": "MATCH (s:VendorSubmittal {tenant_id: $tenant_id}) RETURN max(s.r0_score) as value",
@@ -80,12 +90,12 @@ async def generate_dashboard_config(user_prompt: str) -> dict:
     prompt = f"{DASHBOARD_AGENT_PROMPT}\n\nUser Request: {user_prompt}\nJSON Configuration:"
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     content = response.content.strip()
-    
+
     # Clean up potential markdown blocks using regex for robustness
-    content = re.sub(r'^```(?:json)?\s*', '', content)
-    content = re.sub(r'\s*```$', '', content)
+    content = re.sub(r"^```(?:json)?\s*", "", content)
+    content = re.sub(r"\s*```$", "", content)
     content = content.strip()
-        
+
     try:
         return json.loads(content)
     except Exception as e:

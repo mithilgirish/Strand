@@ -3,33 +3,34 @@ backend/routers/dashboards.py — Custom BI Dashboards & AI Generator Router
 
 All routes are fully secured and scoped to the user's tenant.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-from uuid import UUID
-import httpx
+
 import re
-from datetime import datetime, timezone
-from pathlib import Path
-from uuid import uuid4
 import tempfile
+from datetime import UTC, datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from uuid import UUID, uuid4
 
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
+from pydantic import BaseModel
 
-from backend.deps import get_current_user, get_optional_current_user, CurrentUser
-from backend.config import settings
-from backend.graph.client import get_neo4j_session
 from backend.agents.dashboard import generate_dashboard_config
 from backend.agents.guardian import run_guardian
 from backend.agents.inspector import list_ncrs
 from backend.agents.oracle import run_oracle
 from backend.agents.scheduler import run_scheduler
-from backend.redis_client import redis_client
+from backend.config import settings
+from backend.deps import CurrentUser, get_current_user, get_optional_current_user
+from backend.graph.client import get_neo4j_session
 from backend.project_state import dashboard_rows
+from backend.redis_client import redis_client
 
 router = APIRouter(prefix="/dashboards", tags=["Dashboards"])
 compat_router = APIRouter(prefix="/dashboard", tags=["Dashboard Builder"])
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "strand_dashboard_uploads"
+
 
 # ---------------------------------------------------------------------------
 # Helper: Supabase Headers & URLs
@@ -39,7 +40,7 @@ def _supabase_headers() -> dict:
     if not service_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SUPABASE_SERVICE_ROLE_KEY not configured on server."
+            detail="SUPABASE_SERVICE_ROLE_KEY not configured on server.",
         )
     return {
         "apikey": service_key,
@@ -47,14 +48,15 @@ def _supabase_headers() -> dict:
         "Content-Type": "application/json",
     }
 
+
 def _supabase_rest_url(path: str) -> str:
     url = getattr(settings, "SUPABASE_URL", "")
     if not url:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SUPABASE_URL not configured on server."
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SUPABASE_URL not configured on server."
         )
     return f"{url}/rest/v1/{path}"
+
 
 # ---------------------------------------------------------------------------
 # Request & Response Models
@@ -62,13 +64,16 @@ def _supabase_rest_url(path: str) -> str:
 class DashboardQuery(BaseModel):
     query: str
 
+
 class GenerateRequest(BaseModel):
     prompt: str
+
 
 class SaveDashboardRequest(BaseModel):
     dashboard_name: str
     layout: List[Dict[str, Any]]
     queries: Dict[str, str]
+
 
 # ---------------------------------------------------------------------------
 # Cypher Query Sanitization
@@ -322,14 +327,12 @@ def _dashboard_widgets(
         )
     return widgets
 
+
 # ---------------------------------------------------------------------------
 # POST /dashboards/generate
 # ---------------------------------------------------------------------------
 @router.post("/generate")
-async def generate_dashboard(
-    payload: GenerateRequest,
-    user: CurrentUser = Depends(get_current_user)
-):
+async def generate_dashboard(payload: GenerateRequest, user: CurrentUser = Depends(get_current_user)):
     """
     Calls the AI Dashboard Agent to map the user prompt to layout/Cypher configurations.
     """
@@ -337,10 +340,8 @@ async def generate_dashboard(
         config = await generate_dashboard_config(payload.prompt)
         return config
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI generation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI generation failed: {str(e)}")
+
 
 # ---------------------------------------------------------------------------
 SEED_DEMO_RESULTS = {
@@ -352,37 +353,38 @@ SEED_DEMO_RESULTS = {
         {"date": "Day 4", "value": 26.5, "threshold": 28.0},
         {"date": "Day 5", "value": 25.2, "threshold": 28.0},
         {"date": "Day 6", "value": 28.0, "threshold": 28.0},
-        {"date": "Day 7", "value": 27.4, "threshold": 28.0}
+        {"date": "Day 7", "value": 27.4, "threshold": 28.0},
     ],
     "submittals": [
         {"Code": "SUB-104", "Vendor": "Trane HVAC", "DelayDays": 8, "Status": "Critical"},
         {"Code": "SUB-208", "Vendor": "Cummins Power", "DelayDays": 6, "Status": "Warning"},
         {"Code": "SUB-312", "Vendor": "Schneider Elec", "DelayDays": 12, "Status": "Critical"},
-        {"Code": "SUB-405", "Vendor": "ABB Switchgear", "DelayDays": 4, "Status": "Normal"}
+        {"Code": "SUB-405", "Vendor": "ABB Switchgear", "DelayDays": 4, "Status": "Normal"},
     ],
     "logistics": [
         {"Equipment": "Chiller Unit A", "Carrier": "FedEx Freight", "ETA": "2026-08-15"},
         {"Equipment": "Backup Gen", "Carrier": "UPS Supply", "ETA": "2026-08-18"},
-        {"Equipment": "Switchgear Board", "Carrier": "XPO Logistics", "ETA": "2026-08-21"}
+        {"Equipment": "Switchgear Board", "Carrier": "XPO Logistics", "ETA": "2026-08-21"},
     ],
     "ncr_status": [
         {"name": "Low Risk", "value": 65},
         {"name": "Moderate", "value": 25},
-        {"name": "Critical", "value": 10}
+        {"name": "Critical", "value": 10},
     ],
     "contractor": [
         {"name": "Trane HVAC", "count": 12},
         {"name": "Cummins Power", "count": 8},
         {"name": "Schneider Elec", "count": 15},
-        {"name": "ABB Switchgear", "count": 5}
+        {"name": "ABB Switchgear", "count": 5},
     ],
     "default": [
         {"metric": "Data Center Facility Node A", "status": "Active", "value": 142.5},
-        {"metric": "Data Center Facility Node B", "status": "Active", "value": 98.2}
-    ]
+        {"metric": "Data Center Facility Node B", "status": "Active", "value": 98.2},
+    ],
 }
 
 import random
+
 
 def _get_seed_fallback(query_str: str):
     q = query_str.lower()
@@ -395,9 +397,9 @@ def _get_seed_fallback(query_str: str):
         base_vals = [22.4, 24.1, 23.8, 26.5, 25.2, 28.0, 27.4]
         return [
             {
-                "date": f"Day {i+1}",
+                "date": f"Day {i + 1}",
                 "value": round(max(18.0, val + round(random.uniform(-0.6, 0.6), 1)), 1),
-                "threshold": 28.0
+                "threshold": 28.0,
             }
             for i, val in enumerate(base_vals)
         ]
@@ -410,6 +412,7 @@ def _get_seed_fallback(query_str: str):
     elif "submittal" in q or "delay" in q:
         return SEED_DEMO_RESULTS["submittals"]
     return SEED_DEMO_RESULTS["default"]
+
 
 @router.post("/query")
 async def execute_dashboard_query(
@@ -456,20 +459,18 @@ async def execute_dashboard_query_alias(
 ):
     return await execute_dashboard_query(payload, user)
 
+
 # ---------------------------------------------------------------------------
 # POST /dashboards/save
 # ---------------------------------------------------------------------------
 @router.post("/save")
-async def save_dashboard(
-    payload: SaveDashboardRequest,
-    user: CurrentUser = Depends(get_current_user)
-):
+async def save_dashboard(payload: SaveDashboardRequest, user: CurrentUser = Depends(get_current_user)):
     """
     Saves a generated custom dashboard to public.custom_dashboards.
     """
     headers = _supabase_headers()
     url = _supabase_rest_url("custom_dashboards")
-    
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             url,
@@ -480,96 +481,76 @@ async def save_dashboard(
                 "dashboard_name": payload.dashboard_name,
                 "layout": payload.layout,
                 "queries": payload.queries,
-            }
+            },
         )
-        
+
     if resp.status_code not in (200, 201):
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to save dashboard to database: {resp.text}"
-        )
-        
+        raise HTTPException(status_code=502, detail=f"Failed to save dashboard to database: {resp.text}")
+
     return {"status": "saved", "dashboard": resp.json()[0]}
+
 
 # ---------------------------------------------------------------------------
 # GET /dashboards/list
 # ---------------------------------------------------------------------------
 @router.get("/list")
-async def list_dashboards(
-    user: CurrentUser = Depends(get_current_user)
-):
+async def list_dashboards(user: CurrentUser = Depends(get_current_user)):
     """
     Lists all saved dashboards for the user's tenant.
     """
     headers = _supabase_headers()
     url = _supabase_rest_url(f"custom_dashboards?tenant_id=eq.{user.tenant_id}&order=created_at.desc")
-    
+
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, headers=headers)
-        
+
     if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to fetch dashboards from database: {resp.text}"
-        )
-        
+        raise HTTPException(status_code=502, detail=f"Failed to fetch dashboards from database: {resp.text}")
+
     return {"dashboards": resp.json()}
+
 
 # ---------------------------------------------------------------------------
 # GET /dashboards/{id}
 # ---------------------------------------------------------------------------
 @router.get("/{dashboard_id}")
-async def get_dashboard(
-    dashboard_id: UUID,
-    user: CurrentUser = Depends(get_current_user)
-):
+async def get_dashboard(dashboard_id: UUID, user: CurrentUser = Depends(get_current_user)):
     """
     Retrieves a single dashboard configuration.
     """
     headers = _supabase_headers()
     url = _supabase_rest_url(f"custom_dashboards?id=eq.{dashboard_id}&tenant_id=eq.{user.tenant_id}")
-    
+
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, headers=headers)
-        
+
     if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to fetch dashboard: {resp.text}"
-        )
-        
+        raise HTTPException(status_code=502, detail=f"Failed to fetch dashboard: {resp.text}")
+
     dashboards = resp.json()
     if not dashboards:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dashboard not found or access denied."
-        )
-        
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dashboard not found or access denied.")
+
     return dashboards[0]
+
 
 # ---------------------------------------------------------------------------
 # DELETE /dashboards/{id}
 # ---------------------------------------------------------------------------
 @router.delete("/{dashboard_id}")
-async def delete_dashboard(
-    dashboard_id: UUID,
-    user: CurrentUser = Depends(get_current_user)
-):
+async def delete_dashboard(dashboard_id: UUID, user: CurrentUser = Depends(get_current_user)):
     """
     Deletes a custom dashboard configuration.
     """
     headers = _supabase_headers()
     url = _supabase_rest_url(f"custom_dashboards?id=eq.{dashboard_id}&tenant_id=eq.{user.tenant_id}")
-    
+
     async with httpx.AsyncClient() as client:
         resp = await client.delete(url, headers=headers)
-        
+
     if resp.status_code not in (200, 204):
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to delete dashboard: {resp.text}"
-        )
-        
+        raise HTTPException(status_code=502, detail=f"Failed to delete dashboard: {resp.text}")
+
     return {"status": "deleted"}
 
 
@@ -593,9 +574,7 @@ async def build_dashboard_from_prompt(
     generated_config = await generate_dashboard_config(prompt)
     guardian_result = await _analyze_dashboard_upload(upload, project_id, tenant_id)
     guardian_violations = (
-        guardian_result.get("violations", [])
-        if guardian_result
-        else _cached_guardian_violations(tenant_id)
+        guardian_result.get("violations", []) if guardian_result else _cached_guardian_violations(tenant_id)
     )
 
     oracle_result = await run_oracle(project_id=project_id)
@@ -614,7 +593,7 @@ async def build_dashboard_from_prompt(
         "dashboard_name": generated_config.get("dashboard_name") or prompt[:80],
         "tenant_id": tenant_id,
         "project_id": project_id,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "widgets": widgets,
         "components": widgets,
         "layout": generated_config.get("layout", []),

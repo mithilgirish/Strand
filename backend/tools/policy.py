@@ -3,11 +3,12 @@
 TOOL_POLICY dict + authorize_tool_call().
 Role-based tool permissions. planner_llm_write role requires HITL.
 """
+
 from __future__ import annotations
 
 from loguru import logger
-from backend.errors import StrandPermissionError
 
+from backend.errors import StrandPermissionError
 
 # ── Tool access control (§5.7 v1.2) ─────────────────────────────────
 # Role → which tools are allowed
@@ -19,11 +20,21 @@ TOOL_POLICY: dict[str, list[str]] = {
     "brain": ["run_brain", "search_vector", "retrieve_graph", "trace_spec_dna"],
     "judge": ["trace_spec_dna", "compute_r0", "search_vector", "retrieve_graph"],
     "planner": [
-        "run_guardian", "run_scheduler", "run_oracle",
-        "run_inspector", "run_brain", "run_judge",
-        "trace_spec_dna", "compute_r0", "search_vector",
-        "retrieve_graph", "find_suppliers", "calculate_delay",
-        "create_rfi", "create_ncr", "generate_report",
+        "run_guardian",
+        "run_scheduler",
+        "run_oracle",
+        "run_inspector",
+        "run_brain",
+        "run_judge",
+        "trace_spec_dna",
+        "compute_r0",
+        "search_vector",
+        "retrieve_graph",
+        "find_suppliers",
+        "calculate_delay",
+        "create_rfi",
+        "create_ncr",
+        "generate_report",
     ],
     "admin": ["*"],  # unrestricted
 }
@@ -54,11 +65,12 @@ def authorize_tool_call(tool_name: str, is_write: bool = False) -> bool:
         StrandPermissionError: If the role cannot use this tool
     """
     from backend.config import settings
+
     allowed_tools = TOOL_POLICY.get(_current_role, [])
 
     if is_write and not getattr(settings, "DEMO_MODE", False):
         raise StrandPermissionError(
-            message=f"Write operations are disabled unless DEMO_MODE=True",
+            message="Write operations are disabled unless DEMO_MODE=True",
             agent=_current_role,
         )
 

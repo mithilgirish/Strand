@@ -1,19 +1,21 @@
 # backend/models/planner.py — Planner, Judge, Approval models
 from __future__ import annotations
-from typing import Optional, Any
+
+from typing import Any, Optional
+
 from pydantic import BaseModel, model_validator
 
 
 class PlannerRequest(BaseModel):
     query: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class PlannerSubtask(BaseModel):
     agent: str
     action: str
     depends_on: list[str] = []
-    result: Optional[dict] = None
+    result: dict | None = None
     status: str = "pending"  # pending | running | completed | failed
 
 
@@ -38,13 +40,14 @@ class PlannerResponse(BaseModel):
     intent: str = ""
     response: str = ""
     subtask_results: list[dict] = []
-    judge_verdict: Optional[dict] = None
-    approval_id: Optional[str] = None
+    judge_verdict: dict | None = None
+    approval_id: str | None = None
     status: str = "completed"
 
 
 class JudgeVerdict(BaseModel):
     """Per PRD §6.6 — independent verification result."""
+
     verdict: str = "approved"  # approved | approved_with_flag | rejected
     confidence_score: float = 0.0
     evidence_chain: list[dict] = []
@@ -57,7 +60,7 @@ class JudgeVerdict(BaseModel):
 
 class ApprovalRequest(BaseModel):
     decision: str  # approve | reject
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class ApprovalItem(BaseModel):
@@ -67,13 +70,14 @@ class ApprovalItem(BaseModel):
     payload: dict = {}
     status: str = "pending"  # pending | approved | rejected
     created_at: str = ""
-    decided_at: Optional[str] = None
-    decision_reason: Optional[str] = None
+    decided_at: str | None = None
+    decision_reason: str | None = None
 
 
 class ExecutiveReportRequest(BaseModel):
     """§8.2 Executive Report Generator."""
-    topic: Optional[str] = None
+
+    topic: str | None = None
     include_agents: list[str] = []
 
 
@@ -82,6 +86,6 @@ class ExecutiveReport(BaseModel):
     title: str = ""
     narrative: str = ""
     agent_summaries: dict[str, dict] = {}
-    judge_verdict: Optional[JudgeVerdict] = None
+    judge_verdict: JudgeVerdict | None = None
     approval_status: str = "pending_approval"
     immunity_score: float = 0.0

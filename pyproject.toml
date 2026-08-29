@@ -1,0 +1,44 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+exclude = [
+    ".venv",
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    "data",
+    "Strand-docs",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (syntax, undefined names, unused imports)
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modern python syntax)
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E402",  # module level import not at top of file
+    "E722",  # do not use bare 'except'
+    "F401",  # unused imports in __init__ / re-exports
+    "F841",  # local variable unused
+    "UP006", # non-pep585-annotation
+    "UP007", # non-pep604-annotation
+    "UP035", # deprecated-import
+    "UP042", # str, Enum inheritance
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"backend/tools/registry.py" = ["F401"]
+"backend/models/__init__.py" = ["F401"]
+"backend/graph/__init__.py" = ["F401"]
+"backend/agents/__init__.py" = ["F401"]
+"backend/routers/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

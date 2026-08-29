@@ -14,6 +14,7 @@ Final violation R0:
 When the PKG has no DERIVES_FROM fan-out (typical for a freshly uploaded PDF),
 contagion uses a labeled discipline estimate instead of a fake constant.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -23,7 +24,6 @@ from loguru import logger
 
 from backend.graph.schema import get_operator_for_parameter
 from backend.r0.classifier import r0_to_severity
-
 
 # How badly a miss on this parameter hurts the facility (0.4–1.0).
 PARAMETER_CRITICALITY: dict[str, float] = {
@@ -155,6 +155,7 @@ def _pkg_downstream_count(spec_dna_id: str, neo4j_client=None) -> tuple[int, str
         return 0, "none"
     if neo4j_client is None:
         from backend.graph.client import neo4j_client as _client
+
         neo4j_client = _client
     try:
         from backend.graph import queries
@@ -237,7 +238,7 @@ def compute_r0_from_pkg(
 def compute_r0_from_task_graph(
     task_id: str,
     task_graph: nx.DiGraph,
-    critical_path: Optional[list[str]] = None,
+    critical_path: list[str] | None = None,
 ) -> float:
     """R0 for a CPM task: downstream blockage, weighted for the critical path."""
     if task_id not in task_graph:
@@ -262,11 +263,11 @@ def compute_r0_from_task_graph(
 
 
 def compute_r0_score(
-    spec_dna_id: Optional[str] = None,
-    submittal_id: Optional[str] = None,
-    task_id: Optional[str] = None,
-    task_graph: Optional[nx.DiGraph] = None,
-    critical_path: Optional[list[str]] = None,
+    spec_dna_id: str | None = None,
+    submittal_id: str | None = None,
+    task_id: str | None = None,
+    task_graph: nx.DiGraph | None = None,
+    critical_path: list[str] | None = None,
     neo4j_client=None,
     **kwargs: Any,
 ) -> float:

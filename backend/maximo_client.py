@@ -1,11 +1,14 @@
 # backend/maximo_client.py
 import os
+
 import requests
-from loguru import logger
 from fastapi import HTTPException
-from backend.redis_client import redis_client
+from loguru import logger
+
 from backend.config import settings
 from backend.crypto_utils import _decrypt_token
+from backend.redis_client import redis_client
+
 
 class MaximoClient:
     def get_client_credentials(self, tenant_id: str = None):
@@ -19,9 +22,9 @@ class MaximoClient:
     def test_connection(self, tenant_id: str = None):
         """Tests the connection to IBM Maximo REST API."""
         base_url, api_key = self.get_client_credentials(tenant_id)
-        
+
         is_sandbox = (
-            settings.DEMO_MODE 
+            settings.DEMO_MODE
             or api_key == "strand_maximo_demo"
             or not base_url
             or not api_key
@@ -33,18 +36,18 @@ class MaximoClient:
 
         if is_sandbox:
             logger.info("Simulating Maximo successful connection in demo/sandbox mode.")
-            demo_config = {"base_url": base_url or "https://maximo.demo.strand.build", "api_key": api_key or "strand_maximo_demo"}
+            demo_config = {
+                "base_url": base_url or "https://maximo.demo.strand.build",
+                "api_key": api_key or "strand_maximo_demo",
+            }
             cache_key = f"{tenant_id}:maximo_config" if tenant_id else "maximo_config"
             redis_client.set_cache(cache_key, demo_config)
             return {"status": "success", "message": "Connected to Maximo successfully (Sandbox)"}
 
         # Typical Maximo ping endpoint for OSLC API
         endpoint = f"{base_url.rstrip('/')}/maximo/oslc/whoami"
-        headers = {
-            "apikey": api_key,
-            "Content-Type": "application/json"
-        }
-        
+        headers = {"apikey": api_key, "Content-Type": "application/json"}
+
         try:
             response = requests.get(endpoint, headers=headers, timeout=10)
             if response.status_code == 200:
@@ -55,5 +58,6 @@ class MaximoClient:
         except requests.RequestException as e:
             logger.error(f"Maximo connection error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to connect to Maximo: {str(e)}")
+
 
 maximo_client = MaximoClient()

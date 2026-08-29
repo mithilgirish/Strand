@@ -4,10 +4,11 @@ Neo4j driver with session factory, health check, and graceful
 fallback to NetworkX in-memory graph if Aura times out.
 All Cypher queries MUST use parameterized queries (§5.6 anti-injection rule).
 """
+
 from __future__ import annotations
 
-from typing import Optional, Any
 from contextlib import contextmanager
+from typing import Any, Optional
 
 import networkx as nx
 from loguru import logger
@@ -21,7 +22,7 @@ class Neo4jClient:
 
     def __init__(self):
         self._driver = None
-        self._fallback_graph: Optional[nx.DiGraph] = None
+        self._fallback_graph: nx.DiGraph | None = None
         self._using_fallback = False
         self._connect()
 
@@ -33,6 +34,7 @@ class Neo4jClient:
 
         try:
             from neo4j import GraphDatabase
+
             self._driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
                 auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
@@ -56,7 +58,7 @@ class Neo4jClient:
         return self._using_fallback
 
     @contextmanager
-    def get_session(self, default_access_mode: Optional[str] = None):
+    def get_session(self, default_access_mode: str | None = None):
         """
         Get a Neo4j session (or a fallback wrapper).
         Usage:
@@ -94,7 +96,7 @@ class Neo4jClient:
             logger.warning(f"Neo4j connectivity check failed: {e}")
             return False
 
-    def execute_query(self, query: str, parameters: Optional[dict] = None) -> list[dict]:
+    def execute_query(self, query: str, parameters: dict | None = None) -> list[dict]:
         """Execute a Cypher query and return results as list of dicts."""
         if self._using_fallback:
             logger.debug(f"Fallback graph query (no-op): {query[:80]}...")
@@ -109,7 +111,7 @@ class Neo4jClient:
         except Exception as e:
             raise StrandGraphError(message=f"Query execution failed: {e}")
 
-    def execute_write(self, query: str, parameters: Optional[dict] = None) -> list[dict]:
+    def execute_write(self, query: str, parameters: dict | None = None) -> list[dict]:
         """Execute a write Cypher query (MERGE, CREATE, DELETE)."""
         if self._using_fallback:
             logger.debug(f"Fallback graph write (no-op): {query[:80]}...")
@@ -147,7 +149,7 @@ class _NetworkXSession:
     def __init__(self, graph: nx.DiGraph):
         self.graph = graph
 
-    def run(self, query: str, parameters: Optional[dict] = None, **kwargs) -> "_NetworkXResult":
+    def run(self, query: str, parameters: dict | None = None, **kwargs) -> _NetworkXResult:
         logger.debug(f"NetworkX fallback — query not executed: {query[:60]}...")
         raise StrandGraphUnavailableError(message="Graph operations are not supported in fallback mode")
 
@@ -161,7 +163,7 @@ class _NetworkXResult:
     def data(self) -> list[dict]:
         return self._data
 
-    def single(self) -> Optional[dict]:
+    def single(self) -> dict | None:
         return self._data[0] if self._data else None
 
 
@@ -169,6 +171,6 @@ class _NetworkXResult:
 neo4j_client = Neo4jClient()
 
 
-def get_neo4j_session(default_access_mode: Optional[str] = None):
+def get_neo4j_session(default_access_mode: str | None = None):
     """Convenience alias used throughout the codebase."""
     return neo4j_client.get_session(default_access_mode=default_access_mode)

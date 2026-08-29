@@ -6,11 +6,12 @@ All agents use invoke_structured() for reliable Pydantic JSON parsing.
 - Logs prompt_name, prompt_version, latency, token counts per call
 - Returns typed Pydantic models, not raw strings
 """
+
 from __future__ import annotations
 
 import json
 import time
-from typing import Type, TypeVar, Optional
+from typing import Optional, Type, TypeVar
 
 from loguru import logger
 from pydantic import BaseModel
@@ -27,13 +28,16 @@ _agent_metrics: dict[str, dict] = {}
 
 def get_agent_metrics(agent_name: str) -> dict:
     """Return accumulated metrics for an agent. Used by /metrics endpoint."""
-    return _agent_metrics.get(agent_name, {
-        "total_calls": 0,
-        "total_tokens": 0,
-        "total_latency_ms": 0,
-        "retry_count": 0,
-        "error_count": 0,
-    })
+    return _agent_metrics.get(
+        agent_name,
+        {
+            "total_calls": 0,
+            "total_tokens": 0,
+            "total_latency_ms": 0,
+            "retry_count": 0,
+            "error_count": 0,
+        },
+    )
 
 
 def _record_metric(agent_name: str, latency_ms: float, tokens: int, retried: bool, errored: bool):
@@ -62,6 +66,7 @@ def _get_llm():
 
     if provider == "groq":
         from langchain_groq import ChatGroq
+
         return ChatGroq(
             model=settings.LLM_MODEL,
             api_key=settings.GROQ_API_KEY,
@@ -70,6 +75,7 @@ def _get_llm():
         )
     elif provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
+
         return ChatAnthropic(
             model=settings.LLM_MODEL,
             api_key=settings.ANTHROPIC_API_KEY,
@@ -120,7 +126,7 @@ def invoke_structured(
     agent_name: str = "unknown",
     prompt_name: str = "unknown",
     prompt_version: int = 1,
-    max_retries: Optional[int] = None,
+    max_retries: int | None = None,
 ) -> T:
     """
     Invoke the LLM and parse the response into a Pydantic model.
@@ -199,7 +205,7 @@ def invoke_structured(
 
             if attempt < retries:
                 # Exponential backoff: 1s, 2s, 4s
-                backoff = 2 ** attempt
+                backoff = 2**attempt
                 time.sleep(backoff)
             continue
         except Exception as e:
@@ -225,38 +231,40 @@ def invoke_vision_structured(
     agent_name: str = "unknown",
     prompt_name: str = "unknown",
     prompt_version: int = 1,
-    max_retries: Optional[int] = None,
+    max_retries: int | None = None,
 ) -> T:
     """Invoke the LLM with an image and parse into a Pydantic model."""
     from langchain_core.messages import HumanMessage
-    
+
     retries = max_retries if max_retries is not None else settings.LLM_RETRY_COUNT
     last_error = None
     had_retry = False
-    
+
     for attempt in range(retries + 1):
         start = time.time()
         try:
             provider = settings.LLM_PROVIDER.lower()
             if provider == "groq":
-                # Groq has decommissioned vision models. 
+                # Groq has decommissioned vision models.
                 # Raise an error immediately to avoid retries and 22s timeouts.
                 raise ValueError("Groq currently does not support vision models.")
             else:
                 llm = get_llm()
 
-            message = HumanMessage(content=[
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-            ])
-            
+            message = HumanMessage(
+                content=[
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                ]
+            )
+
             response = llm.invoke([message])
             latency_ms = (time.time() - start) * 1000
-            
+
             tokens = 0
             if hasattr(response, "response_metadata"):
                 tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-                
+
             logger.info(
                 "Vision LLM call completed",
                 agent=agent_name,
@@ -265,29 +273,28 @@ def invoke_vision_structured(
                 tokens=tokens,
                 attempt=attempt + 1,
             )
-                
+
             parsed = _extract_json(response.content)
             result = response_model.model_validate(parsed)
-            
+
             _record_metric(agent_name, latency_ms, tokens, had_retry, False)
             return result
-            
+
         except (json.JSONDecodeError, ValueError) as e:
             latency_ms = (time.time() - start) * 1000
             last_error = e
             had_retry = True
             logger.warning(f"Vision LLM parse attempt {attempt + 1} failed: {e}")
             if attempt < retries:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             continue
         except Exception as e:
             latency_ms = (time.time() - start) * 1000
             _record_metric(agent_name, latency_ms, 0, False, True)
             raise StrandLLMError(f"Vision LLM invocation failed: {e}", agent=agent_name) from e
-            
+
     _record_metric(agent_name, 0, 0, True, True)
     raise StrandLLMParseError(f"Vision LLM failed: {last_error}", agent=agent_name) from last_error
-
 
 
 # ── Raw invoke (for non-structured use cases) ────────────────────────
@@ -376,7 +383,7 @@ def _extract_json(text: str) -> dict:
             elif text[i] == "}":
                 depth -= 1
                 if depth == 0:
-                    return json.loads(text[brace_start:i + 1])
+                    return json.loads(text[brace_start : i + 1])
 
     # Try finding JSON array boundaries
     bracket_start = text.find("[")
@@ -388,6 +395,6 @@ def _extract_json(text: str) -> dict:
             elif text[i] == "]":
                 depth -= 1
                 if depth == 0:
-                    return json.loads(text[bracket_start:i + 1])
+                    return json.loads(text[bracket_start : i + 1])
 
     raise json.JSONDecodeError("No valid JSON found in LLM response", text, 0)

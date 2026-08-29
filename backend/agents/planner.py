@@ -6,24 +6,25 @@ Routes user requests to agents.
 Per v1.2 §14.4: Write operations go through HITL approval gate.
 Cross-agent trigger: Guardian r0_max > 5.0 → Scheduler re-check.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 from typing import Optional
+
 from loguru import logger  # type: ignore
 
-from backend.llm.client import invoke_structured, invoke_raw
-from backend.prompts.registry import load_prompt, get_prompt_version
-from backend.models.planner import IntentClassification, PlannerResponse
-from backend.agents.guardian import run_guardian
-from backend.agents.scheduler import run_scheduler
-from backend.agents.oracle import run_oracle
-from backend.agents.inspector import run_inspector
 from backend.agents.brain import run_brain
+from backend.agents.guardian import run_guardian
+from backend.agents.inspector import run_inspector
 from backend.agents.judge import run_judge
+from backend.agents.oracle import run_oracle
+from backend.agents.scheduler import run_scheduler
 from backend.approvals.manager import approval_manager
-
+from backend.llm.client import invoke_raw, invoke_structured
+from backend.models.planner import IntentClassification, PlannerResponse
+from backend.prompts.registry import get_prompt_version, load_prompt
 
 # ── Fast-path event routing ────────────────────────────────────────
 EVENT_ROUTING = {
@@ -55,7 +56,7 @@ AGENT_RUNNERS = {
 }
 
 
-async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
+async def run_planner(query: str, session_id: str | None = None) -> dict:
     """
     Main Planner entry point.
 
@@ -79,20 +80,24 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
         runner = AGENT_RUNNERS.get(agent_name)
 
         if not runner:
-            subtask_results.append({
-                "agent": agent_name,
-                "status": "failed",
-                "error": f"Unknown agent: {agent_name}",
-            })
+            subtask_results.append(
+                {
+                    "agent": agent_name,
+                    "status": "failed",
+                    "error": f"Unknown agent: {agent_name}",
+                }
+            )
             continue
 
         try:
             result = await _execute_agent(agent_name, runner, query)
-            subtask_results.append({
-                "agent": agent_name,
-                "status": "completed",
-                "result": result,
-            })
+            subtask_results.append(
+                {
+                    "agent": agent_name,
+                    "status": "completed",
+                    "result": result,
+                }
+            )
 
             if agent_name == "guardian" and isinstance(result, dict):
                 r0_max = result.get("r0_max", 0)
@@ -100,28 +105,34 @@ async def run_planner(query: str, session_id: Optional[str] = None) -> dict:
                     logger.info("Planner: R0={} > 5.0, triggering Scheduler re-check", r0_max)
                     try:
                         sched_result = await run_scheduler()
-                        subtask_results.append({
-                            "agent": "scheduler",
-                            "status": "completed",
-                            "result": sched_result,
-                            "triggered_by": f"guardian_r0_{r0_max}",
-                        })
+                        subtask_results.append(
+                            {
+                                "agent": "scheduler",
+                                "status": "completed",
+                                "result": sched_result,
+                                "triggered_by": f"guardian_r0_{r0_max}",
+                            }
+                        )
                     except Exception as sched_e:
                         logger.error("Planner: triggered scheduler re-check failed: {}", sched_e)
-                        subtask_results.append({
-                            "agent": "scheduler",
-                            "status": "failed",
-                            "error": str(sched_e),
-                            "triggered_by": f"guardian_r0_{r0_max}",
-                        })
+                        subtask_results.append(
+                            {
+                                "agent": "scheduler",
+                                "status": "failed",
+                                "error": str(sched_e),
+                                "triggered_by": f"guardian_r0_{r0_max}",
+                            }
+                        )
 
         except Exception as e:
             logger.error("Planner: {} execution failed: {}", agent_name, e)
-            subtask_results.append({
-                "agent": agent_name,
-                "status": "failed",
-                "error": str(e),
-            })
+            subtask_results.append(
+                {
+                    "agent": agent_name,
+                    "status": "failed",
+                    "error": str(e),
+                }
+            )
 
     # Step 3: Judge output (if it contains LLM-generated content)
     judge_verdict = None
@@ -235,19 +246,21 @@ def _synthesize_response(
     query: str,
     intent: IntentClassification,
     subtask_results: list[dict],
-    judge_verdict: Optional[dict],
-    approval_id: Optional[str] = None,
+    judge_verdict: dict | None,
+    approval_id: str | None = None,
 ) -> dict:
     """Synthesize the final planner response."""
     # Build a narrative from subtask results
     response_parts = []
-    
+
     # Identify missing tasks for replanning context
     executed_agents = [r["agent"] for r in subtask_results]
     missing_agents = [task.agent for task in intent.subtasks if task.agent not in executed_agents]
     if missing_agents:
         logger.warning("Planner: Missing agent execution for {} - proceeding with partial results", missing_agents)
-        response_parts.append(f"*(Note: Results for {', '.join(missing_agents)} are incomplete and will be retried later.)*")
+        response_parts.append(
+            f"*(Note: Results for {', '.join(missing_agents)} are incomplete and will be retried later.)*"
+        )
 
     for r in subtask_results:
         if r.get("status") == "completed":
@@ -260,7 +273,9 @@ def _synthesize_response(
             response_parts.append(f"**{r['agent'].title()}**: Failed — {r.get('error', 'unknown')}")
 
     if approval_id:
-        response_parts.append(f"**Action requires approval**: A pending approval request ({approval_id}) has been created.")
+        response_parts.append(
+            f"**Action requires approval**: A pending approval request ({approval_id}) has been created."
+        )
 
     synthesized = "\n".join(response_parts) if response_parts else "No agents were invoked."
     completed_count = sum(1 for r in subtask_results if r.get("status") == "completed")

@@ -7,28 +7,29 @@ Uses invoke_structured for RFI drafting.
 Two-pass extraction (regex + NER).
 Idempotent MERGE writes for VIOLATES edges.
 """
+
 from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TypedDict, Optional
+from typing import Optional, TypedDict
 
 from loguru import logger
 
+from backend.demo_data import demo_chain, get_demo_clause
+from backend.graph import queries
+from backend.graph.client import neo4j_client
+from backend.graph.schema import get_operator_for_parameter, passes_constraint
 from backend.ingestion.parsers.pdf_parser import extract_parameters_from_pdf
 from backend.ingestion.parsers.vision_parser import analyze_drawing_with_vision
-from backend.ingestion.spec_dna.fingerprint import generate_submittal_spec_dna
 from backend.ingestion.spec_dna.chain import get_spec_dna_chain
-from backend.graph.client import neo4j_client
-from backend.graph import queries
-from backend.graph.schema import passes_constraint, get_operator_for_parameter
-from backend.r0.engine import compute_violation_r0
-from backend.r0.classifier import r0_to_severity
+from backend.ingestion.spec_dna.fingerprint import generate_submittal_spec_dna
 from backend.llm.client import has_configured_llm, invoke_raw
-from backend.prompts.registry import load_prompt, get_prompt_version
-from backend.redis_client import redis_client
 from backend.project_state import save_guardian_result
-from backend.demo_data import get_demo_clause, demo_chain
+from backend.prompts.registry import get_prompt_version, load_prompt
+from backend.r0.classifier import r0_to_severity
+from backend.r0.engine import compute_violation_r0
+from backend.redis_client import redis_client
 
 
 class GuardianState(TypedDict):
@@ -52,8 +53,10 @@ def extract_parameters(state: GuardianState) -> GuardianState:
     """Step 1: Parse PDF and extract all technical parameters & visual anomalies."""
     params = extract_parameters_from_pdf(state["document_path"])
     vision_violations = analyze_drawing_with_vision(state["document_path"], state["submittal_id"])
-    
-    logger.info(f"Guardian: extracted {len(params)} parameters and {len(vision_violations)} visual anomalies from {state['document_path']}")
+
+    logger.info(
+        f"Guardian: extracted {len(params)} parameters and {len(vision_violations)} visual anomalies from {state['document_path']}"
+    )
     return {**state, "extracted_parameters": params, "vision_violations": vision_violations}
 
 
@@ -113,10 +116,7 @@ def check_against_spec(state: GuardianState) -> GuardianState:
                     ],
                 }
                 violations.append(violation)
-                logger.info(
-                    f"Guardian: VIOLATION — {param_name}: "
-                    f"actual={actual} {operator} required={required}"
-                )
+                logger.info(f"Guardian: VIOLATION — {param_name}: actual={actual} {operator} required={required}")
 
     # Append vision anomalies directly as violations
     for vv in state.get("vision_violations", []):
@@ -133,9 +133,7 @@ def check_against_spec(state: GuardianState) -> GuardianState:
             "page": 1,
             "deviation_type": vv.get("deviation_type", "visual_anomaly"),
             "confidence_score": float(vv.get("confidence_score", 0.8)),
-            "evidence_citations": [
-                {"source": "uploaded_drawing", "page": 1, "section": "Visual QA"}
-            ],
+            "evidence_citations": [{"source": "uploaded_drawing", "page": 1, "section": "Visual QA"}],
         }
         violations.append(violation)
         logger.info(f"Guardian: VISUAL VIOLATION — {vv['parameter']}: actual={vv['actual']}")
@@ -348,9 +346,7 @@ async def run_guardian(submittal_id: str, document_path: str, tenant_id: str = "
             "r0_max": state["r0_max"],
             "confidence_score": 0.94 if state["violations"] else 0.98,
             "evidence_citations": [
-                citation
-                for violation in state["violations"]
-                for citation in violation.get("evidence_citations", [])
+                citation for violation in state["violations"] for citation in violation.get("evidence_citations", [])
             ],
             "rfi_draft": state["rfi_draft"],
             "spec_dna_chain": state["spec_dna_chain"],

@@ -1,19 +1,21 @@
 # backend/models/risks.py — Scheduler models
 from __future__ import annotations
+
 from typing import Optional
+
 from pydantic import BaseModel
 
 
 class AtRiskTask(BaseModel):
     task_id: str
-    task_name: Optional[str] = None
+    task_name: str | None = None
     delay_probability: float = 0.0
     expected_delay_days: int = 0
     on_critical_path: bool = False
     r0_score: float = 0.0
     severity: str = ""
-    discipline: Optional[str] = None
-    equipment_tag: Optional[str] = None
+    discipline: str | None = None
+    equipment_tag: str | None = None
 
 
 class MitigationSuggestion(BaseModel):

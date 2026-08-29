@@ -145,13 +145,16 @@ class InspectorRouteWiringTests(unittest.TestCase):
 class HealthAndCompatibilityRouteTests(unittest.TestCase):
     def test_root_health_has_all_agent_status_objects(self):
         async def run_request():
-            with patch("backend.routers.health.probe_services", return_value={
-                "neo4j": {"status": "ok"},
-                "chroma": {"status": "ok"},
-                "redis": {"status": "ok"},
-                "llm": {"configured": True, "provider": "gemini"},
-                "demo_mode": False,
-            }):
+            with patch(
+                "backend.routers.health.probe_services",
+                return_value={
+                    "neo4j": {"status": "ok"},
+                    "chroma": {"status": "ok"},
+                    "redis": {"status": "ok"},
+                    "llm": {"configured": True, "provider": "gemini"},
+                    "demo_mode": False,
+                },
+            ):
                 transport = httpx.ASGITransport(app=app)
                 async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
                     return await client.get("/health")
@@ -190,11 +193,7 @@ class HealthAndCompatibilityRouteTests(unittest.TestCase):
                 patch(
                     "backend.routers.dashboards.run_scheduler",
                     new=AsyncMock(
-                        return_value={
-                            "at_risk_tasks": [
-                                {"task_id": "T023", "r0_score": 4.2, "severity": "Critical"}
-                            ]
-                        }
+                        return_value={"at_risk_tasks": [{"task_id": "T023", "r0_score": 4.2, "severity": "Critical"}]}
                     ),
                 ),
                 patch("backend.routers.dashboards.list_ncrs", new=AsyncMock(return_value=[])),
@@ -343,7 +342,9 @@ class CustomPlanSecurityTests(unittest.TestCase):
                     headers={"Authorization": "Bearer not-a-real-jwt"},
                 )
 
-        with patch("backend.routers.dashboards.dashboard_rows", return_value=[{"primary_metric": 4.1, "status": "Moderate"}]):
+        with patch(
+            "backend.routers.dashboards.dashboard_rows", return_value=[{"primary_metric": 4.1, "status": "Moderate"}]
+        ):
             response = asyncio.run(run_request())
 
         self.assertEqual(response.status_code, 200, response.text)

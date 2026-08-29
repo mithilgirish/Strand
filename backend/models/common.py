@@ -1,8 +1,8 @@
 # backend/models/common.py — Shared Pydantic models per PRD §5.3
 from __future__ import annotations
 
-from typing import Optional, Any
 from enum import Enum
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -30,18 +30,21 @@ class ConfidenceLevel(str, Enum):
 
 class StrandResponse(BaseModel):
     """Standard success envelope."""
+
     ok: bool = True
     data: Any = None
 
 
 class ErrorDetail(BaseModel):
     """Standard error detail."""
+
     code: str
     message: str
-    agent: Optional[str] = None
+    agent: str | None = None
 
 
 class StrandErrorResponse(BaseModel):
     """Standard error envelope per §5.3."""
+
     ok: bool = False
     error: ErrorDetail

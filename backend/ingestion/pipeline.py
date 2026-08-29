@@ -3,6 +3,7 @@
 Orchestrates: parse → extract parameters → link entities → write to PKG + Chroma.
 Handles PDF, CSV, and JSON file types.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,18 +12,22 @@ from uuid import uuid4
 
 from loguru import logger
 
-from backend.ingestion.parsers.pdf_parser import extract_text_from_pdf, extract_parameters_from_pdf, extract_text_from_image
-from backend.ingestion.parsers.csv_parser import parse_schedule_csv
-from backend.ingestion.parsers.json_parser import parse_supplier_graph, parse_checklist
-from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
-from backend.ingestion.ner.entity_linker import link_entities_to_clauses
-from backend.vector.store import chroma_store
-from backend.vector.embedder import prepare_chunks_for_storage
-from backend.graph.client import neo4j_client
 from backend.graph import queries
+from backend.graph.client import neo4j_client
+from backend.ingestion.ner.entity_linker import link_entities_to_clauses
+from backend.ingestion.parsers.csv_parser import parse_schedule_csv
+from backend.ingestion.parsers.json_parser import parse_checklist, parse_supplier_graph
+from backend.ingestion.parsers.pdf_parser import (
+    extract_parameters_from_pdf,
+    extract_text_from_image,
+    extract_text_from_pdf,
+)
+from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
+from backend.vector.embedder import prepare_chunks_for_storage
+from backend.vector.store import chroma_store
 
 
-def ingest_document(file_path: str, document_type: Optional[str] = None, tenant_id: str = "demo-123") -> dict:
+def ingest_document(file_path: str, document_type: str | None = None, tenant_id: str = "demo-123") -> dict:
     """
     Main ingestion entry point. Detects file type and routes to appropriate parser.
 
@@ -70,9 +75,7 @@ def ingest_document(file_path: str, document_type: Optional[str] = None, tenant_
         }
 
 
-def _ingest_pdf(
-    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
-) -> dict:
+def _ingest_pdf(file_path: str, filename: str, doc_id: str, doc_type: str | None, tenant_id: str) -> dict:
     """Ingest a PDF document: extract text, parameters, store in Chroma + PKG."""
     # Extract text pages
     pages = extract_text_from_pdf(file_path)
@@ -132,6 +135,7 @@ def _ingest_pdf(
             text_lower = page_data["text"].lower()
             if "vendor:" in text_lower or "supplier:" in text_lower:
                 import re
+
                 match = re.search(r"(?:vendor|supplier)[:\s]+(.+?)(?:\n|$)", page_data["text"], re.IGNORECASE)
                 if match:
                     vendor_name = match.group(1).strip()
@@ -164,9 +168,7 @@ def _ingest_pdf(
         )
         node_count += 1
 
-    logger.info(
-        f"PDF ingestion complete: {filename} → {node_count} nodes, {chunk_count} chunks"
-    )
+    logger.info(f"PDF ingestion complete: {filename} → {node_count} nodes, {chunk_count} chunks")
     return {
         "document_id": doc_id,
         "filename": filename,
@@ -176,9 +178,7 @@ def _ingest_pdf(
     }
 
 
-def _ingest_image_doc(
-    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
-) -> dict:
+def _ingest_image_doc(file_path: str, filename: str, doc_id: str, doc_type: str | None, tenant_id: str) -> dict:
     """Ingest a CAD/blueprint image document: OCR text, extract parameters, store in Chroma + PKG."""
     pages = extract_text_from_image(file_path)
     node_count = 0
@@ -212,16 +212,16 @@ def _ingest_image_doc(
                     "text": f"Required {param_name}: {param_data['value']} {param_data.get('unit', '')}",
                     "document_source": filename,
                     "parameter_name": param_name,
-                    "required_value": float(param_data["value"]) if isinstance(param_data["value"], (int, float)) else 0.0,
+                    "required_value": float(param_data["value"])
+                    if isinstance(param_data["value"], (int, float))
+                    else 0.0,
                     "unit": param_data.get("unit", ""),
                     "page_number": param_data.get("page", 1),
                 },
             )
             node_count += 1
 
-    logger.info(
-        f"Image ingestion complete: {filename} → {node_count} nodes, {chunk_count} chunks"
-    )
+    logger.info(f"Image ingestion complete: {filename} → {node_count} nodes, {chunk_count} chunks")
     return {
         "document_id": doc_id,
         "filename": filename,
@@ -238,7 +238,9 @@ def _ingest_csv(file_path: str, filename: str, doc_id: str) -> dict:
 
     # Store tasks in Chroma for Brain's retrieval
     for task in tasks:
-        text = f"Task {task['task_id']}: {task['task_name']} — Status: {task['status']}, Progress: {task['progress_pct']}%"
+        text = (
+            f"Task {task['task_id']}: {task['task_name']} — Status: {task['status']}, Progress: {task['progress_pct']}%"
+        )
         chroma_store.add_documents(
             documents=[text],
             metadatas=[{"document_source": filename, "task_id": task["task_id"]}],
@@ -255,13 +257,11 @@ def _ingest_csv(file_path: str, filename: str, doc_id: str) -> dict:
     }
 
 
-def _ingest_json(
-    file_path: str, filename: str, doc_id: str, doc_type: Optional[str], tenant_id: str
-) -> dict:
+def _ingest_json(file_path: str, filename: str, doc_id: str, doc_type: str | None, tenant_id: str) -> dict:
     """Ingest a JSON file (supplier graph or checklist)."""
     if doc_type == "supplier" or "supplier" in filename.lower():
         data = parse_supplier_graph(file_path)
-        
+
         # Ingest suppliers and shipments into Neo4j
         for sup in data.get("suppliers", []):
             neo4j_client.execute_write(
@@ -276,9 +276,9 @@ def _ingest_json(
                     "lat": sup.get("lat", 0.0),
                     "lng": sup.get("lng", 0.0),
                     "tenant_id": tenant_id,
-                }
+                },
             )
-            
+
         for sh in data.get("shipments", []):
             neo4j_client.execute_write(
                 queries.MERGE_SHIPMENT,
@@ -295,11 +295,11 @@ def _ingest_json(
                     "lat": sh.get("lat", 0.0),
                     "lng": sh.get("lng", 0.0),
                     "tenant_id": tenant_id,
-                }
+                },
             )
             neo4j_client.execute_write(
                 queries.LINK_SHIPMENT_SUPPLIER,
-                {"shipment_id": sh.get("id", ""), "supplier_id": sh.get("origin_supplier", "")}
+                {"shipment_id": sh.get("id", ""), "supplier_id": sh.get("origin_supplier", "")},
             )
 
         node_count = len(data.get("suppliers", [])) + len(data.get("shipments", []))

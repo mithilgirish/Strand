@@ -7,6 +7,7 @@ Brain Agent's retrieval engine:
 
 Per PRD §6.5: the groundedness check ensures answers cite sources.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -60,8 +61,10 @@ class HybridRetriever:
         # Merge via Reciprocal Rank Fusion — keep RRF rank (do not re-sort by page)
         fused = self._reciprocal_rank_fusion(dense_results, bm25_results, k=k)
         from backend.config import settings
+
         if settings.DEMO_MODE and len(fused) < k:
             from backend.demo_data import demo_spec_chunks
+
             seen = {doc["text"][:100] for doc in fused}
             for doc in demo_spec_chunks(""):
                 key = doc["text"][:100]
@@ -73,10 +76,7 @@ class HybridRetriever:
                 if len(fused) >= k:
                     break
 
-        logger.debug(
-            f"Hybrid retrieval: {len(dense_results)} dense, "
-            f"{len(bm25_results)} BM25, {len(fused)} fused"
-        )
+        logger.debug(f"Hybrid retrieval: {len(dense_results)} dense, {len(bm25_results)} BM25, {len(fused)} fused")
         return fused
 
     def _ensure_bm25_index(self) -> None:
@@ -86,6 +86,7 @@ class HybridRetriever:
         try:
             from backend.config import settings
             from backend.demo_data import demo_spec_chunks
+
             if not settings.DEMO_MODE:
                 return
             self.build_bm25_index(
@@ -112,14 +113,16 @@ class HybridRetriever:
                 if result["distances"] and result["distances"][0]:
                     distance = result["distances"][0][i] if i < len(result["distances"][0]) else 0.0
 
-                docs.append({
-                    "text": doc_text,
-                    "metadata": metadata,
-                    "source": metadata.get("document_source", "dense"),
-                    "page": metadata.get("page_number", 0),
-                    "section": metadata.get("section", ""),
-                    "score": 1.0 - distance,  # Convert distance to similarity
-                })
+                docs.append(
+                    {
+                        "text": doc_text,
+                        "metadata": metadata,
+                        "source": metadata.get("document_source", "dense"),
+                        "page": metadata.get("page_number", 0),
+                        "section": metadata.get("section", ""),
+                        "score": 1.0 - distance,  # Convert distance to similarity
+                    }
+                )
         return docs
 
     def _bm25_retrieve(self, query: str, k: int = 8) -> list[dict]:

@@ -5,6 +5,7 @@ it's ingested. It serves as the universal lineage identifier across the PKG.
 
 Formula: SHA256(JSON(parameter_name, parameter_value, document_source, section))
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +18,7 @@ def generate_spec_dna_id(
     parameter_value: Any,
     document_source: str,
     section: str,
-    extra: Optional[str] = None,
+    extra: str | None = None,
 ) -> str:
     """
     Generate a deterministic Spec-DNA ID (SHA-256) for a PKG entity.

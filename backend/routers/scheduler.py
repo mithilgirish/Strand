@@ -1,4 +1,5 @@
 """Phase 2 Scheduler API routes."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -10,7 +11,6 @@ from pydantic import BaseModel, Field
 from backend.agents.scheduler import run_scheduler
 from backend.ingestion.parsers.csv_parser import parse_schedule_csv
 from backend.redis_client import redis_client
-
 
 router = APIRouter(tags=["scheduler"])
 CACHE_KEY = "scheduler:latest:v2"

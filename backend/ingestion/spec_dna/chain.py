@@ -6,9 +6,11 @@ ContractClause → BOQLine → POLine → VendorSubmittal → TestStep
 The chain shows the mutation point — where a requirement was violated
 in its journey from specification to installed equipment.
 """
+
 from __future__ import annotations
 
 from typing import Optional
+
 from loguru import logger
 
 from backend.graph.client import neo4j_client
@@ -29,13 +31,7 @@ def get_spec_dna_chain(submittal_id: str) -> list[dict]:
         )
         if results and results[0].get("chain"):
             chain = results[0]["chain"]
-            rank = {
-                "ContractClause": 0,
-                "BOQLine": 1,
-                "POLine": 2,
-                "VendorSubmittal": 3,
-                "TestStep": 4
-            }
+            rank = {"ContractClause": 0, "BOQLine": 1, "POLine": 2, "VendorSubmittal": 3, "TestStep": 4}
             return sorted(chain, key=lambda x: rank.get(x.get("label", ""), 99))
         return []
     except Exception as e:

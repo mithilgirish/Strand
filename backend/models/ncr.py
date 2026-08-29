@@ -1,6 +1,8 @@
 # backend/models/ncr.py — Inspector models
 from __future__ import annotations
+
 from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -13,6 +15,7 @@ class NcrSubmission(BaseModel):
 
 class NcrData(BaseModel):
     """LLM-extracted structured NCR data."""
+
     title: str
     description: str
     parameter_name: str

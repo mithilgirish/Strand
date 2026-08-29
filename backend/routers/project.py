@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 from loguru import logger
+
+from backend.config import settings
 from backend.graph.client import neo4j_client
 from backend.redis_client import redis_client
-from backend.config import settings
 from backend.routers.health import agent_statuses
 
 router = APIRouter(prefix="/project", tags=["project"])
+
 
 @router.get("/")
 async def get_project_metadata():
@@ -26,8 +28,9 @@ async def get_project_metadata():
         logger.error(f"Error fetching project metadata: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": {"code": "INTERNAL", "message": "Failed to fetch project metadata"}}
+            detail={"error": {"code": "INTERNAL", "message": "Failed to fetch project metadata"}},
         )
+
 
 @router.get("/stats")
 async def get_project_stats():
@@ -44,14 +47,8 @@ async def get_project_stats():
                 count = r.get("count", 0)
                 stats[label] = count
                 total_nodes += count
-        
-        return {
-            "ok": True,
-            "data": {
-                "total_nodes": total_nodes,
-                "breakdown": stats
-            }
-        }
+
+        return {"ok": True, "data": {"total_nodes": total_nodes, "breakdown": stats}}
     except Exception as e:
         logger.error(f"Error fetching project stats: {e}")
         # Return fallback stats if graph is down
@@ -59,14 +56,9 @@ async def get_project_stats():
             "ok": True,
             "data": {
                 "total_nodes": 1420,
-                "breakdown": {
-                    "ContractClause": 10,
-                    "Task": 100,
-                    "Supplier": 8,
-                    "Shipment": 15
-                },
-                "note": "fallback_data"
-            }
+                "breakdown": {"ContractClause": 10, "Task": 100, "Supplier": 8, "Shipment": 15},
+                "note": "fallback_data",
+            },
         }
 
 
@@ -113,7 +105,11 @@ def _systemic_r0_count(sched: dict | None) -> tuple[int, dict]:
         return len(clusters), {"raw_tasks_ge_5": raw_ge_5, "clusters": sorted(clusters), "source": "tasks"}
     max_r0 = max((float(value or 0) for value in r0_scores.values()), default=0.0)
     count = 1 if max_r0 >= 5.0 else 0
-    return count, {"raw_tasks_ge_5": sum(1 for value in r0_scores.values() if float(value or 0) >= 5.0), "clusters": ["r0_max"] if count else [], "source": "r0_map"}
+    return count, {
+        "raw_tasks_ge_5": sum(1 for value in r0_scores.values() if float(value or 0) >= 5.0),
+        "clusters": ["r0_max"] if count else [],
+        "source": "r0_map",
+    }
 
 
 @router.get("/summary")
@@ -130,6 +126,7 @@ async def get_project_summary():
     critical_violations = 0
     try:
         from backend.project_state import load_latest
+
         latest = load_latest()
         if latest:
             viols = latest.get("violations") or []
@@ -143,9 +140,7 @@ async def get_project_summary():
                 if cached:
                     viols = cached.get("violations", [])
                     violations_today += len(viols)
-                    critical_violations += sum(
-                        1 for v in viols if v.get("severity", "").lower() == "critical"
-                    )
+                    critical_violations += sum(1 for v in viols if v.get("severity", "").lower() == "critical")
     except Exception as e:
         logger.warning(f"Summary: guardian data unavailable: {e}")
         if settings.DEMO_MODE:
@@ -162,6 +157,7 @@ async def get_project_summary():
         sched_cached = redis_client.get_cache("scheduler:latest:v2") or redis_client.get_cache("scheduler:latest")
         if not sched_cached:
             from backend.agents.scheduler import run_scheduler
+
             sched_cached = await run_scheduler()
             redis_client.set_cache("scheduler:latest:v2", sched_cached, ttl=600)
         r0_scores = sched_cached.get("r0_scores", {}) if sched_cached else {}
@@ -177,6 +173,7 @@ async def get_project_summary():
     at_risk_shipments = 0
     try:
         from backend.agents.oracle import run_oracle
+
         oracle_result = await run_oracle()
         at_risk_shipments = oracle_result.get("at_risk_count", 0)
     except Exception as e:
@@ -190,6 +187,7 @@ async def get_project_summary():
     immunity_ncrs_critical = 0
     try:
         from backend.project_state import ncrs_from_submittal
+
         submittal_ncrs = ncrs_from_submittal()
         if submittal_ncrs:
             open_ncrs = len(submittal_ncrs)

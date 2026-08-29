@@ -1,5 +1,6 @@
-import whisper
 import sys
+
+import whisper
 
 print("Loading model...")
 try:

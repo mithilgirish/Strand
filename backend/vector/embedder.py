@@ -3,6 +3,7 @@
 Thin wrapper around the embedding model used for Chroma.
 Uses Chroma's default embedding function (all-MiniLM-L6-v2) for Phase 1.
 """
+
 from __future__ import annotations
 
 from loguru import logger
@@ -68,11 +69,13 @@ def prepare_chunks_for_storage(
     for i, chunk in enumerate(chunks):
         chunk_id = f"{document_source}::p{page_number}::c{i}"
         documents.append(chunk)
-        metadatas.append({
-            "document_source": document_source,
-            "page_number": page_number,
-            "chunk_index": i,
-        })
+        metadatas.append(
+            {
+                "document_source": document_source,
+                "page_number": page_number,
+                "chunk_index": i,
+            }
+        )
         ids.append(chunk_id)
 
     return documents, metadatas, ids

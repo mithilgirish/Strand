@@ -4,11 +4,12 @@ Parses project schedule CSV (MS Project / Primavera export format).
 Expected columns: task_id, task_name, start_date, end_date, status,
                    progress_pct, predecessors
 """
+
 from __future__ import annotations
 
 import csv
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -26,7 +27,7 @@ def parse_schedule_csv(file_path: str) -> list[dict[str, Any]]:
     tasks = []
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:

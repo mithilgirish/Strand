@@ -1,18 +1,20 @@
-from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel, model_validator
+import asyncio
+from datetime import UTC, datetime, timezone
+
 # pyrefly: ignore [missing-import]
 import loguru
-import asyncio
-from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, model_validator
 
-from backend.deps import limiter
-from backend.agents.planner import AGENT_CAPABILITIES, AGENT_RUNNERS, EVENT_ROUTING, run_planner
 from backend.agents.brain import run_brain
 from backend.agents.inspector import list_ncrs
 from backend.agents.oracle import run_oracle
+from backend.agents.planner import AGENT_CAPABILITIES, AGENT_RUNNERS, EVENT_ROUTING, run_planner
 from backend.agents.scheduler import run_scheduler
+from backend.deps import limiter
 
 router = APIRouter(prefix="/planner", tags=["planner"])
+
 
 class PlannerAskRequest(BaseModel):
     query: str | None = None
@@ -27,6 +29,7 @@ class PlannerAskRequest(BaseModel):
             raise ValueError("query or input is required")
         return self
 
+
 @router.post("/ask")
 @limiter.limit("30/minute")
 async def ask_planner(request: Request, data: PlannerAskRequest):
@@ -36,6 +39,7 @@ async def ask_planner(request: Request, data: PlannerAskRequest):
     except Exception as e:
         loguru.logger.error(f"Planner ask failed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/report")
 @limiter.limit("30/minute")
@@ -101,7 +105,7 @@ async def planner_report(request: Request):
         "key_risks": key_risks,
         "judge_verdict": "approved_with_flag" if key_risks else "approved",
         "evidence_citations": evidence_citations,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "status": "ready",
         "event_routing": EVENT_ROUTING,
         "available_agents": sorted(AGENT_RUNNERS.keys()),

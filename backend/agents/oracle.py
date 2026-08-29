@@ -1,4 +1,5 @@
 """Oracle supply-chain intelligence with deterministic offline behaviour."""
+
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +13,6 @@ from backend.config import settings
 from backend.graph import queries
 from backend.graph.client import neo4j_client
 from backend.redis_client import redis_client
-
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 DATA_PATH = DATA_DIR / "supplier_graph_data.json"
@@ -132,11 +132,7 @@ def get_all_shipments_with_source() -> tuple[list[dict[str, Any]], str]:
 
 
 def get_at_risk_shipments() -> list[dict[str, Any]]:
-    return [
-        shipment
-        for shipment in get_all_shipments()
-        if shipment["risk_flag"] or shipment["delay_days"] > 7
-    ]
+    return [shipment for shipment in get_all_shipments() if shipment["risk_flag"] or shipment["delay_days"] > 7]
 
 
 def build_geojson(shipments: list[dict[str, Any]]) -> dict[str, Any]:
@@ -225,7 +221,9 @@ def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
                     "on_time_rate": 0.0,
                     "country": "",
                     "city": "",
-                    "status": "critical" if str(violation.get("severity", "")).lower() in {"critical", "systemic"} else "warning",
+                    "status": "critical"
+                    if str(violation.get("severity", "")).lower() in {"critical", "systemic"}
+                    else "warning",
                     "children": [],
                 }
             )
@@ -262,7 +260,10 @@ def get_supply_chain_tree(shipment_id: str) -> dict[str, Any]:
     if root_supplier is None:
         root_supplier = {
             "id": origin_id or shipment_id,
-            "name": (live or {}).get("supplier_name") or (raw or {}).get("supplier_name") or origin_id or "Unknown supplier",
+            "name": (live or {}).get("supplier_name")
+            or (raw or {}).get("supplier_name")
+            or origin_id
+            or "Unknown supplier",
             "tier": _safe_int((live or {}).get("supplier_tier") or 1, 1),
             "risk_score": float((live or {}).get("supplier_risk_score") or 0.5),
             "on_time_rate": 0.8,
@@ -316,7 +317,9 @@ def _alternative_from_supplier(
         "tier": _safe_int(supplier.get("tier", 1) or 1, 1),
         "risk_score": round(risk, 2),
         "on_time_rate": round(on_time, 2),
-        "match_score": round(float(match_score), 1) if match_score is not None else round((1 - risk) * 55 + on_time * 45, 1),
+        "match_score": round(float(match_score), 1)
+        if match_score is not None
+        else round((1 - risk) * 55 + on_time * 45, 1),
         "lead_time_days": int(lead_time) if lead_time is not None else 12 + index * 3,
         "country": supplier.get("country", ""),
         "city": supplier.get("city", ""),
@@ -359,8 +362,7 @@ def find_alternative_suppliers(
         return alternatives
 
     supplemented = [
-        _alternative_from_supplier(supplier, equipment_tag, index)
-        for index, supplier in enumerate(graph_results)
+        _alternative_from_supplier(supplier, equipment_tag, index) for index, supplier in enumerate(graph_results)
     ]
     seen = {supplier.get("supplier_id") for supplier in supplemented}
     for alternative in alternatives:

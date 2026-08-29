@@ -4,10 +4,10 @@ Node types, properties, constraints, and the critical passes_constraint() functi
 ContractClause.passes_constraint corrects the constraint-direction bug from the
 reference code (PRD §11, correction #1).
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
-
 
 # ── Cypher constraint creation statements (§4.1) ────────────────────
 SCHEMA_CONSTRAINTS = [
@@ -121,7 +121,6 @@ PARAMETER_OPERATORS: dict[str, str] = {
     "ground_resistance": "lte",
     "chilled_water_supply_temp": "lte",
     "voltage_unbalance": "lte",
-
     # Lower bounds (value must be >= spec)
     "ambient_temperature_max": "gte",
     "thermal_max": "gte",
@@ -143,8 +142,8 @@ def get_operator_for_parameter(parameter_name: str) -> str:
 def passes_constraint(
     actual_value: Any,
     required_value: Any,
-    operator: Optional[str] = None,
-    parameter_name: Optional[str] = None,
+    operator: str | None = None,
+    parameter_name: str | None = None,
 ) -> bool:
     """
     Check if an actual value passes the constraint defined by the required value.
@@ -182,4 +181,5 @@ def init_schema(neo4j_client) -> None:
             neo4j_client.execute_write(stmt)
         except Exception as e:
             from loguru import logger
+
             logger.warning(f"Schema init statement failed (may already exist): {e}")

@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel, model_validator
 from typing import Any, Dict
+
 # pyrefly: ignore [missing-import]
 import loguru
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, model_validator
 
-from backend.deps import limiter
 from backend.agents.judge import run_judge
+from backend.deps import limiter
 
 router = APIRouter(prefix="/judge", tags=["judge"])
+
 
 class JudgeVerifyRequest(BaseModel):
     content: Dict[str, Any] | None = None
@@ -29,6 +31,7 @@ class JudgeVerifyRequest(BaseModel):
                 "brain": "answer",
             }.get(self.agent_source, "report")
         return self
+
 
 @router.post("/verify")
 @limiter.limit("30/minute")

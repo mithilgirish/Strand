@@ -1,34 +1,30 @@
 # backend/routers/integrations.py — Enterprise API Connectors
-from fastapi import APIRouter, BackgroundTasks, Request, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from loguru import logger
 import os
 import time
+from typing import Any, Dict, Optional
 
 import requests
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from loguru import logger
+from pydantic import BaseModel, Field
+
 from backend.agents.guardian import run_guardian
-from backend.deps import get_current_user, CurrentUser, RoleChecker
-from backend.redis_client import redis_client
-from backend.config import settings
 from backend.autodesk_client import autodesk_client
-from backend.procore_client import procore_client
-from backend.primavera_client import primavera_client
-from backend.maximo_client import maximo_client
-import time
-
-import requests
-from backend.agents.guardian import run_guardian
-from backend.deps import get_current_user, CurrentUser, RoleChecker
-from backend.redis_client import redis_client
 from backend.config import settings
+from backend.deps import CurrentUser, RoleChecker, get_current_user
+from backend.maximo_client import maximo_client
+from backend.primavera_client import primavera_client
+from backend.procore_client import procore_client
+from backend.redis_client import redis_client
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 
-def _get_target_tenant(user: CurrentUser, tenant_id: Optional[str] = None) -> str:
+
+def _get_target_tenant(user: CurrentUser, tenant_id: str | None = None) -> str:
     if tenant_id and user.role in ["super_admin", "super-admin"]:
         return tenant_id
     return user.tenant_id
+
 
 def _upsert_tenant_integration(tenant_id: str, integration_id: str, data: dict):
     # 1. Update in Redis cache / in-memory fallback dict
@@ -43,15 +39,18 @@ def _upsert_tenant_integration(tenant_id: str, integration_id: str, data: dict):
             "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
             "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates"
+            "Prefer": "resolution=merge-duplicates",
         }
         payload = {"tenant_id": tenant_id, "integration_id": integration_id, **data}
         try:
-            resp = requests.post(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations", headers=headers, json=payload, timeout=5)
+            resp = requests.post(
+                f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations", headers=headers, json=payload, timeout=5
+            )
             if not resp.ok:
                 logger.debug(f"Supabase upsert note: {resp.text}")
         except Exception as e:
             logger.debug(f"Connection error to Supabase during upsert (using cache fallback): {e}")
+
 
 def _get_tenant_integrations(tenant_id: str):
     records_map = {}
@@ -63,7 +62,11 @@ def _get_tenant_integrations(tenant_id: str):
             "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
         }
         try:
-            resp = requests.get(f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations?tenant_id=eq.{tenant_id}", headers=headers, timeout=5)
+            resp = requests.get(
+                f"{settings.SUPABASE_URL}/rest/v1/tenant_integrations?tenant_id=eq.{tenant_id}",
+                headers=headers,
+                timeout=5,
+            )
             if resp.ok:
                 for r in resp.json():
                     records_map[r.get("integration_id")] = r
@@ -81,19 +84,27 @@ def _get_tenant_integrations(tenant_id: str):
         elif int_id not in records_map:
             config = redis_client.get_cache(f"{tenant_id}:{int_id}_config")
             if config:
-                records_map[int_id] = {"integration_id": int_id, "tenant_id": tenant_id, "config": config, "status": "disconnected"}
+                records_map[int_id] = {
+                    "integration_id": int_id,
+                    "tenant_id": tenant_id,
+                    "config": config,
+                    "status": "disconnected",
+                }
 
     return list(records_map.values())
 
+
 class ConfigUpdateRequest(BaseModel):
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    base_url: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    api_key: Optional[str] = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    base_url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    api_key: str | None = None
+
 
 # ── Webhook Endpoint (Public) ────────────────────────────────────────
+
 
 @router.post("/autodesk/webhook")
 async def autodesk_webhook(request: Request, background_tasks: BackgroundTasks):
@@ -103,14 +114,15 @@ async def autodesk_webhook(request: Request, background_tasks: BackgroundTasks):
     Verifies payload authenticity using HMAC-SHA256 signature check.
     """
     logger.info("Received webhook from Autodesk APS Data Management API")
-    
+
     body_bytes = await request.body()
     try:
         import json
+
         payload = json.loads(body_bytes)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-        
+
     hook_event = payload.get("hook", {}).get("event")
     if hook_event not in ["dm.version.added", "dm.version.modified"]:
         logger.info(f"Ignoring non-version event: {hook_event}")
@@ -124,52 +136,53 @@ async def autodesk_webhook(request: Request, background_tasks: BackgroundTasks):
         if not signature:
             logger.warning("Rejecting Autodesk webhook: signature header missing.")
             raise HTTPException(status_code=401, detail="Missing signature header")
-            
+
         secret = os.getenv("APS_WEBHOOK_SECRET", "") or settings.APS_WEBHOOK_SECRET
         if secret in ["", "your_webhook_secret_here", "strand-fallback-webhook-secret-98765"]:
             # Fall back to tenant-specific client secret
             tenant_id = payload.get("hookAttribute", {}).get("tenant_id") or "default_tenant"
             from backend.autodesk_client import autodesk_client
+
             _, client_secret = autodesk_client.get_client_credentials(tenant_id)
             secret = client_secret
-            
+
         if not secret:
             logger.error("Autodesk webhook validation secret not configured")
             raise HTTPException(status_code=500, detail="Webhook validation secret not configured")
-            
-        import hmac
+
         import hashlib
-        expected = hmac.new(
-            secret.encode('utf-8'),
-            body_bytes,
-            hashlib.sha256
-        ).hexdigest()
-        
+        import hmac
+
+        expected = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+
         if not hmac.compare_digest(expected, signature):
             logger.warning(f"Autodesk webhook signature validation failed. Expected: {expected}, Got: {signature}")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
-    resource_urn = payload.get("resourceUrn") or payload.get("payload", {}).get("version", {}).get("id") or "unknown:urn"
+    resource_urn = (
+        payload.get("resourceUrn") or payload.get("payload", {}).get("version", {}).get("id") or "unknown:urn"
+    )
     project_id = (
-        payload.get("payload", {}).get("projectId") or 
-        payload.get("payload", {}).get("project") or 
-        payload.get("hookAttribute", {}).get("projectId") or 
-        "unknown:project"
+        payload.get("payload", {}).get("projectId")
+        or payload.get("payload", {}).get("project")
+        or payload.get("hookAttribute", {}).get("projectId")
+        or "unknown:project"
     )
     logger.info(f"New drawing version detected! Project: {project_id}, URN: {resource_urn}")
-    
+
     # Real Implementation: Use the APS Client to fetch the file
     from backend.autodesk_client import autodesk_client
-    
+
     submittal_id = f"ACC-{int(time.time())}"
-    
+
     # Check if client credentials exist scoped by tenant if available
     tenant_id = payload.get("hookAttribute", {}).get("tenant_id") or "default_tenant"
     client_id, _ = autodesk_client.get_client_credentials(tenant_id)
-    
+
     if client_id:
         # Real download path
         import tempfile
+
         download_path = os.path.join(tempfile.gettempdir(), f"{submittal_id}.pdf")
         try:
             target_file_path = autodesk_client.download_file(project_id, resource_urn, download_path, tenant_id)
@@ -179,25 +192,30 @@ async def autodesk_webhook(request: Request, background_tasks: BackgroundTasks):
         except Exception:
             # Fallback to local baseline file if Autodesk client fails
             target_file_path = "data/vendor_submittal_cooling_tower.pdf"
-            
+
         logger.info(f"Triggering Guardian AI workflow for new drawing sheet {submittal_id} for tenant {tenant_id}")
         background_tasks.add_task(run_guardian, submittal_id, target_file_path)
-    
+
     return {
-        "status": "success", 
+        "status": "success",
         "message": "Autodesk webhook received. Triggering Computer Vision QA review.",
-        "submittal_id": submittal_id
+        "submittal_id": submittal_id,
     }
+
 
 # ── 3-Legged OAuth 2.0 Flow (Public) ──────────────────────────────────
 
 from backend.crypto_utils import _encrypt_token
 
+
 @router.post("/autodesk/authorize")
-async def autodesk_authorize(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def autodesk_authorize(
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Generates the authorization URL and returns it as JSON."""
     from backend.autodesk_client import autodesk_client
-    
+
     target_tenant = _get_target_tenant(user, tenant_id)
     try:
         url = autodesk_client.get_authorization_url(state=target_tenant)
@@ -206,41 +224,49 @@ async def autodesk_authorize(tenant_id: Optional[str] = None, user: CurrentUser 
         logger.error(f"Failed to generate authorization URL: {e}")
         raise HTTPException(status_code=400, detail="APS_CLIENT_ID_not_configured")
 
+
 @router.get("/autodesk/callback")
-async def autodesk_callback(code: str, state: Optional[str] = None):
+async def autodesk_callback(code: str, state: str | None = None):
     """Receives the auth code from Autodesk and exchanges it for a token."""
-    from backend.autodesk_client import autodesk_client
-    from fastapi.responses import RedirectResponse
     import os
-    
+
+    from fastapi.responses import RedirectResponse
+
+    from backend.autodesk_client import autodesk_client
+
     success = False
     try:
         token_data = autodesk_client.exchange_code(code, tenant_id=state)
-        
+
         # If state provided, securely encrypt tokens and save to Supabase
         if state and token_data:
             encrypted_creds = {
                 "access_token": _encrypt_token(token_data.get("access_token", "")),
                 "refresh_token": _encrypt_token(token_data.get("refresh_token", "")),
-                "expires_in": token_data.get("expires_in")
+                "expires_in": token_data.get("expires_in"),
             }
             _upsert_tenant_integration(state, "autodesk", {"status": "connected", "credentials": encrypted_creds})
-            
+
         logger.info("Successfully completed Autodesk 3-Legged OAuth flow.")
         success = True
     except Exception as e:
         logger.error(f"Failed OAuth exchange: {e}")
-        
+
     frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
     if success:
         return RedirectResponse(f"{frontend_url}/integrations?status=success&integration=autodesk")
     else:
         return RedirectResponse(f"{frontend_url}/integrations?status=error&integration=autodesk&message=OAuth_failed")
 
+
 # ── Integrations Status & Management (Secured) ────────────────────────
 
+
 @router.post("/autodesk/connect-2legged")
-async def connect_autodesk_2legged(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def connect_autodesk_2legged(
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Establish connection using 2-legged OAuth credentials."""
     target_tenant = _get_target_tenant(user, tenant_id)
     try:
@@ -252,10 +278,15 @@ async def connect_autodesk_2legged(tenant_id: Optional[str] = None, user: Curren
         logger.error(f"Failed 2-legged connection validation: {e}")
         raise HTTPException(status_code=400, detail=f"Failed to authenticate with Autodesk: {str(e)}")
 
+
 # ── Procore Auth ──────────────────────────────────
 
+
 @router.post("/procore/authorize")
-async def procore_authorize(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def procore_authorize(
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Generates the authorization URL for Procore."""
     target_tenant = _get_target_tenant(user, tenant_id)
     try:
@@ -265,50 +296,58 @@ async def procore_authorize(tenant_id: Optional[str] = None, user: CurrentUser =
         logger.error(f"Failed to generate Procore auth URL: {e}")
         raise HTTPException(status_code=400, detail="PROCORE_CLIENT_ID_not_configured")
 
+
 @router.get("/procore/callback")
-async def procore_callback(code: str, state: Optional[str] = None):
+async def procore_callback(code: str, state: str | None = None):
     """Receives the auth code from Procore and exchanges it for a token."""
-    from fastapi.responses import RedirectResponse
     import os
-    
+
+    from fastapi.responses import RedirectResponse
+
     success = False
     try:
         token_data = procore_client.exchange_code(code, tenant_id=state)
-        
+
         # If state provided, securely encrypt tokens and save to Supabase
         if state and token_data:
             encrypted_creds = {
                 "access_token": _encrypt_token(token_data.get("access_token", "")),
                 "refresh_token": _encrypt_token(token_data.get("refresh_token", "")),
-                "expires_in": token_data.get("expires_in")
+                "expires_in": token_data.get("expires_in"),
             }
             _upsert_tenant_integration(state, "procore", {"status": "connected", "credentials": encrypted_creds})
-            
+
         logger.info("Successfully completed Procore OAuth flow.")
         success = True
     except Exception as e:
         logger.error(f"Failed Procore OAuth exchange: {e}")
-        
+
     frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
     if success:
         return RedirectResponse(f"{frontend_url}/integrations?status=success&integration=procore")
     else:
         return RedirectResponse(f"{frontend_url}/integrations?status=error&integration=procore&message=OAuth_failed")
 
+
 # ── Primavera Auth ──────────────────────────────────
 
+
 @router.post("/primavera/authorize")
-async def primavera_authorize(tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def primavera_authorize(
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Generates the authorization URL for Primavera."""
     from backend.primavera_client import primavera_client
+
     target_tenant = _get_target_tenant(user, tenant_id)
-    
+
     # We must have base_url configured first
     records = _get_tenant_integrations(target_tenant)
     record = next((r for r in records if r["integration_id"] == "primavera"), {})
     config = record.get("config", {})
     base_url = config.get("base_url")
-    
+
     if not base_url:
         raise HTTPException(status_code=400, detail="Primavera Base URL not configured")
 
@@ -319,15 +358,16 @@ async def primavera_authorize(tenant_id: Optional[str] = None, user: CurrentUser
         logger.error(f"Failed to generate Primavera auth URL: {e}")
         raise HTTPException(status_code=400, detail="PRIMAVERA_CLIENT_ID_not_configured")
 
+
 @router.get("/primavera/mock-oracle-login")
-async def primavera_mock_login(redirect_uri: str, state: Optional[str] = None):
+async def primavera_mock_login(redirect_uri: str, state: str | None = None):
     """Provides a dummy UI simulating Oracle Identity Cloud Service login."""
     from fastapi.responses import HTMLResponse
-    
+
     # URL encode the state for the redirect script
     state_param = f"&state={state}" if state else ""
     target_url = f"{redirect_uri}?code=strand_primavera_demo{state_param}"
-    
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -376,35 +416,37 @@ async def primavera_mock_login(redirect_uri: str, state: Optional[str] = None):
     """
     return HTMLResponse(content=html_content)
 
+
 @router.get("/primavera/callback")
-async def primavera_callback(code: str, state: Optional[str] = None):
+async def primavera_callback(code: str, state: str | None = None):
     """Receives the auth code from Primavera and exchanges it for a token."""
-    from backend.primavera_client import primavera_client
     from fastapi.responses import RedirectResponse
-    
+
+    from backend.primavera_client import primavera_client
+
     success = False
     try:
         # We need the base_url to exchange the code
         if not state:
             raise ValueError("State (tenant_id) missing from callback")
-            
+
         records = _get_tenant_integrations(state)
         record = next((r for r in records if r["integration_id"] == "primavera"), {})
         base_url = record.get("config", {}).get("base_url")
-        
+
         if not base_url:
             raise ValueError("Primavera Base URL missing for tenant")
-            
+
         token_data = primavera_client.exchange_code(base_url, code)
-        
+
         if token_data:
             encrypted_creds = {
                 "access_token": _encrypt_token(token_data.get("access_token", "")),
                 "refresh_token": _encrypt_token(token_data.get("refresh_token", "")),
-                "expires_in": token_data.get("expires_in")
+                "expires_in": token_data.get("expires_in"),
             }
             _upsert_tenant_integration(state, "primavera", {"status": "connected", "credentials": encrypted_creds})
-            
+
         logger.info("Successfully completed Primavera OAuth flow.")
         success = True
     except Exception as e:
@@ -413,10 +455,12 @@ async def primavera_callback(code: str, state: Optional[str] = None):
     frontend_url = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
     return RedirectResponse(f"{frontend_url}/integrations?status={'success' if success else 'error'}")
 
+
 # ── Integration Management ──────────────────────────────────
 
+
 @router.get("/status")
-async def get_integrations_status(tenant_id: Optional[str] = None, user: CurrentUser = Depends(get_current_user)):
+async def get_integrations_status(tenant_id: str | None = None, user: CurrentUser = Depends(get_current_user)):
     """Fetch status of all integrations for the target tenant."""
     target_tenant = _get_target_tenant(user, tenant_id)
     records = _get_tenant_integrations(target_tenant)
@@ -424,13 +468,17 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
 
     # Autodesk connection check
     auto_record = status_map.get("autodesk", {})
-    autodesk_connected = auto_record.get("status") == "connected" or bool(redis_client.get_cache(f"{target_tenant}:autodesk_token"))
+    autodesk_connected = auto_record.get("status") == "connected" or bool(
+        redis_client.get_cache(f"{target_tenant}:autodesk_token")
+    )
     autodesk_configured = bool(auto_record.get("config", {}).get("client_id")) or bool(os.getenv("APS_CLIENT_ID"))
 
     # Procore connection check
     pro_record = status_map.get("procore", {})
     procore_token = redis_client.get_cache(f"{target_tenant}:procore_token")
-    logger.info(f"Checking procore status. DB status: {pro_record.get('status')}, Token exists in cache: {bool(procore_token)}")
+    logger.info(
+        f"Checking procore status. DB status: {pro_record.get('status')}, Token exists in cache: {bool(procore_token)}"
+    )
     procore_connected = pro_record.get("status") == "connected" or bool(procore_token)
     procore_configured = bool(pro_record.get("config", {}).get("client_id")) or bool(os.getenv("PROCORE_CLIENT_ID"))
 
@@ -452,7 +500,7 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
             "status": "connected" if autodesk_connected else "disconnected",
             "category": "Design & BIM",
             "lastSync": "Just now" if autodesk_connected else "Never",
-            "configured": autodesk_configured
+            "configured": autodesk_configured,
         },
         {
             "id": "procore",
@@ -461,7 +509,7 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
             "status": "connected" if procore_connected else "disconnected",
             "category": "Project Management",
             "lastSync": "Just now" if procore_connected else "Never",
-            "configured": procore_configured
+            "configured": procore_configured,
         },
         {
             "id": "primavera",
@@ -470,7 +518,7 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
             "status": "connected" if primavera_connected else "disconnected",
             "category": "Project Controls",
             "lastSync": "Just now" if primavera_connected else "Never",
-            "configured": primavera_configured
+            "configured": primavera_configured,
         },
         {
             "id": "maximo",
@@ -479,48 +527,48 @@ async def get_integrations_status(tenant_id: Optional[str] = None, user: Current
             "status": "connected" if maximo_connected else "disconnected",
             "category": "Operations & Handover",
             "lastSync": "Just now" if maximo_connected else "Never",
-            "configured": maximo_configured
-        }
+            "configured": maximo_configured,
+        },
     ]
 
+
 @router.get("/config")
-async def get_integrations_config(tenant_id: Optional[str] = None, user: CurrentUser = Depends(get_current_user)):
+async def get_integrations_config(tenant_id: str | None = None, user: CurrentUser = Depends(get_current_user)):
     """Return configured settings for a specific tenant (secrets redacted)."""
     target_tenant = _get_target_tenant(user, tenant_id)
     records = _get_tenant_integrations(target_tenant)
-    
+
     config_map = {}
     for integration_id in ["autodesk", "procore", "primavera", "maximo"]:
         record = next((r for r in records if r["integration_id"] == integration_id), {})
         config = record.get("config", {})
-        
+
         if integration_id in ["autodesk", "procore"]:
             client_id = config.get("client_id", "")
-            config_map[integration_id] = {
-                "client_id": client_id,
-                "configured": bool(client_id)
-            }
+            config_map[integration_id] = {"client_id": client_id, "configured": bool(client_id)}
         elif integration_id in ["primavera", "maximo"]:
             base_url = config.get("base_url", "")
             username = config.get("username", "")
-            config_map[integration_id] = {
-                "base_url": base_url,
-                "username": username,
-                "configured": bool(base_url)
-            }
-            
+            config_map[integration_id] = {"base_url": base_url, "username": username, "configured": bool(base_url)}
+
     return config_map
 
+
 @router.post("/{integration_id}/config")
-async def update_integrations_config(integration_id: str, config_req: ConfigUpdateRequest, tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def update_integrations_config(
+    integration_id: str,
+    config_req: ConfigUpdateRequest,
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Update credentials configuration in Supabase for any integration."""
     if integration_id not in ["autodesk", "procore", "primavera", "maximo"]:
         raise HTTPException(status_code=400, detail="Invalid integration ID")
-        
+
     target_tenant = _get_target_tenant(user, tenant_id)
     records = _get_tenant_integrations(target_tenant)
     record = next((r for r in records if r["integration_id"] == integration_id), {})
-    
+
     config = record.get("config", {})
     if config_req.client_id is not None:
         config["client_id"] = config_req.client_id
@@ -534,51 +582,71 @@ async def update_integrations_config(integration_id: str, config_req: ConfigUpda
         config["password"] = _encrypt_token(config_req.password)
     if config_req.api_key is not None:
         config["api_key"] = _encrypt_token(config_req.api_key)
-        
+
     _upsert_tenant_integration(target_tenant, integration_id, {"config": config})
-    
+
     # Cache for the backend clients scoped by tenant
     # WARNING: Cached config contains encrypted secrets now. Clients must decrypt them.
     redis_client.set_cache(f"{target_tenant}:{integration_id}_config", config)
-    
+
     return {"status": "success", "message": f"{integration_id.capitalize()} credentials updated successfully"}
 
+
 @router.post("/{integration_id}/connect")
-async def connect_integration(integration_id: str, tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def connect_integration(
+    integration_id: str,
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Connect a non-Autodesk/Procore integration."""
     if integration_id not in ["primavera", "maximo"]:
         raise HTTPException(status_code=400, detail="Invalid integration ID")
     target_tenant = _get_target_tenant(user, tenant_id)
-    
+
     # Test connection
     if integration_id == "primavera":
         primavera_client.test_connection(target_tenant)
     elif integration_id == "maximo":
         maximo_client.test_connection(target_tenant)
-        
+
     _upsert_tenant_integration(target_tenant, integration_id, {"status": "connected"})
     return {"status": "success", "integration_id": integration_id, "state": "connected"}
 
+
 @router.post("/{integration_id}/disconnect")
-async def disconnect_integration(integration_id: str, tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def disconnect_integration(
+    integration_id: str,
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Disconnect an integration."""
     target_tenant = _get_target_tenant(user, tenant_id)
-    
+
     # Remove OAuth tokens from cache (scoped by tenant)
     redis_client.delete(f"cache:{target_tenant}:{integration_id}_token")
     redis_client.delete(f"cache:{target_tenant}:{integration_id}_refresh")
-    
+
     if integration_id == "autodesk":
         records = _get_tenant_integrations(target_tenant)
         auto_record = next((r for r in records if r["integration_id"] == "autodesk"), {})
-        _upsert_tenant_integration(target_tenant, "autodesk", {"status": "disconnected", "credentials": {}, "config": auto_record.get("config", {})})
+        _upsert_tenant_integration(
+            target_tenant,
+            "autodesk",
+            {"status": "disconnected", "credentials": {}, "config": auto_record.get("config", {})},
+        )
     else:
         _upsert_tenant_integration(target_tenant, integration_id, {"status": "disconnected"})
     return {"status": "success", "integration_id": integration_id, "state": "disconnected"}
 
+
 @router.post("/{integration_id}/sync")
-async def sync_integration_data(integration_id: str, tenant_id: Optional[str] = None, user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"]))):
+async def sync_integration_data(
+    integration_id: str,
+    tenant_id: str | None = None,
+    user: CurrentUser = Depends(RoleChecker(["tenant_admin", "super_admin", "super-admin"])),
+):
     """Trigger a manual data sync for the integration."""
     import asyncio
+
     await asyncio.sleep(1.5)  # Simulate network fetch delay
     return {"status": "success", "message": f"Successfully synced data for {integration_id}"}

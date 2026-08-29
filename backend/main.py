@@ -1,20 +1,39 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from loguru import logger
 
 from backend.config import settings
 from backend.deps import limiter
 from backend.errors import StrandError
-from backend.routers import health, documents, guardian, scheduler, oracle, inspector, brain, approvals, metrics, planner, judge, project, dashboards, admin, integrations, chat
+from backend.routers import (
+    admin,
+    approvals,
+    brain,
+    chat,
+    dashboards,
+    documents,
+    guardian,
+    health,
+    inspector,
+    integrations,
+    judge,
+    metrics,
+    oracle,
+    planner,
+    project,
+    scheduler,
+)
 
 
 def _seed_chroma_if_empty() -> None:
@@ -79,6 +98,7 @@ async def strand_error_handler(request: Request, exc: StrandError):
     states visible to clients rather than silently swallowed."""
     return JSONResponse(status_code=exc.status_code, content=exc.to_envelope())
 
+
 # CORS middleware configuration
 origins = settings.CORS_ORIGINS.split(",")
 app.add_middleware(
@@ -109,10 +129,7 @@ app.include_router(integrations.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(health.router)
 
+
 @app.get("/")
 async def root():
-    return {
-        "message": "Welcome to STRAND API Platform",
-        "docs_url": "/docs",
-        "redoc_url": "/redoc"
-    }
+    return {"message": "Welcome to STRAND API Platform", "docs_url": "/docs", "redoc_url": "/redoc"}

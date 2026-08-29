@@ -1,36 +1,40 @@
 """Phase 3 Inspector API routes wired to the real QA agent."""
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-import tempfile
-import os
 
 from backend.agents.inspector import (
     close_checklist_session,
-    get_checklist as inspector_get_checklist,
     get_latest_as_built,
     list_ncrs,
     process_voice_ncr,
 )
-from backend.deps import limiter, get_current_user, get_optional_current_user, CurrentUser
-
+from backend.agents.inspector import (
+    get_checklist as inspector_get_checklist,
+)
+from backend.deps import CurrentUser, get_current_user, get_optional_current_user, limiter
 
 router = APIRouter(tags=["inspector"])
 
 _whisper_model = None
+
 
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
         try:
             import imageio_ffmpeg
+
             os.environ["PATH"] = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe()) + os.pathsep + os.environ["PATH"]
         except ImportError:
             pass
         import whisper
+
         _whisper_model = whisper.load_model("base")
     return _whisper_model
 
@@ -52,6 +56,7 @@ class ChecklistCloseRequest(BaseModel):
 async def get_checklist(tag: str, user: CurrentUser = Depends(get_current_user)):
     return await inspector_get_checklist(tag, tenant_id=user.tenant_id)
 
+
 @router.post("/inspector/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
     try:
@@ -60,17 +65,18 @@ async def transcribe_audio(audio: UploadFile = File(...), user: CurrentUser = De
             content = await audio.read()
             tmp.write(content)
             tmp_path = tmp.name
-            
+
         try:
             result = model.transcribe(tmp_path)
             transcript = result.get("text", "").strip()
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-            
+
         return {"transcript": transcript}
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
@@ -84,7 +90,7 @@ async def log_ncr(request: Request, ncr: NcrSubmission, user: CurrentUser = Depe
             "equipment_tag": ncr.equipment_tag.upper(),
             "step_id": ncr.step_id,
             "raised_by": ncr.raised_by,
-            "tenant_id": user.tenant_id
+            "tenant_id": user.tenant_id,
         }
         if ncr.photo_url:
             kwargs["photo_url"] = ncr.photo_url
@@ -96,11 +102,13 @@ async def log_ncr(request: Request, ncr: NcrSubmission, user: CurrentUser = Depe
 @router.post("/inspector/upload-photo")
 async def upload_photo(photo: UploadFile = File(...), user: CurrentUser | None = Depends(get_optional_current_user)):
     try:
-        from datetime import datetime
         import re
+        from datetime import datetime
+
         import httpx
-        from backend.config import settings
         from loguru import logger
+
+        from backend.config import settings
 
         raw_name = photo.filename or "photo.jpg"
         clean_name = re.sub(r"[^a-zA-Z0-9._-]", "_", raw_name)
@@ -121,7 +129,7 @@ async def upload_photo(photo: UploadFile = File(...), user: CurrentUser | None =
                     "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
                     "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
                     "Content-Type": mime_type,
-                    "x-upsert": "true"
+                    "x-upsert": "true",
                 }
                 upload_endpoint = f"{settings.SUPABASE_URL}/storage/v1/object/inspector_photos/{filename}"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -146,8 +154,7 @@ class PhotoBase64Request(BaseModel):
 
 @router.post("/inspector/upload-photo-base64")
 async def upload_photo_base64(
-    payload: PhotoBase64Request,
-    user: CurrentUser | None = Depends(get_optional_current_user)
+    payload: PhotoBase64Request, user: CurrentUser | None = Depends(get_optional_current_user)
 ):
     """
     Mobile-friendly inspection photo upload: accepts base64-encoded image (no FormData).
@@ -156,9 +163,11 @@ async def upload_photo_base64(
     try:
         import base64
         from datetime import datetime
+
         import httpx
-        from backend.config import settings
         from loguru import logger
+
+        from backend.config import settings
 
         ext = "jpg"
         if "png" in payload.content_type:
@@ -186,7 +195,7 @@ async def upload_photo_base64(
                     "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
                     "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
                     "Content-Type": payload.content_type,
-                    "x-upsert": "true"
+                    "x-upsert": "true",
                 }
                 upload_endpoint = f"{settings.SUPABASE_URL}/storage/v1/object/inspector_photos/{filename}"
                 async with httpx.AsyncClient(timeout=15.0) as client:
@@ -207,15 +216,16 @@ async def upload_photo_base64(
 
 @router.post("/user/upload-avatar")
 async def upload_user_avatar(
-    photo: UploadFile = File(...),
-    user: CurrentUser | None = Depends(get_optional_current_user)
+    photo: UploadFile = File(...), user: CurrentUser | None = Depends(get_optional_current_user)
 ):
     try:
-        from datetime import datetime
         import re
+        from datetime import datetime
+
         import httpx
-        from backend.config import settings
         from loguru import logger
+
+        from backend.config import settings
 
         user_id = user.id if user else "user"
         raw_name = photo.filename or "avatar.jpg"
@@ -231,7 +241,7 @@ async def upload_user_avatar(
                     "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
                     "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
                     "Content-Type": mime_type,
-                    "x-upsert": "true"
+                    "x-upsert": "true",
                 }
                 upload_endpoint = f"{settings.SUPABASE_URL}/storage/v1/object/avatars/{filename}"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -263,8 +273,7 @@ class AvatarBase64Request(BaseModel):
 
 @router.post("/user/upload-avatar-base64")
 async def upload_user_avatar_base64(
-    payload: AvatarBase64Request,
-    user: CurrentUser | None = Depends(get_optional_current_user)
+    payload: AvatarBase64Request, user: CurrentUser | None = Depends(get_optional_current_user)
 ):
     """
     Mobile-friendly avatar upload: accepts base64-encoded image (no FormData).
@@ -274,9 +283,11 @@ async def upload_user_avatar_base64(
         import base64
         import re
         from datetime import datetime
+
         import httpx
-        from backend.config import settings
         from loguru import logger
+
+        from backend.config import settings
 
         user_id = user.id if user else (payload.user_id or "user")
         ext = "jpg"
@@ -299,7 +310,7 @@ async def upload_user_avatar_base64(
                     "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
                     "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
                     "Content-Type": payload.content_type,
-                    "x-upsert": "true"
+                    "x-upsert": "true",
                 }
                 upload_endpoint = f"{settings.SUPABASE_URL}/storage/v1/object/avatars/{filename}"
                 async with httpx.AsyncClient(timeout=15.0) as client:
@@ -333,10 +344,7 @@ async def get_ncrs(user: CurrentUser | None = Depends(get_optional_current_user)
 async def close_checklist(tag: str, payload: ChecklistCloseRequest, user: CurrentUser = Depends(get_current_user)):
     try:
         return await close_checklist_session(
-            equipment_tag=tag.upper(),
-            step_results=payload.steps,
-            closed_by=payload.closed_by,
-            tenant_id=user.tenant_id
+            equipment_tag=tag.upper(), step_results=payload.steps, closed_by=payload.closed_by, tenant_id=user.tenant_id
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Checklist closeout failed: {e}") from e
@@ -376,35 +384,43 @@ async def get_all_checklist_photos(user: CurrentUser | None = Depends(get_option
             photo = ncr.get("photo_url") or ncr.get("image_url") or ncr.get("photoUri")
             if photo and photo not in seen_urls:
                 seen_urls.add(photo)
-                results.append({
-                    "ncr_id": ncr.get("ncr_id", ""),
-                    "as_built_id": ncr.get("ncr_id", ""),
-                    "equipment_tag": ncr.get("equipment_tag", ""),
-                    "step_id": ncr.get("step_id", "IST-001"),
-                    "title": ncr.get("title") or f"Defect on {ncr.get('equipment_tag', 'Equipment')}",
-                    "description": ncr.get("description") or ncr.get("transcript", "") or "Field inspection defect recorded.",
-                    "transcript": ncr.get("transcript") or ncr.get("description", ""),
-                    "status": ncr.get("status", "fail"),
-                    "severity": ncr.get("severity", "Major"),
-                    "r0_score": ncr.get("r0_score", 3.0),
-                    "mitigation": ncr.get("mitigation", "Inspect field assembly and recalibrate."),
-                    "raised_by": ncr.get("raised_by", "field_engineer"),
-                    "timestamp": ncr.get("timestamp") or ncr.get("raised_at") or "",
-                    "generated_at": ncr.get("timestamp") or ncr.get("raised_at") or "",
-                    "photo_url": photo,
-                    "parameter_name": ncr.get("parameter_name") or "Operational Tolerance",
-                    "actual_value": ncr.get("actual_value") or "Non-compliant",
-                    "required_value": ncr.get("required_value") or "Within spec",
-                    "unit": ncr.get("unit") or "",
-                    "clause": ncr.get("clause") or ncr.get("clause_section") or "Section 26 32 13",
-                    "is_demo": ncr.get("is_demo", False),
-                })
+                results.append(
+                    {
+                        "ncr_id": ncr.get("ncr_id", ""),
+                        "as_built_id": ncr.get("ncr_id", ""),
+                        "equipment_tag": ncr.get("equipment_tag", ""),
+                        "step_id": ncr.get("step_id", "IST-001"),
+                        "title": ncr.get("title") or f"Defect on {ncr.get('equipment_tag', 'Equipment')}",
+                        "description": ncr.get("description")
+                        or ncr.get("transcript", "")
+                        or "Field inspection defect recorded.",
+                        "transcript": ncr.get("transcript") or ncr.get("description", ""),
+                        "status": ncr.get("status", "fail"),
+                        "severity": ncr.get("severity", "Major"),
+                        "r0_score": ncr.get("r0_score", 3.0),
+                        "mitigation": ncr.get("mitigation", "Inspect field assembly and recalibrate."),
+                        "raised_by": ncr.get("raised_by", "field_engineer"),
+                        "timestamp": ncr.get("timestamp") or ncr.get("raised_at") or "",
+                        "generated_at": ncr.get("timestamp") or ncr.get("raised_at") or "",
+                        "photo_url": photo,
+                        "parameter_name": ncr.get("parameter_name") or "Operational Tolerance",
+                        "actual_value": ncr.get("actual_value") or "Non-compliant",
+                        "required_value": ncr.get("required_value") or "Within spec",
+                        "unit": ncr.get("unit") or "",
+                        "clause": ncr.get("clause") or ncr.get("clause_section") or "Section 26 32 13",
+                        "is_demo": ncr.get("is_demo", False),
+                    }
+                )
     except Exception as e:
         pass
 
     # 2. Pull from Redis as-built records (passed & failed checklist steps)
     try:
-        all_keys = redis_client.client.keys(f"{prefix_key}*") if hasattr(redis_client, 'client') and redis_client.client else []
+        all_keys = (
+            redis_client.client.keys(f"{prefix_key}*")
+            if hasattr(redis_client, "client") and redis_client.client
+            else []
+        )
         for key in all_keys:
             try:
                 record = redis_client.get_json(key.decode() if isinstance(key, bytes) else key)
@@ -421,33 +437,41 @@ async def get_all_checklist_photos(user: CurrentUser | None = Depends(get_option
                     if photo and photo not in seen_urls:
                         seen_urls.add(photo)
                         is_pass = step.get("status") == "pass"
-                        results.append({
-                            "ncr_id": f"CHK-{step.get('step_id', '001')}",
-                            "as_built_id": as_built_id,
-                            "equipment_tag": equipment_tag,
-                            "step_id": step.get("step_id", ""),
-                            "title": step.get("description", "") or f"Step {step.get('step_id', '')} Checkpoint",
-                            "description": step.get("description", ""),
-                            "transcript": step.get("notes") or ("Verification passed: Criteria successfully satisfied and visually verified in field." if is_pass else "Checkpoint defect observed."),
-                            "status": "pass" if is_pass else "fail",
-                            "severity": "Verified Pass" if is_pass else "Minor",
-                            "r0_score": 0.0 if is_pass else 1.2,
-                            "mitigation": "Criteria met. Approved for commissioning." if is_pass else (step.get("notes") or "Perform corrective adjustment."),
-                            "raised_by": closed_by,
-                            "timestamp": gen_at,
-                            "generated_at": gen_at,
-                            "photo_url": photo,
-                            "parameter_name": "Field Visual Verification",
-                            "actual_value": "Passed Spec" if is_pass else "Deviated",
-                            "required_value": step.get("acceptance_criteria", "Satisfy specification"),
-                            "unit": "",
-                            "clause": "QA Commissioning Protocol",
-                            "is_demo": False,
-                        })
+                        results.append(
+                            {
+                                "ncr_id": f"CHK-{step.get('step_id', '001')}",
+                                "as_built_id": as_built_id,
+                                "equipment_tag": equipment_tag,
+                                "step_id": step.get("step_id", ""),
+                                "title": step.get("description", "") or f"Step {step.get('step_id', '')} Checkpoint",
+                                "description": step.get("description", ""),
+                                "transcript": step.get("notes")
+                                or (
+                                    "Verification passed: Criteria successfully satisfied and visually verified in field."
+                                    if is_pass
+                                    else "Checkpoint defect observed."
+                                ),
+                                "status": "pass" if is_pass else "fail",
+                                "severity": "Verified Pass" if is_pass else "Minor",
+                                "r0_score": 0.0 if is_pass else 1.2,
+                                "mitigation": "Criteria met. Approved for commissioning."
+                                if is_pass
+                                else (step.get("notes") or "Perform corrective adjustment."),
+                                "raised_by": closed_by,
+                                "timestamp": gen_at,
+                                "generated_at": gen_at,
+                                "photo_url": photo,
+                                "parameter_name": "Field Visual Verification",
+                                "actual_value": "Passed Spec" if is_pass else "Deviated",
+                                "required_value": step.get("acceptance_criteria", "Satisfy specification"),
+                                "unit": "",
+                                "clause": "QA Commissioning Protocol",
+                                "is_demo": False,
+                            }
+                        )
             except Exception:
                 continue
     except Exception:
         pass
 
     return results
-

@@ -10,26 +10,28 @@ Every error returned by the API uses this envelope:
     }
 }
 """
+
 from __future__ import annotations
+
 from typing import Optional
 
 
 # ── Error codes ──────────────────────────────────────────────────────
 class ErrorCode:
-    VALIDATION_ERROR = "VALIDATION_ERROR"          # 422
-    LLM_ERROR = "LLM_ERROR"                        # 502
-    LLM_PARSE_ERROR = "LLM_PARSE_ERROR"            # 502
-    GRAPH_UNAVAILABLE = "GRAPH_UNAVAILABLE"         # 503
-    GRAPH_QUERY_ERROR = "GRAPH_QUERY_ERROR"         # 500
-    VECTOR_UNAVAILABLE = "VECTOR_UNAVAILABLE"       # 503
-    REDIS_UNAVAILABLE = "REDIS_UNAVAILABLE"         # 503
-    NOT_FOUND = "NOT_FOUND"                        # 404
-    FORBIDDEN = "FORBIDDEN"                        # 403
-    RATE_LIMITED = "RATE_LIMITED"                   # 429
+    VALIDATION_ERROR = "VALIDATION_ERROR"  # 422
+    LLM_ERROR = "LLM_ERROR"  # 502
+    LLM_PARSE_ERROR = "LLM_PARSE_ERROR"  # 502
+    GRAPH_UNAVAILABLE = "GRAPH_UNAVAILABLE"  # 503
+    GRAPH_QUERY_ERROR = "GRAPH_QUERY_ERROR"  # 500
+    VECTOR_UNAVAILABLE = "VECTOR_UNAVAILABLE"  # 503
+    REDIS_UNAVAILABLE = "REDIS_UNAVAILABLE"  # 503
+    NOT_FOUND = "NOT_FOUND"  # 404
+    FORBIDDEN = "FORBIDDEN"  # 403
+    RATE_LIMITED = "RATE_LIMITED"  # 429
     IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"  # 409
-    INTERNAL_ERROR = "INTERNAL_ERROR"              # 500
-    APPROVAL_PENDING = "APPROVAL_PENDING"          # 202
-    APPROVAL_REJECTED = "APPROVAL_REJECTED"        # 403
+    INTERNAL_ERROR = "INTERNAL_ERROR"  # 500
+    APPROVAL_PENDING = "APPROVAL_PENDING"  # 202
+    APPROVAL_REJECTED = "APPROVAL_REJECTED"  # 403
 
 
 # ── Status code mapping ─────────────────────────────────────────────
@@ -59,7 +61,7 @@ class StrandError(Exception):
         self,
         code: str = ErrorCode.INTERNAL_ERROR,
         message: str = "An internal error occurred",
-        agent: Optional[str] = None,
+        agent: str | None = None,
     ):
         self.code = code
         self.message = message
@@ -85,47 +87,47 @@ class StrandError(Exception):
 class StrandLLMError(StrandError):
     """LLM invocation or parse failure."""
 
-    def __init__(self, message: str = "LLM invocation failed", agent: Optional[str] = None):
+    def __init__(self, message: str = "LLM invocation failed", agent: str | None = None):
         super().__init__(code=ErrorCode.LLM_ERROR, message=message, agent=agent)
 
 
 class StrandLLMParseError(StrandError):
     """LLM returned unparseable output after all retries."""
 
-    def __init__(self, message: str = "LLM output could not be parsed", agent: Optional[str] = None):
+    def __init__(self, message: str = "LLM output could not be parsed", agent: str | None = None):
         super().__init__(code=ErrorCode.LLM_PARSE_ERROR, message=message, agent=agent)
 
 
 class StrandGraphError(StrandError):
     """Neo4j / graph layer error."""
 
-    def __init__(self, message: str = "Graph query failed", agent: Optional[str] = None):
+    def __init__(self, message: str = "Graph query failed", agent: str | None = None):
         super().__init__(code=ErrorCode.GRAPH_QUERY_ERROR, message=message, agent=agent)
 
 
 class StrandGraphUnavailableError(StrandError):
     """Neo4j unreachable."""
 
-    def __init__(self, message: str = "Neo4j is unavailable", agent: Optional[str] = None):
+    def __init__(self, message: str = "Neo4j is unavailable", agent: str | None = None):
         super().__init__(code=ErrorCode.GRAPH_UNAVAILABLE, message=message, agent=agent)
 
 
 class StrandValidationError(StrandError):
     """Input validation failure."""
 
-    def __init__(self, message: str = "Validation error", agent: Optional[str] = None):
+    def __init__(self, message: str = "Validation error", agent: str | None = None):
         super().__init__(code=ErrorCode.VALIDATION_ERROR, message=message, agent=agent)
 
 
 class StrandPermissionError(StrandError):
     """Tool policy / RBAC denial — §5.7 authorize_tool_call."""
 
-    def __init__(self, message: str = "Permission denied", agent: Optional[str] = None):
+    def __init__(self, message: str = "Permission denied", agent: str | None = None):
         super().__init__(code=ErrorCode.FORBIDDEN, message=message, agent=agent)
 
 
 class StrandNotFoundError(StrandError):
     """Entity not found in PKG."""
 
-    def __init__(self, message: str = "Resource not found", agent: Optional[str] = None):
+    def __init__(self, message: str = "Resource not found", agent: str | None = None):
         super().__init__(code=ErrorCode.NOT_FOUND, message=message, agent=agent)

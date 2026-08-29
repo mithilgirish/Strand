@@ -2,6 +2,7 @@
 """
 Builds CPM dependency graph, forecasts delays, computes R0, suggests mitigations.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,17 +12,17 @@ from typing import Any, Optional, TypedDict
 import networkx as nx
 from loguru import logger
 
-from backend.ingestion.parsers.csv_parser import parse_schedule_csv
-from backend.r0.engine import compute_r0_from_task_graph
-from backend.r0.classifier import r0_to_severity
-from backend.llm.client import has_configured_llm, invoke_raw
-from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.config import settings
+from backend.ingestion.parsers.csv_parser import parse_schedule_csv
+from backend.llm.client import has_configured_llm, invoke_raw
+from backend.prompts.registry import get_prompt_version, load_prompt
+from backend.r0.classifier import r0_to_severity
+from backend.r0.engine import compute_r0_from_task_graph
 
 
 class SchedulerState(TypedDict):
     schedule_data: list
-    task_graph: Optional[nx.DiGraph]
+    task_graph: nx.DiGraph | None
     at_risk_tasks: list
     r0_scores: dict
     critical_path: list
@@ -49,7 +50,9 @@ def build_task_graph(state: SchedulerState) -> SchedulerState:
     except (nx.NetworkXUnfeasible, nx.NetworkXError):
         critical_path = []
 
-    logger.info(f"Scheduler: built task graph with {G.number_of_nodes()} nodes, critical path length={len(critical_path)}")
+    logger.info(
+        f"Scheduler: built task graph with {G.number_of_nodes()} nodes, critical path length={len(critical_path)}"
+    )
     return {**state, "task_graph": G, "critical_path": critical_path}
 
 
@@ -68,21 +71,23 @@ def forecast_delays(state: SchedulerState) -> SchedulerState:
 
         if delay_prob > 0.6:
             downstream = sorted(nx.descendants(G, task_id))
-            at_risk.append({
-                "task_id": task_id,
-                "task_name": data.get("task_name", ""),
-                "delay_probability": round(delay_prob, 2),
-                "confidence_score": round(min(0.98, 0.65 + delay_prob * 0.3), 2),
-                "expected_delay_days": _estimate_delay_days(data),
-                "on_critical_path": task_id in state["critical_path"],
-                "discipline": data.get("discipline", ""),
-                "equipment_tag": data.get("equipment_tag", ""),
-                "status": data.get("status", "on_track"),
-                "start_date": data.get("start_date", ""),
-                "end_date": data.get("end_date", ""),
-                "downstream_count": len(downstream),
-                "downstream_task_ids": downstream,
-            })
+            at_risk.append(
+                {
+                    "task_id": task_id,
+                    "task_name": data.get("task_name", ""),
+                    "delay_probability": round(delay_prob, 2),
+                    "confidence_score": round(min(0.98, 0.65 + delay_prob * 0.3), 2),
+                    "expected_delay_days": _estimate_delay_days(data),
+                    "on_critical_path": task_id in state["critical_path"],
+                    "discipline": data.get("discipline", ""),
+                    "equipment_tag": data.get("equipment_tag", ""),
+                    "status": data.get("status", "on_track"),
+                    "start_date": data.get("start_date", ""),
+                    "end_date": data.get("end_date", ""),
+                    "downstream_count": len(downstream),
+                    "downstream_task_ids": downstream,
+                }
+            )
 
     logger.info(f"Scheduler: identified {len(at_risk)} at-risk tasks")
     return {**state, "at_risk_tasks": at_risk}
@@ -133,6 +138,7 @@ def suggest_mitigations(state: SchedulerState) -> SchedulerState:
         )
         # Try to parse JSON from response
         from backend.llm.client import _extract_json
+
         mitigations = _extract_json(response_text)
         if isinstance(mitigations, dict):
             mitigations = [mitigations]
@@ -187,7 +193,7 @@ def _estimate_delay_days(task_data: dict) -> int:
 
 
 # ── Agent runner ─────────────────────────────────────────────────────
-async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional[str] = None) -> dict:
+async def run_scheduler(schedule_data: list | None = None, csv_path: str | None = None) -> dict:
     """Run the full Scheduler pipeline."""
     from backend.project_state import overlay_scheduler
 
@@ -198,7 +204,8 @@ async def run_scheduler(schedule_data: Optional[list] = None, csv_path: Optional
     elif schedule_data is None:
         default_csv = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "data", "project_schedule_100tasks.csv",
+            "data",
+            "project_schedule_100tasks.csv",
         )
         schedule_data = parse_schedule_csv(default_csv)
         source = "project_schedule_csv"

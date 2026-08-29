@@ -1,22 +1,22 @@
 """Phase 2 Oracle API routes with live HITL supplier switch governance."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.agents.oracle import (
+    _merged_catalog,
     build_geojson,
     find_alternative_suppliers,
     get_supply_chain_tree,
     run_oracle,
-    _merged_catalog,
 )
+from backend.deps import CurrentUser, get_optional_current_user
 from backend.redis_client import redis_client
-from backend.deps import get_optional_current_user, CurrentUser
-
 
 router = APIRouter(tags=["oracle"])
 
@@ -107,7 +107,7 @@ async def initiate_switch(body: SupplierSwitchRequest, user: CurrentUser | None 
     replaced_supp = catalog_suppliers.get(body.replaced_supplier_id, {})
 
     protocol_id = f"SWITCH-{body.equipment_tag}-{body.target_supplier_id}"
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     protocol = {
         "message": f"Supplier switch protocol created for {body.equipment_tag}.",
@@ -153,12 +153,12 @@ async def approve_switch(protocol_id: str, user: CurrentUser | None = Depends(ge
                 "protocol_id": protocol_id,
                 "equipment_tag": eq_tag,
                 "target_supplier_id": target_id,
-                "status": "pending_approval"
+                "status": "pending_approval",
             }
         else:
             raise HTTPException(status_code=404, detail=f"Switch protocol {protocol_id} not found")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     protocol["status"] = "approved"
     protocol["approved_at"] = now_iso
     protocol["approved_by"] = user.email if user else "procurement_director@strand.ai"
@@ -176,26 +176,28 @@ async def approve_switch(protocol_id: str, user: CurrentUser | None = Depends(ge
     return {
         "status": "success",
         "message": f"Supplier switch approved for {eq_tag}. Shipment re-routed successfully.",
-        "protocol": protocol
+        "protocol": protocol,
     }
 
 
 @router.post("/oracle/switches/{protocol_id}/reject")
-async def reject_switch(protocol_id: str, request: SwitchDecisionRequest | None = None, user: CurrentUser | None = Depends(get_optional_current_user)):
+async def reject_switch(
+    protocol_id: str,
+    request: SwitchDecisionRequest | None = None,
+    user: CurrentUser | None = Depends(get_optional_current_user),
+):
     """Rejects the switch protocol."""
     protocol = redis_client.get_json(f"oracle:switch:{protocol_id}")
     if not protocol:
         raise HTTPException(status_code=404, detail=f"Switch protocol {protocol_id} not found")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     protocol["status"] = "rejected"
     protocol["rejected_at"] = now_iso
     protocol["rejected_by"] = user.email if user else "admin@strand.ai"
-    protocol["rejection_reason"] = request.reason if request and request.reason else "Declined by procurement governance."
+    protocol["rejection_reason"] = (
+        request.reason if request and request.reason else "Declined by procurement governance."
+    )
 
     redis_client.set_json(f"oracle:switch:{protocol_id}", protocol, ttl=86400 * 7)
-    return {
-        "status": "rejected",
-        "message": "Supplier switch protocol was rejected.",
-        "protocol": protocol
-    }
+    return {"status": "rejected", "message": "Supplier switch protocol was rejected.", "protocol": protocol}

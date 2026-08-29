@@ -4,24 +4,26 @@ Hybrid retrieval (dense + BM25 + RRF fusion).
 v1.2: spec_dna_ids as differentiator + graph_context for PKG-traceable answers.
 Groundedness check: answers must cite sources.
 """
+
 from __future__ import annotations
 
-from typing import Optional
-import time
-
 import logging
+import time
+from typing import Optional
+
 logger = logging.getLogger(__name__)
+import json
+
 from backend.config import settings
 from backend.demo_data import demo_spec_chunks
-from backend.vector.retriever import hybrid_retriever
-from backend.graph.client import neo4j_client
 from backend.graph import queries
+from backend.graph.client import neo4j_client
 from backend.ingestion.spec_dna.chain import get_spec_dna_neighborhood
 from backend.llm.client import has_configured_llm, invoke_structured
-from backend.prompts.registry import load_prompt, get_prompt_version
 from backend.models.query import BrainAnswer
+from backend.prompts.registry import get_prompt_version, load_prompt
 from backend.redis_client import redis_client
-import json
+from backend.vector.retriever import hybrid_retriever
 
 
 async def run_brain(question: str, project_id: str = "default") -> dict:
@@ -85,7 +87,9 @@ async def run_brain(question: str, project_id: str = "default") -> dict:
 
     answer.response_time_ms = int((time.time() - start) * 1000)
     result = answer.model_dump()
-    result["answer_mode"] = "demo_rag" if used_demo_chunks else ("fallback" if result.get("confidence") == "Low" and not chunks else "rag")
+    result["answer_mode"] = (
+        "demo_rag" if used_demo_chunks else ("fallback" if result.get("confidence") == "Low" and not chunks else "rag")
+    )
     result["degraded"] = bool(used_demo_chunks) or result.get("confidence") == "Low"
     result["context_source"] = "demo" if used_demo_chunks else ("chroma" if chunks else "unavailable")
     result["provenance_note"] = (
@@ -150,7 +154,8 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
 
     fire_chunk = next(
         (
-            chunk for chunk in chunks
+            chunk
+            for chunk in chunks
             if "fire suppression" in chunk.get("text", "").lower()
             or "fm-200" in chunk.get("text", "").lower()
             or "novec" in chunk.get("text", "").lower()
@@ -173,9 +178,9 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
         )
         source_chunk = next(
             (
-                chunk for chunk in chunks
-                if "ambient" in chunk.get("text", "").lower()
-                or "temperature" in chunk.get("text", "").lower()
+                chunk
+                for chunk in chunks
+                if "ambient" in chunk.get("text", "").lower() or "temperature" in chunk.get("text", "").lower()
             ),
             (demo_pad("ambient temperature cooling tower")[:1] or [None])[0],
         )
@@ -186,9 +191,9 @@ def _fallback_answer(question: str, chunks: list[dict], related_rfis: list[dict]
         )
         source_chunk = next(
             (
-                chunk for chunk in chunks
-                if "ambient" in chunk.get("text", "").lower()
-                or "temperature" in chunk.get("text", "").lower()
+                chunk
+                for chunk in chunks
+                if "ambient" in chunk.get("text", "").lower() or "temperature" in chunk.get("text", "").lower()
             ),
             (demo_pad("ambient temperature cooling tower")[:1] or [None])[0],
         )
@@ -256,8 +261,7 @@ def _build_context(chunks: list[dict]) -> str:
         sources_str = ", ".join(chunk.get("sources", ["unknown"]))
 
         context_parts.append(
-            f"[Source {i + 1}: {source}, Page {page}, Retrieved via: {sources_str}]\n"
-            f"{chunk['text']}\n"
+            f"[Source {i + 1}: {source}, Page {page}, Retrieved via: {sources_str}]\n{chunk['text']}\n"
         )
 
     return "\n---\n".join(context_parts)
@@ -278,7 +282,7 @@ def _find_related_rfis(question: str) -> list[dict]:
         return []
 
 
-def _enrich_with_graph_context(spec_dna_ids: list[str]) -> Optional[dict]:
+def _enrich_with_graph_context(spec_dna_ids: list[str]) -> dict | None:
     """
     v1.2: When retrieved chunks correspond to PKG entities with DERIVES_FROM lineage,
     include the 1-hop neighborhood so the answer can surface relationships

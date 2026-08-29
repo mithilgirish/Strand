@@ -7,13 +7,14 @@ Redis serves three roles:
 
 Falls back to in-process dict if Redis is unavailable (dev mode).
 """
+
 from __future__ import annotations
 
 import fnmatch
 import json
 import time
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -59,7 +60,7 @@ class _DictFallback:
         except Exception as exc:
             logger.debug("Could not persist local KV store: {}", exc)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         if key in self._store:
             value, expiry = self._store[key]
             if expiry == 0 or time.time() < expiry:
@@ -69,7 +70,7 @@ class _DictFallback:
                 self._persist()
         return None
 
-    def set(self, key: str, value: str, ex: Optional[int] = None, nx: bool = False, **kwargs) -> bool:
+    def set(self, key: str, value: str, ex: int | None = None, nx: bool = False, **kwargs) -> bool:
         if nx and self.exists(key):
             return False
         expiry = time.time() + ex if ex else 0
@@ -87,10 +88,7 @@ class _DictFallback:
 
     def keys(self, pattern: str = "*") -> list[str]:
         now = time.time()
-        return [
-            k for k, (_, exp) in self._store.items()
-            if fnmatch.fnmatch(k, pattern) and (exp == 0 or now < exp)
-        ]
+        return [k for k, (_, exp) in self._store.items() if fnmatch.fnmatch(k, pattern) and (exp == 0 or now < exp)]
 
     def ping(self) -> bool:
         return True
@@ -170,13 +168,13 @@ class RedisClient:
         return self._using_fallback
 
     # ── Basic operations ─────────────────────────────────────────
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         try:
             return self._conn.get(key)
         except Exception:
             return self._fallback.get(key)
 
-    def set(self, key: str, value: str, ttl: Optional[int] = None) -> None:
+    def set(self, key: str, value: str, ttl: int | None = None) -> None:
         try:
             self._conn.set(key, value, ex=ttl)
         except Exception:
@@ -207,7 +205,7 @@ class RedisClient:
             return self._fallback.keys(pattern)
 
     # ── JSON convenience ─────────────────────────────────────────
-    def get_json(self, key: str) -> Optional[dict]:
+    def get_json(self, key: str) -> dict | None:
         raw = self.get(key)
         if raw:
             try:
@@ -216,11 +214,11 @@ class RedisClient:
                 return None
         return None
 
-    def set_json(self, key: str, value: dict, ttl: Optional[int] = None) -> None:
+    def set_json(self, key: str, value: dict, ttl: int | None = None) -> None:
         self.set(key, json.dumps(value), ttl=ttl)
 
     # ── Idempotency locks (§5.8) ─────────────────────────────────
-    def acquire_lock(self, lock_key: str, ttl: Optional[int] = None) -> bool:
+    def acquire_lock(self, lock_key: str, ttl: int | None = None) -> bool:
         """
         Acquire an idempotency lock. Returns True if acquired, False if already held.
         Used to prevent duplicate submittal re-analysis, duplicate NCR writes, etc.
@@ -236,17 +234,17 @@ class RedisClient:
         self.delete(f"lock:{lock_key}")
 
     # ── Session store ────────────────────────────────────────────
-    def get_session(self, session_id: str) -> Optional[dict]:
+    def get_session(self, session_id: str) -> dict | None:
         return self.get_json(f"session:{session_id}")
 
     def set_session(self, session_id: str, data: dict) -> None:
         self.set_json(f"session:{session_id}", data, ttl=settings.REDIS_TTL_SESSION)
 
     # ── Cache store ──────────────────────────────────────────────
-    def get_cache(self, cache_key: str) -> Optional[dict]:
+    def get_cache(self, cache_key: str) -> dict | None:
         return self.get_json(f"cache:{cache_key}")
 
-    def set_cache(self, cache_key: str, data: dict, ttl: Optional[int] = None) -> None:
+    def set_cache(self, cache_key: str, data: dict, ttl: int | None = None) -> None:
         self.set_json(f"cache:{cache_key}", data, ttl=ttl or settings.REDIS_TTL_CACHE)
 
     def delete_cache(self, cache_key: str) -> None:

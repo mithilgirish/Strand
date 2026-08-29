@@ -1,6 +1,8 @@
 # backend/models/shipments.py — Oracle models
 from __future__ import annotations
+
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -41,6 +43,6 @@ class GeoJsonResponse(BaseModel):
 
 
 class SupplyChainResponse(BaseModel):
-    shipment: Optional[Shipment] = None
-    supplier: Optional[Supplier] = None
+    shipment: Shipment | None = None
+    supplier: Supplier | None = None
     supply_chain_tiers: list[Supplier] = []

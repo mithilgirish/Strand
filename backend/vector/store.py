@@ -2,12 +2,14 @@
 """
 Chroma client singleton with collection management for document chunks.
 """
+
 from __future__ import annotations
 
 import gc
 import shutil
 from pathlib import Path
 from typing import Optional
+
 from loguru import logger
 
 from backend.config import settings
@@ -87,12 +89,14 @@ class ChromaStore:
 
     def _connect(self):
         import time
+
         retries = 3
         reset_attempted = False
         for attempt in range(retries):
             try:
                 self._close_client()
                 import chromadb
+
                 self._client = chromadb.PersistentClient(
                     path=str(self._persist_dir),
                 )
@@ -101,10 +105,7 @@ class ChromaStore:
                     metadata={"hnsw:space": "cosine"},
                 )
                 count = self._collection.count()
-                logger.info(
-                    f"Chroma connected: collection='{settings.CHROMA_COLLECTION}', "
-                    f"count={count}"
-                )
+                logger.info(f"Chroma connected: collection='{settings.CHROMA_COLLECTION}', count={count}")
                 self._last_error = None
                 return
             except Exception as e:
@@ -158,7 +159,7 @@ class ChromaStore:
         self,
         query_text: str,
         n_results: int = 8,
-        where: Optional[dict] = None,
+        where: dict | None = None,
     ) -> dict:
         """
         Query the collection for similar documents.

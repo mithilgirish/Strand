@@ -1,8 +1,9 @@
 """Persist the latest Guardian submittal so every agent can read the same document."""
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ def save_guardian_result(result: dict[str, Any]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         **result,
-        "saved_at": datetime.now(timezone.utc).isoformat(),
+        "saved_at": datetime.now(UTC).isoformat(),
     }
     STATE_PATH.write_text(json.dumps(payload, default=str), encoding="utf-8")
     logger.info(
@@ -80,7 +81,7 @@ def queue_rfi_from_submittal(state: dict[str, Any] | None = None) -> dict[str, A
         "violation_id": first.get("id") or state.get("submittal_id"),
         "tenant_id": state.get("tenant_id") or "default",
         "status": "queued",
-        "approved_at": state.get("saved_at") or datetime.now(timezone.utc).isoformat(),
+        "approved_at": state.get("saved_at") or datetime.now(UTC).isoformat(),
         "delivery_channel": "System Outbox",
         "message": rfi,
         "submittal_id": state.get("submittal_id"),
@@ -180,7 +181,7 @@ def shipments_from_submittal() -> list[dict[str, Any]]:
             "current_status": "Raw Material Shortage" if has_fail else "on_track",
             "lat": 19.076,
             "lng": 72.877,
-            "expected_delivery": datetime.now(timezone.utc).date().isoformat(),
+            "expected_delivery": datetime.now(UTC).date().isoformat(),
             "origin_port": "Vendor factory",
             "destination_port": "JNPT Mumbai",
             "r0_max": r0,
@@ -224,9 +225,7 @@ def overlay_scheduler(result: dict[str, Any]) -> dict[str, Any]:
         reverse=True,
     )
     result["r0_scores"] = {
-        task.get("task_id"): task.get("r0_score", 0)
-        for task in result["at_risk_tasks"]
-        if task.get("task_id")
+        task.get("task_id"): task.get("r0_score", 0) for task in result["at_risk_tasks"] if task.get("task_id")
     }
     result["at_risk_count"] = len(result["at_risk_tasks"])
     result["submittal_id"] = submittal_id
@@ -250,7 +249,11 @@ def _submittal_match_scores(state: dict[str, Any]) -> tuple[dict[str, float], di
     tag_scores: dict[str, float] = {}
     discipline_scores: dict[str, float] = {}
     rules: list[tuple[tuple[str, ...], list[str], list[str]]] = [
-        (("cooling", "chill", "thermal", "ambient", "hvac", "crah", "temperature"), ["CT-01", "EQ-CH-01", "EQ-CRAH-01"], ["HVAC"]),
+        (
+            ("cooling", "chill", "thermal", "ambient", "hvac", "crah", "temperature"),
+            ["CT-01", "EQ-CH-01", "EQ-CRAH-01"],
+            ["HVAC"],
+        ),
         (("pdu",), ["EQ-PDU-01", "EQ-PDU-02"], ["Electrical"]),
         (("cable", "derating"), ["EQ-HV-01", "EQ-LV-01", "EQ-PDU-01", "EQ-PDU-02", "EQ-TX-01"], []),
         (("ups", "battery"), ["EQ-UPS-01", "EQ-BAT-01"], []),
@@ -286,7 +289,15 @@ def dashboard_rows(query: str) -> list[dict[str, Any]]:
     submittal_id = state.get("submittal_id")
     if "r0" in q:
         status = "Critical" if r0 >= 5 else ("Moderate" if r0 >= 2.5 else "Low")
-        return [{"primary_metric": r0, "value": r0, "scale": "R0 Risk Index", "status": status, "submittal_id": submittal_id}]
+        return [
+            {
+                "primary_metric": r0,
+                "value": r0,
+                "scale": "R0 Risk Index",
+                "status": status,
+                "submittal_id": submittal_id,
+            }
+        ]
     if "telemetry" in q or "thermal" in q or "temp" in q:
         return _thermal_series(state)
     if "count(" in q or "open_ncr" in q or "delayed_count" in q:

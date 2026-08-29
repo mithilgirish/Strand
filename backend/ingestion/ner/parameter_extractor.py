@@ -6,13 +6,13 @@ Two-pass parameter extraction:
 
 Per PRD: regex is the primary pass, NER is fallback — not the other way around.
 """
+
 from __future__ import annotations
 
 import re
 from typing import Any
 
 from loguru import logger
-
 
 # ── Engineering parameter extraction patterns ────────────────────────
 ENGINEERING_PATTERNS = [
@@ -144,26 +144,25 @@ def extract_engineering_entities(text: str, page: int = 1) -> list[dict[str, Any
             end = min(len(text), match.end() + 30)
             context = text[start:end].strip()
 
-            entities.append({
-                "value": value,
-                "unit": pattern_def["unit"],
-                "type": pattern_def["name"],
-                "param_prefix": pattern_def["param_prefix"],
-                "page": page,
-                "confidence": 0.9,
-                "context": context,
-                "source": "regex",
-                "position": match.start(),
-            })
+            entities.append(
+                {
+                    "value": value,
+                    "unit": pattern_def["unit"],
+                    "type": pattern_def["name"],
+                    "param_prefix": pattern_def["param_prefix"],
+                    "page": page,
+                    "confidence": 0.9,
+                    "context": context,
+                    "source": "regex",
+                    "position": match.start(),
+                }
+            )
 
     # Pass 2: spaCy NER fallback
     spacy_entities = _spacy_ner_extract(text, page)
     for ent in spacy_entities:
         # Only add if not already found by regex (avoid duplicates)
-        if not any(
-            abs(e["position"] - ent.get("position", -1)) < 10
-            for e in entities
-        ):
+        if not any(abs(e["position"] - ent.get("position", -1)) < 10 for e in entities):
             entities.append(ent)
 
     logger.debug(f"Extracted {len(entities)} entities from page {page}")
@@ -177,23 +176,26 @@ def _spacy_ner_extract(text: str, page: int) -> list[dict]:
     """
     try:
         import spacy
+
         nlp = spacy.load("en_core_web_sm")
         doc = nlp(text)
 
         entities = []
         for ent in doc.ents:
             if ent.label_ in ("QUANTITY", "CARDINAL", "PERCENT"):
-                entities.append({
-                    "value": ent.text,
-                    "unit": "",
-                    "type": ent.label_.lower(),
-                    "param_prefix": "ner",
-                    "page": page,
-                    "confidence": 0.7,
-                    "context": text[max(0, ent.start_char - 40):ent.end_char + 20],
-                    "source": "spacy_ner",
-                    "position": ent.start_char,
-                })
+                entities.append(
+                    {
+                        "value": ent.text,
+                        "unit": "",
+                        "type": ent.label_.lower(),
+                        "param_prefix": "ner",
+                        "page": page,
+                        "confidence": 0.7,
+                        "context": text[max(0, ent.start_char - 40) : ent.end_char + 20],
+                        "source": "spacy_ner",
+                        "position": ent.start_char,
+                    }
+                )
         return entities
 
     except (ImportError, OSError):

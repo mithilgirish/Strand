@@ -7,18 +7,19 @@ BEFORE a human sees them.
 Per v1.2 §14.4: Judge checks content truth; HITL checks action approval.
 These are separate gates and must not be collapsed into one.
 """
+
 from __future__ import annotations
 
 from typing import Optional
 
 from loguru import logger
 
-from backend.graph.client import neo4j_client
 from backend.graph import queries
+from backend.graph.client import neo4j_client
 from backend.ingestion.spec_dna.chain import trace_spec_dna
+from backend.models.planner import JudgeVerdict
 from backend.r0.engine import compute_r0_from_pkg
 from backend.vector.store import chroma_store
-from backend.models.planner import JudgeVerdict
 
 
 async def run_judge(
@@ -86,14 +87,10 @@ async def run_judge(
             "flags": flags,
         },
         flags=flags,
-        reasoning=f"Verified {content_type} from {agent_source}. "
-                   f"Confidence: {confidence:.0%}. Flags: {len(flags)}.",
+        reasoning=f"Verified {content_type} from {agent_source}. Confidence: {confidence:.0%}. Flags: {len(flags)}.",
     )
 
-    logger.info(
-        f"Judge: verdict={verdict}, confidence={confidence:.2f}, "
-        f"flags={len(flags)}, source={agent_source}"
-    )
+    logger.info(f"Judge: verdict={verdict}, confidence={confidence:.2f}, flags={len(flags)}, source={agent_source}")
 
     return result.model_dump()
 
@@ -131,10 +128,7 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
     for v in violations:
         total_checks += 1
         spec_dna_id = v.get("spec_dna_id", "")
-        has_required_shape = all(
-            key in v
-            for key in ("parameter", "required", "actual", "section")
-        )
+        has_required_shape = all(key in v for key in ("parameter", "required", "actual", "section"))
         if has_required_shape:
             passed_checks += 1
             evidence.append(
@@ -155,18 +149,22 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
 
             if clause_results:
                 passed_checks += 1
-                evidence.append({
-                    "check": "clause_exists",
-                    "spec_dna_id": spec_dna_id,
-                    "result": "confirmed",
-                })
+                evidence.append(
+                    {
+                        "check": "clause_exists",
+                        "spec_dna_id": spec_dna_id,
+                        "result": "confirmed",
+                    }
+                )
             else:
                 flags.append(f"ContractClause {spec_dna_id} not found in PKG")
-                evidence.append({
-                    "check": "clause_exists",
-                    "spec_dna_id": spec_dna_id,
-                    "result": "not_found",
-                })
+                evidence.append(
+                    {
+                        "check": "clause_exists",
+                        "spec_dna_id": spec_dna_id,
+                        "result": "not_found",
+                    }
+                )
 
         # Verify R0 score independently
         if spec_dna_id:
@@ -176,17 +174,16 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
 
             if abs(independent_r0 - claimed_r0) < 0.5:
                 passed_checks += 1
-                evidence.append({
-                    "check": "r0_consistency",
-                    "claimed": claimed_r0,
-                    "independent": independent_r0,
-                    "result": "consistent",
-                })
-            else:
-                flags.append(
-                    f"R0 mismatch for {spec_dna_id}: "
-                    f"claimed={claimed_r0}, independent={independent_r0}"
+                evidence.append(
+                    {
+                        "check": "r0_consistency",
+                        "claimed": claimed_r0,
+                        "independent": independent_r0,
+                        "result": "consistent",
+                    }
                 )
+            else:
+                flags.append(f"R0 mismatch for {spec_dna_id}: claimed={claimed_r0}, independent={independent_r0}")
         else:
             claimed_r0 = float(v.get("r0_score", content.get("r0_max", 0)) or 0)
             if 0 <= claimed_r0 <= 5 and has_required_shape:
@@ -201,8 +198,10 @@ def _verify_violations(content: dict) -> tuple[float, list[dict], list[str]]:
                 )
 
     r0_max = float(content.get("r0_max", 0) or 0)
-    if r0_max > 7.0 and not content.get("spec_dna_chain") and not any(
-        violation.get("spec_dna_id") for violation in violations
+    if (
+        r0_max > 7.0
+        and not content.get("spec_dna_chain")
+        and not any(violation.get("spec_dna_id") for violation in violations)
     ):
         flags.append("Inflated R0 claim lacks Spec-DNA evidence chain")
         total_checks += 1

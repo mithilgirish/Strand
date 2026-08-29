@@ -4,11 +4,12 @@ Two tiers:
 - Tier 1 (Agent-level): run_guardian, run_scheduler, run_oracle, run_inspector, run_brain, run_judge
 - Tier 2 (Primitives): trace_spec_dna, compute_r0, create_rfi, create_ncr, search_vector, etc.
 """
+
 from __future__ import annotations
 
 from typing import Any, Callable
-from loguru import logger
 
+from loguru import logger
 
 # ── Tool registration ────────────────────────────────────────────────
 _TOOL_REGISTRY: dict[str, dict] = {}
@@ -59,6 +60,7 @@ async def invoke_tool(name: str, **kwargs) -> Any:
 
     # Handle both async and sync functions
     import asyncio
+
     if asyncio.iscoroutinefunction(func):
         return await func(**kwargs)
     else:
@@ -71,36 +73,48 @@ def _register_all_tools():
     # Tier 1: Agent-level tools
     try:
         from backend.agents.guardian import run_guardian
-        register_tool("run_guardian", run_guardian, tier=1, is_write=True, description="Run spec compliance analysis on a submittal")
+
+        register_tool(
+            "run_guardian",
+            run_guardian,
+            tier=1,
+            is_write=True,
+            description="Run spec compliance analysis on a submittal",
+        )
     except Exception as e:
         logger.warning(f"Could not load run_guardian: {e}")
 
     try:
         from backend.agents.scheduler import run_scheduler
+
         register_tool("run_scheduler", run_scheduler, tier=1, is_write=False, description="Run schedule risk analysis")
     except Exception as e:
         logger.warning(f"Could not load run_scheduler: {e}")
 
     try:
         from backend.agents.oracle import run_oracle
+
         register_tool("run_oracle", run_oracle, tier=1, is_write=False, description="Get supply chain intelligence")
     except Exception as e:
         logger.warning(f"Could not load run_oracle: {e}")
 
     try:
         from backend.agents.inspector import run_inspector
+
         register_tool("run_inspector", run_inspector, tier=1, is_write=True, description="Process voice NCR")
     except Exception as e:
         logger.warning(f"Could not load run_inspector: {e}")
 
     try:
         from backend.agents.brain import run_brain
+
         register_tool("run_brain", run_brain, tier=1, is_write=False, description="Query project knowledge")
     except Exception as e:
         logger.warning(f"Could not load run_brain: {e}")
 
     try:
         from backend.agents.judge import run_judge
+
         register_tool("run_judge", run_judge, tier=1, is_write=False, description="Verify LLM output")
     except Exception as e:
         logger.warning(f"Could not load run_judge: {e}")
@@ -108,12 +122,16 @@ def _register_all_tools():
     # Tier 2: Primitive tools
     try:
         from backend.ingestion.spec_dna.chain import trace_spec_dna
-        register_tool("trace_spec_dna", trace_spec_dna, tier=2, is_write=False, description="Trace Spec-DNA lineage chain")
+
+        register_tool(
+            "trace_spec_dna", trace_spec_dna, tier=2, is_write=False, description="Trace Spec-DNA lineage chain"
+        )
     except Exception as e:
         logger.warning(f"Could not load trace_spec_dna: {e}")
-        
+
     try:
         from backend.r0.engine import compute_r0_score
+
         register_tool("compute_r0", compute_r0_score, tier=2, is_write=False, description="Compute R0 contagion score")
     except Exception as e:
         logger.warning(f"Could not load compute_r0: {e}")

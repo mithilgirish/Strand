@@ -2,6 +2,7 @@
 """
 Loads supplier graph data and commissioning checklists from JSON files.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,15 +17,13 @@ def parse_supplier_graph(file_path: str) -> dict[str, list[dict]]:
     Expected format: {"suppliers": [...], "shipments": [...]}
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         suppliers = data.get("suppliers", [])
         shipments = data.get("shipments", [])
 
-        logger.info(
-            f"Parsed supplier graph: {len(suppliers)} suppliers, {len(shipments)} shipments"
-        )
+        logger.info(f"Parsed supplier graph: {len(suppliers)} suppliers, {len(shipments)} shipments")
         return {"suppliers": suppliers, "shipments": shipments}
 
     except FileNotFoundError:
@@ -41,13 +40,10 @@ def parse_checklist(file_path: str) -> dict[str, Any]:
     Expected format: {"checklist_id": str, "title": str, "steps": [...]}
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
-        logger.info(
-            f"Parsed checklist: {data.get('checklist_id', 'unknown')} "
-            f"with {len(data.get('steps', []))} steps"
-        )
+        logger.info(f"Parsed checklist: {data.get('checklist_id', 'unknown')} with {len(data.get('steps', []))} steps")
         return data
 
     except FileNotFoundError:

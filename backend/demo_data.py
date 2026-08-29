@@ -1,8 +1,8 @@
 """Deterministic local data used when external services are unavailable."""
+
 from __future__ import annotations
 
 from backend.ingestion.spec_dna.fingerprint import generate_spec_dna_id
-
 
 _CLAUSES = [
     {

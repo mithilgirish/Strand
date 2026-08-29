@@ -1,6 +1,8 @@
 # backend/models/violations.py — Guardian models
 from __future__ import annotations
+
 from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -22,13 +24,13 @@ class Violation(BaseModel):
 class SpecDnaNode(BaseModel):
     id: str
     label: str
-    section: Optional[str] = None
-    parameter_name: Optional[str] = None
-    parameter_value: Optional[float | str] = None
+    section: str | None = None
+    parameter_name: str | None = None
+    parameter_value: float | str | None = None
 
 
 class GuardianAnalysisRequest(BaseModel):
-    submittal_id: Optional[str] = None
+    submittal_id: str | None = None
     document_type: str = "submittal"
 
 

@@ -1,7 +1,8 @@
 """Tenant-scoped chat API for Brain conversations and demo QA checks."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,7 +12,6 @@ from backend.agents.brain import run_brain
 from backend.agents.scheduler import run_scheduler
 from backend.deps import CurrentUser, get_optional_current_user
 from backend.redis_client import redis_client
-
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -64,11 +64,7 @@ def _contextual_question(message: str, history: list[dict[str, Any]]) -> str:
     if not history:
         return message
     recent = history[-4:]
-    context = "\n".join(
-        f"{item['role']}: {item['content']}"
-        for item in recent
-        if item.get("content")
-    )
+    context = "\n".join(f"{item['role']}: {item['content']}" for item in recent if item.get("content"))
     return (
         "Use only this same-tenant, same-session conversation context when resolving pronouns.\n"
         f"{context}\n\nCurrent user question: {message}"
@@ -144,7 +140,7 @@ async def post_chat_message(
         history=history,
     )
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     history.extend(
         [
             {"role": "user", "content": payload.message, "created_at": now},

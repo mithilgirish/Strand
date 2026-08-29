@@ -8,6 +8,7 @@ Phase 1: in-memory queue
 Phase 2: Redis-backed queue
 DEMO_MODE: auto-approve cached-path writes
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -17,8 +18,8 @@ from uuid import uuid4
 from loguru import logger
 
 from backend.config import settings
-from backend.redis_client import redis_client
 from backend.models.planner import ApprovalItem
+from backend.redis_client import redis_client
 
 
 class ApprovalManager:
@@ -73,7 +74,7 @@ class ApprovalManager:
         self,
         approval_id: str,
         decision: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> ApprovalItem:
         """
         Resolve a pending approval.
@@ -90,16 +91,19 @@ class ApprovalManager:
         lock_key = f"lock:approval:{approval_id}"
         if not redis_client.acquire_lock(lock_key):
             from backend.errors import StrandValidationError
+
             raise StrandValidationError(f"Approval {approval_id} is currently being resolved")
 
         try:
             item = self._get_approval(approval_id)
             if not item:
                 from backend.errors import StrandNotFoundError
+
                 raise StrandNotFoundError(f"Approval {approval_id} not found")
 
             if item.status != "pending":
                 from backend.errors import StrandValidationError
+
                 raise StrandValidationError(f"Approval {approval_id} already resolved: {item.status}")
 
             item.status = "approved" if decision.lower() == "approve" else "rejected"
@@ -123,7 +127,7 @@ class ApprovalManager:
         items = self._get_all()
         return [i for i in items if i.status == "pending"]
 
-    def get_approval(self, approval_id: str) -> Optional[ApprovalItem]:
+    def get_approval(self, approval_id: str) -> ApprovalItem | None:
         """Get a specific approval by ID."""
         return self._get_approval(approval_id)
 
@@ -136,7 +140,7 @@ class ApprovalManager:
             ttl=86400,  # 24 hours
         )
 
-    def _get_approval(self, approval_id: str) -> Optional[ApprovalItem]:
+    def _get_approval(self, approval_id: str) -> ApprovalItem | None:
         """Retrieve an approval item."""
         if approval_id in self._memory_queue:
             return self._memory_queue[approval_id]
@@ -168,6 +172,7 @@ class ApprovalManager:
             if ncr_id:
                 from backend.graph.client import neo4j_client
                 from backend.graph.queries import UPDATE_NCR_STATUS
+
                 neo4j_client.execute_write(
                     UPDATE_NCR_STATUS,
                     {"ncr_id": ncr_id, "status": "open"},

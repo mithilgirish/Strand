@@ -3,19 +3,20 @@
 Real clients replacing the stubs. All modules import from here.
 Includes Supabase JWT Verification.
 """
-from backend.graph.client import neo4j_client, get_neo4j_session
-from backend.vector.store import chroma_store
-from backend.redis_client import redis_client
-from backend.config import settings
 
+from typing import Any, List
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
-from pydantic import BaseModel
-from typing import Any, List
+from backend.config import settings
+from backend.graph.client import get_neo4j_session, neo4j_client
+from backend.redis_client import redis_client
+from backend.vector.store import chroma_store
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"])
 
@@ -23,11 +24,13 @@ _jwks_cache = None
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 
+
 class CurrentUser(BaseModel):
     id: str
     email: str
     tenant_id: str
     role: str
+
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
     token = credentials.credentials
@@ -36,9 +39,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         detail="Could not validate Supabase credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     from loguru import logger
-    
+
     try:
         payload = await _decode_supabase_jwt(token)
         return _current_user_from_payload(payload)
@@ -148,7 +151,6 @@ class RoleChecker:
     def __call__(self, user: CurrentUser = Depends(get_current_user)):
         if user.role not in self.allowed_roles:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Operation not permitted for your security clearance."
+                status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted for your security clearance."
             )
         return user

@@ -4,8 +4,8 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-import pandas as pd
 import httpx
+import pandas as pd
 
 from backend.agents.oracle import (
     find_alternative_suppliers,
@@ -96,6 +96,7 @@ class Phase2RouteTests(unittest.TestCase):
             "/api/v1/project/immunity-score",
             "/api/v1/project/summary",
         )
+
         async def run_requests():
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

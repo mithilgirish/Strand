@@ -5,14 +5,14 @@ Two-pass extraction:
 2. Regex patterns for engineering parameter values
 Falls back to Unstructured.io if PyMuPDF tables fail.
 """
+
 from __future__ import annotations
 
 import re
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
-
 
 # ── Engineering parameter regex patterns ─────────────────────────────
 PARAMETER_PATTERNS: dict[str, re.Pattern] = {
@@ -82,16 +82,18 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
             # If the page is a scanned raster drawing with no vector text, OCR it
             if len(text.strip()) < 10:
                 try:
-                    from PIL import Image
-                    import pytesseract
                     import io
+
+                    import pytesseract
+                    from PIL import Image
+
                     pix = page.get_pixmap(dpi=150)
                     img = Image.open(io.BytesIO(pix.tobytes("png")))
                     ocr_text = pytesseract.image_to_string(img)
                     if ocr_text.strip():
                         text = ocr_text
                 except Exception as ocr_err:
-                    logger.debug(f"OCR fallback on page {page_num+1} skipped: {ocr_err}")
+                    logger.debug(f"OCR fallback on page {page_num + 1} skipped: {ocr_err}")
 
             # Try to extract tables
             tables = []
@@ -103,11 +105,13 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
             except BaseException:
                 pass  # Tables extraction is best-effort
 
-            pages.append({
-                "page": page_num + 1,
-                "text": text,
-                "tables": tables,
-            })
+            pages.append(
+                {
+                    "page": page_num + 1,
+                    "text": text,
+                    "tables": tables,
+                }
+            )
 
         doc.close()
         return pages
@@ -123,8 +127,8 @@ def extract_text_from_pdf(file_path: str) -> list[dict]:
 def extract_text_from_image(file_path: str) -> list[dict]:
     """Extract text from an image file (PNG, JPG, TIFF) using OCR."""
     try:
-        from PIL import Image
         import pytesseract
+        from PIL import Image
 
         img = Image.open(file_path)
         text = pytesseract.image_to_string(img)

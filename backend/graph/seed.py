@@ -3,23 +3,23 @@
 Seeds Neo4j PKG + Chroma from the files in data/.
 Run via: python -m backend.graph.seed
 """
+
 from __future__ import annotations
 
-import os
 import json
+import os
 import random
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from loguru import logger
 
+from backend.demo_data import demo_contract_clauses
+from backend.graph import queries
 from backend.graph.client import neo4j_client
 from backend.graph.schema import init_schema
-from backend.graph import queries
-from backend.vector.store import chroma_store
 from backend.vector.embedder import prepare_chunks_for_storage
-from backend.demo_data import demo_contract_clauses
-
+from backend.vector.store import chroma_store
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
@@ -76,7 +76,7 @@ def seed_suppliers():
         logger.warning("supplier_graph_data.json not found, skipping supplier seed")
         return
 
-    with open(supplier_file, "r") as f:
+    with open(supplier_file) as f:
         data = json.load(f)
 
     # Locations for geo data
@@ -113,7 +113,7 @@ def seed_suppliers():
             queries.MERGE_SHIPMENT,
             {
                 "shipment_id": ship["id"],
-                "equipment_tag": f"EQ-{random.randint(1,20):03d}",
+                "equipment_tag": f"EQ-{random.randint(1, 20):03d}",
                 "supplier_id": ship["origin_supplier"],
                 "origin_port": origin_loc[0],
                 "destination_port": "Site A",
@@ -131,10 +131,7 @@ def seed_suppliers():
             {"shipment_id": ship["id"], "supplier_id": ship["origin_supplier"]},
         )
 
-    logger.info(
-        f"Seeded {len(data.get('suppliers', []))} suppliers, "
-        f"{len(data.get('shipments', []))} shipments"
-    )
+    logger.info(f"Seeded {len(data.get('suppliers', []))} suppliers, {len(data.get('shipments', []))} shipments")
 
 
 def seed_schedule_to_chroma():
@@ -193,6 +190,7 @@ def seed_spec_to_chroma():
 
     if bm25_corpus:
         from backend.vector.retriever import hybrid_retriever
+
         hybrid_retriever.build_bm25_index(bm25_corpus)
 
     logger.info(f"Seeded {total_chunks} spec chunks to Chroma")

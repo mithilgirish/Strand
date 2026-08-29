@@ -4,11 +4,12 @@ All prompts are externalized to YAML files, one per prompt.
 Agents call load_prompt() instead of embedding f-strings.
 invoke_structured() logs which prompt name+version was used.
 """
+
 from __future__ import annotations
 
 import os
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 from loguru import logger
 
@@ -18,7 +19,7 @@ _prompt_cache: dict[str, dict] = {}
 PROMPTS_DIR = Path(__file__).parent
 
 
-def load_prompt(name: str, version: Optional[int] = None, **variables) -> str:
+def load_prompt(name: str, version: int | None = None, **variables) -> str:
     """
     Load and render a prompt from the YAML registry.
 
@@ -38,10 +39,7 @@ def load_prompt(name: str, version: Optional[int] = None, **variables) -> str:
     prompt_data = _prompt_cache[cache_key]
 
     if version and prompt_data.get("version") != version:
-        raise ValueError(
-            f"Prompt '{name}' version mismatch: "
-            f"requested {version}, got {prompt_data.get('version')}"
-        )
+        raise ValueError(f"Prompt '{name}' version mismatch: requested {version}, got {prompt_data.get('version')}")
 
     template = prompt_data.get("template", "")
 
@@ -78,7 +76,8 @@ def _load_yaml(name: str) -> dict:
 
     try:
         import yaml
-        with open(yaml_path, "r", encoding="utf-8") as f:
+
+        with open(yaml_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return data or {}
     except ImportError:
@@ -95,7 +94,7 @@ def _simple_yaml_parse(path: Path) -> dict:
     in_template = False
     template_lines = []
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             if line.startswith("version:"):
                 try:

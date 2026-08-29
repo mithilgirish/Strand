@@ -1,7 +1,7 @@
-from pathlib import Path
-from datetime import datetime, timezone
-from uuid import uuid4
 import tempfile
+from datetime import UTC, datetime, timezone
+from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -142,6 +142,7 @@ async def get_violation(
             }
     raise HTTPException(status_code=404, detail="Violation not found")
 
+
 @router.get("/guardian/rfi/outbox")
 async def get_rfi_outbox(
     tenant_id: str | None = None,
@@ -212,7 +213,7 @@ async def approve_rfi(
         "violation_id": violation_id,
         "tenant_id": resolved_tenant_id,
         "status": "approved_sent",
-        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": datetime.now(UTC).isoformat(),
         "delivery_channel": "System Outbox",
         "message": rfi_text or "RFI approved and queued for sending.",
         "submittal_id": submittal_id,
